@@ -1,6 +1,6 @@
 import { CButton, CButtonGroup, CSpinner } from '@coreui/react'
 import CIcon from '@coreui/icons-react'
-import { cilCalculator, cilCart } from '@coreui/icons'
+import { cilCalculator, cilCart, cilLoopCircular } from '@coreui/icons'
 
 import type { PackingStrategy } from './types'
 
@@ -22,6 +22,14 @@ interface OptimizeActionBarProps {
   // Optional muted hint shown next to the primary button while it is disabled (e.g. "Sin cambios
   // por guardar" in the pre-order view). Only rendered when the button is disabled and not pending.
   disabledHint?: string
+  // "Generar otra alternativa": bumps the variant seed and recomputes, producing a genuinely
+  // different deterministic layout when alternatives exist. Hidden when omitted or without result.
+  onAlternative?: () => void
+  // Current variant seed (shown as a hint when > 0 so the user knows which alternative is active).
+  variant?: number
+  // Own gate for the alternative button (defaults to canOptimize). The pre-order view gates the
+  // primary button on "dirty", but generating an alternative is precisely a no-pending-edits action.
+  canAlternative?: boolean
 }
 
 const OPTIONS: { value: PackingStrategy; label: string }[] = [
@@ -42,6 +50,9 @@ const OptimizeActionBar = ({
   canCreateQuote = true,
   optimizeLabel = 'Optimizar',
   disabledHint,
+  onAlternative,
+  variant = 0,
+  canAlternative,
 }: OptimizeActionBarProps) => (
   <div style={{ position: 'sticky', bottom: 0, zIndex: 1020 }} className="mb-3">
     <div className="d-flex flex-wrap align-items-center gap-3 p-2 border rounded-3 bg-body shadow-sm">
@@ -76,6 +87,20 @@ const OptimizeActionBar = ({
       <div className="ms-auto d-flex align-items-center gap-2">
         {disabledHint && !canOptimize && !isPending && (
           <span className="text-body-secondary small d-none d-sm-inline">{disabledHint}</span>
+        )}
+        {hasResult && onAlternative && (
+          <CButton
+            color="secondary"
+            variant="outline"
+            type="button"
+            disabled={!(canAlternative ?? canOptimize) || isPending}
+            onClick={onAlternative}
+            title="Genera una distribución alternativa con las mismas piezas"
+          >
+            <CIcon icon={cilLoopCircular} className="me-1" />
+            Otra alternativa
+            {variant > 0 && <span className="ms-1 badge text-bg-secondary">#{variant}</span>}
+          </CButton>
         )}
         {hasResult && onCreateQuote && (
           <CButton

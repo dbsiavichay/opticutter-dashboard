@@ -45,6 +45,8 @@ const OptimizerPage = () => {
   const [showSaveDraft, setShowSaveDraft] = useState(false)
   const [priceTierCode, setPriceTierCode] = useState('consumidor')
   const [strategy, setStrategy] = useState<PackingStrategy>('longOffcuts')
+  // Alternative-solution seed: bumped by "Otra alternativa" to explore different layouts.
+  const [variant, setVariant] = useState(0)
   const [restored, setRestored] = useState(!!bootstrap)
   const [loadingDraftId, setLoadingDraftId] = useState<number | null>(null)
   const [savedFlash, setSavedFlash] = useState(false)
@@ -153,6 +155,7 @@ const OptimizerPage = () => {
     pieces.clear()
     setDraftId(null)
     setDraftName('')
+    setVariant(0)
     clearAutosave()
   }
 
@@ -221,6 +224,7 @@ const OptimizerPage = () => {
         requirements: built.requirements,
         priceTierCode,
         strategy: newStrategy,
+        variant,
       })
     }
   }
@@ -232,6 +236,22 @@ const OptimizerPage = () => {
       requirements: built.requirements,
       priceTierCode,
       strategy,
+      variant,
+    })
+  }
+
+  // "Otra alternativa": bump the seed and recompute — each seed yields a
+  // deterministic, cached layout, genuinely different when alternatives exist.
+  const handleAlternative = () => {
+    if (!canOptimize) return
+    const next = variant + 1
+    setVariant(next)
+    optimize.mutate({
+      materials: built.materials,
+      requirements: built.requirements,
+      priceTierCode,
+      strategy,
+      variant: next,
     })
   }
 
@@ -327,6 +347,8 @@ const OptimizerPage = () => {
         onOptimize={handleOptimize}
         onCreateQuote={() => setShowQuote(true)}
         canCreateQuote={canCreateQuote}
+        onAlternative={handleAlternative}
+        variant={variant}
       />
 
       <DeleteMaterialModal
@@ -359,6 +381,7 @@ const OptimizerPage = () => {
         priceTierCode={priceTierCode}
         onPriceTierChange={setPriceTierCode}
         strategy={strategy}
+        variant={variant}
         onCreated={clearAutosave}
       />
 

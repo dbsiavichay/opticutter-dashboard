@@ -179,6 +179,7 @@ function editSignature(
   notes: string,
   priceTierCode: string,
   strategy: PackingStrategy,
+  variant: number,
 ): string {
   const { materials: mInputs, requirements: rInputs } = buildPayload(materials, requirements)
   return JSON.stringify({
@@ -188,6 +189,7 @@ function editSignature(
     notes: notes || '',
     priceTierCode,
     strategy,
+    variant,
   })
 }
 
@@ -216,6 +218,9 @@ const PreOrderView = ({ preOrder }: { preOrder: PreOrder }) => {
   const [strategy, setStrategy] = useState<PackingStrategy>(
     preOrder.optimization.strategy ?? 'default',
   )
+  // Alternative-solution seed: persisted with the pre-order so every recompute
+  // reproduces the chosen layout; bumped by "Otra alternativa".
+  const [variant, setVariant] = useState(preOrder.variant ?? preOrder.optimization.variant ?? 0)
   const [showImport, setShowImport] = useState(false)
   const [deleteTarget, setDeleteTarget] = useState<MaterialForm | null>(null)
   const [optimization, setOptimization] = useState<OptimizeResponse>(preOrder.optimization)
@@ -236,6 +241,7 @@ const PreOrderView = ({ preOrder }: { preOrder: PreOrder }) => {
     notes,
     priceTierCode,
     strategy,
+    variant,
   )
   const [baselineSignature, setBaselineSignature] = useState(() => currentSignature)
   const isDirty = currentSignature !== baselineSignature
@@ -249,7 +255,7 @@ const PreOrderView = ({ preOrder }: { preOrder: PreOrder }) => {
   const createReviewLink = useCreatePreOrderReviewLink()
   const reviewLinkInfo = usePreOrderReviewLinkInfo(preOrder.id, preOrder.status)
 
-  const handleSave = () => {
+  const doSave = (variantValue: number) => {
     const { materials: mInputs, requirements: rInputs } = buildPayload(
       materials,
       editor.requirements,
@@ -264,16 +270,37 @@ const PreOrderView = ({ preOrder }: { preOrder: PreOrder }) => {
           notes: notes || undefined,
           priceTierCode,
           strategy,
+          variant: variantValue,
         },
       },
       {
         onSuccess: (updated) => {
           setOptimization(updated.optimization)
           // The saved state is the new baseline, so "Actualizar" disables again until further edits.
-          setBaselineSignature(currentSignature)
+          setBaselineSignature(
+            editSignature(
+              materials,
+              editor.requirements,
+              services,
+              notes,
+              priceTierCode,
+              strategy,
+              variantValue,
+            ),
+          )
         },
       },
     )
+  }
+
+  const handleSave = () => doSave(variant)
+
+  // "Otra alternativa": bump the seed and save+recompute immediately — the
+  // pre-order persists the seed so the alternative survives every recompute.
+  const handleAlternative = () => {
+    const next = variant + 1
+    setVariant(next)
+    doSave(next)
   }
 
   const addMaterial = () => setMaterials((ms) => [...ms, emptyCatalogMaterial()])
@@ -649,6 +676,9 @@ const PreOrderView = ({ preOrder }: { preOrder: PreOrder }) => {
           onOptimize={handleSave}
           optimizeLabel="Actualizar cotización"
           disabledHint={saveDisabledHint}
+          onAlternative={handleAlternative}
+          variant={variant}
+          canAlternative={canSave && missingBanding.length === 0}
         />
       )}
 

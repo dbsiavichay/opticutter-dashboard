@@ -139,6 +139,8 @@ export interface OptimizeResponse {
   layoutGroups: LayoutGroup[]
   pricing?: PricingData
   strategy?: PackingStrategy
+  // Alternative-solution seed this result was computed with (0 = canonical).
+  variant?: number
 }
 
 // --- Request inputs (what the frontend sends) ---
@@ -200,6 +202,9 @@ export interface OptimizePayload {
   clientId?: number
   priceTierCode?: string
   strategy?: PackingStrategy
+  // Alternative-solution seed: bump it ("Generar otra alternativa") to get a
+  // genuinely different deterministic layout when alternatives exist.
+  variant?: number
 }
 
 // --- Optimizer drafts (persistence) ---

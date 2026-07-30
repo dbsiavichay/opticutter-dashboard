@@ -61,6 +61,8 @@ export interface PreOrder extends PreOrderSummary {
   confirmedAt: string | null
   priceTierCode?: string
   strategy?: PackingStrategy
+  // Alternative-solution seed remembered for the recompute (0 = canonical).
+  variant?: number
   // Always present in GET /preorders/{id} and PUT responses
   materials: MaterialInput[]
   requirements: RequirementInput[]
@@ -75,6 +77,7 @@ export interface PreOrderCreate {
   source?: string
   priceTierCode?: string
   strategy?: PackingStrategy
+  variant?: number
   materials: MaterialInput[]
   requirements: RequirementInput[]
   additionalServices?: AdditionalServiceInput[]
