@@ -38,6 +38,9 @@ interface CreateQuoteModalProps {
   priceTierCode: string
   onPriceTierChange: (code: string) => void
   strategy: PackingStrategy
+  // Alternative-solution seed of the layout currently on screen; persisted with
+  // the pre-order so every recompute reproduces the chosen alternative.
+  variant?: number
   // Called after the order is successfully created (e.g. to clear the optimizer autosave).
   onCreated?: () => void
 }
@@ -50,6 +53,7 @@ const CreateQuoteModal = ({
   priceTierCode,
   onPriceTierChange,
   strategy,
+  variant = 0,
   onCreated,
 }: CreateQuoteModalProps) => {
   const navigate = useNavigate()
@@ -83,6 +87,7 @@ const CreateQuoteModal = ({
         notes: notes || undefined,
         priceTierCode,
         strategy,
+        variant,
         materials,
         requirements,
         branchId: isGlobalBranch && branchId ? Number(branchId) : undefined,
