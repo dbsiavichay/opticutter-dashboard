@@ -1,5 +1,6 @@
 import type { Client } from 'src/features/clients/types'
 import type { BranchRef } from 'src/features/branches/types'
+import type { EdgeSide } from 'src/shared/utils/cutDrawing'
 import type { MaterialForm, RequirementForm } from './optimizerForm'
 
 // Response types for POST /api/v1/optimize/. The contract is deterministic and cached by
@@ -13,7 +14,9 @@ export type PoolFillOrder = 'auto' | 'offcutsFirst' | 'catalogFirst'
 
 export type MaterialSourceKind = 'catalog' | 'companyOffcut' | 'clientOffcut' | 'manual'
 
-export type EdgeSide = 'top' | 'bottom' | 'left' | 'right'
+// Defined with the drawing primitives (shared/) since that's what consumes it; re-exported here
+// so the rest of the optimizer keeps importing its types from one place.
+export type { EdgeSide }
 
 // Physical material of a sheet, as returned in each Layout.
 export interface OptimizeMaterialSheet {

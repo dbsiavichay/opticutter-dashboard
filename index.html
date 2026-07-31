@@ -3,7 +3,9 @@
   <head>
     <meta charset="utf-8">
     <meta http-equiv="X-UA-Compatible" content="IE=edge">
-    <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
+    <!-- viewport-fit=cover so env(safe-area-inset-*) is non-zero on notched iPhones; the review
+         page's sticky action bar pads itself with it to clear the home indicator. -->
+    <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no, viewport-fit=cover">
     <meta name="referrer" content="no-referrer">
     <meta name="robots" content="noindex, nofollow">
     <meta name="description" content="Maderable Dashboard">
