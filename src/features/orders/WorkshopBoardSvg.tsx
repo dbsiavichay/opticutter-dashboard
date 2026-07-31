@@ -11,7 +11,7 @@ import {
   insetSideLine,
   pieceSig,
   uprightText,
-} from 'src/features/optimizer/cutDrawing'
+} from 'src/shared/utils/cutDrawing'
 import useZoomPan from 'src/shared/hooks/useZoomPan'
 import useFullscreen from 'src/shared/hooks/useFullscreen'
 import ZoomControls from 'src/shared/components/ZoomControls'

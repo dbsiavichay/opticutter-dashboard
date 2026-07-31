@@ -1,4 +1,4 @@
-import { useId, useMemo, useState } from 'react'
+import { useMemo, useState } from 'react'
 import {
   CBadge,
   CButton,
@@ -10,10 +10,9 @@ import {
   CRow,
 } from '@coreui/react'
 
-import useZoomPan from 'src/shared/hooks/useZoomPan'
-import ZoomControls from 'src/shared/components/ZoomControls'
+import SheetSvg from 'src/shared/components/SheetSvg'
 import { stripHalfSuffix } from 'src/shared/utils/halfBoard'
-import type { EdgeSide, Layout, LayoutGroup, MaterialSummary, PlacedPiece } from './types'
+import type { EdgeSide, LayoutGroup, MaterialSummary, PlacedPiece } from './types'
 import {
   EDGE_COLOR,
   PALETTE,
@@ -21,214 +20,10 @@ import {
   bandedSides,
   boardRotation,
   clamp,
-  insetSideLine,
   pieceSig,
   uprightText,
-} from './cutDrawing'
-import type { SideLine } from './cutDrawing'
-
-// --- Reusable sheet SVG (used in the small card and expanded in the modal) ---
-
-interface SheetSvgProps {
-  layout: Layout
-  colorFor: (sig: string) => string
-  dimSig?: string | null
-  highlightId?: string | null
-  onPieceEnter?: (p: PlacedPiece) => void
-  onPieceLeave?: () => void
-  maxHeight?: number
-  // Shows board dimensions (width at top, height on the left). Expanded view only.
-  showDimensions?: boolean
-  // Enables zoom + pan (pinch/wheel/drag + buttons). Expanded view only.
-  enableZoom?: boolean
-}
-
-const SheetSvg = ({
-  layout,
-  colorFor,
-  dimSig,
-  highlightId,
-  onPieceEnter,
-  onPieceLeave,
-  maxHeight = 420,
-  showDimensions = false,
-  enableZoom = false,
-}: SheetSvgProps) => {
-  const rawId = useId()
-  const wasteId = `waste-${rawId.replace(/:/g, '')}`
-  const { material, placedPieces, remainders, statistics } = layout
-  const W = material.width
-  const H = material.height
-  const edgeWidth = clamp(Math.max(W, H) * 0.012, 8, 22)
-
-  const { svgRef, groupTransform, scale, isZoomed, zoomIn, zoomOut, reset } = useZoomPan()
-
-  // Extra margin reserved for the board dimension labels (expanded view only).
-  const margin = showDimensions ? Math.max(W, H) * 0.07 : 0
-  const labelSize = clamp(Math.max(W, H) * 0.028, 16, 44)
-
-  const svg = (
-    <svg
-      ref={enableZoom ? svgRef : undefined}
-      viewBox={`${-margin} ${-margin} ${H + margin} ${W + margin}`}
-      preserveAspectRatio="xMidYMid meet"
-      style={{
-        width: '100%',
-        height: 'auto',
-        display: 'block',
-        maxHeight,
-        touchAction: enableZoom ? 'none' : undefined,
-        cursor: enableZoom && isZoomed ? 'grab' : undefined,
-      }}
-      role="img"
-      aria-label={`Hoja ${material.width}×${material.height} con ${statistics.piecesCount} piezas`}
-    >
-      <defs>
-        <pattern id={wasteId} patternUnits="userSpaceOnUse" width={48} height={48}>
-          <rect width={48} height={48} fill="#f1f3f5" />
-          <path d="M0,48 L48,0" stroke="#ced4da" strokeWidth={3} />
-        </pattern>
-      </defs>
-
-      {/* Board dimensions: in landscape space, outside the rotation (top = H, side = W). */}
-      {showDimensions && (
-        <g
-          transform={enableZoom ? groupTransform : undefined}
-          fill="#868e96"
-          style={{ userSelect: 'none' }}
-        >
-          <text
-            x={H / 2}
-            y={-margin / 2}
-            fontSize={labelSize}
-            textAnchor="middle"
-            dominantBaseline="central"
-          >
-            {H} mm
-          </text>
-          <text
-            x={-margin / 2}
-            y={W / 2}
-            fontSize={labelSize}
-            textAnchor="middle"
-            dominantBaseline="central"
-            transform={`rotate(-90 ${-margin / 2} ${W / 2})`}
-          >
-            {W} mm
-          </text>
-        </g>
-      )}
-
-      {/* Board and pieces rotated 90° clockwise (landscape); text is counter-rotated to stay readable. */}
-      <g transform={enableZoom ? `${groupTransform} ${boardRotation(H)}` : boardRotation(H)}>
-        <rect
-          x={0}
-          y={0}
-          width={W}
-          height={H}
-          fill="#ffffff"
-          stroke="#868e96"
-          strokeWidth={1.5}
-          vectorEffect="non-scaling-stroke"
-        />
-
-        {/* Offcuts / waste */}
-        {remainders.map((r, idx) => (
-          <rect
-            key={`rem-${idx}`}
-            x={r.x}
-            y={r.y}
-            width={r.width}
-            height={r.height}
-            fill={`url(#${wasteId})`}
-            stroke="#ced4da"
-            strokeWidth={1}
-            strokeDasharray="6 6"
-            vectorEffect="non-scaling-stroke"
-          />
-        ))}
-
-        {placedPieces.map((p) => {
-          const sig = pieceSig(p)
-          const color = colorFor(sig)
-          const dimmed =
-            highlightId != null ? p.pieceId !== highlightId : dimSig != null && sig !== dimSig
-          const minSide = Math.min(p.width, p.height)
-          const fontSize = clamp(minSide / 5, 22, 90)
-          // On zoom-in, small pieces reveal their dimensions (threshold based on effective scale).
-          const showText = p.width * scale > 130 && p.height * scale > 90
-
-          return (
-            <g
-              key={p.pieceId}
-              opacity={dimmed ? 0.35 : 1}
-              onMouseEnter={() => onPieceEnter?.(p)}
-              onMouseLeave={() => onPieceLeave?.()}
-              style={{ cursor: 'default' }}
-            >
-              <title>
-                {p.originalWidth}×{p.originalHeight} mm{p.rotated ? ' (rotada 90°)' : ''}
-              </title>
-              <rect
-                x={p.x}
-                y={p.y}
-                width={p.width}
-                height={p.height}
-                fill={color}
-                fillOpacity={0.85}
-                stroke="rgba(0,0,0,0.35)"
-                strokeWidth={1}
-                vectorEffect="non-scaling-stroke"
-              />
-
-              {/* Edge banding: thick band inset from the piece border (does not overlap the cut line) */}
-              {bandedSides(p).map((side) => {
-                const l = insetSideLine(side, p.x, p.y, p.width, p.height, edgeWidth)
-                return (
-                  <line
-                    key={`${p.pieceId}-${side}`}
-                    x1={l.x1}
-                    y1={l.y1}
-                    x2={l.x2}
-                    y2={l.y2}
-                    stroke={EDGE_COLOR}
-                    strokeWidth={edgeWidth}
-                    strokeLinecap="butt"
-                  />
-                )
-              })}
-
-              {showText && (
-                <text
-                  x={p.x + p.width / 2}
-                  y={p.y + p.height / 2}
-                  fontSize={fontSize}
-                  textAnchor="middle"
-                  dominantBaseline="central"
-                  fill="#212529"
-                  transform={uprightText(p.x + p.width / 2, p.y + p.height / 2)}
-                  style={{ pointerEvents: 'none', userSelect: 'none' }}
-                >
-                  {p.originalWidth}×{p.originalHeight}
-                  {p.rotated ? ' ↻' : ''}
-                </text>
-              )}
-            </g>
-          )
-        })}
-      </g>
-    </svg>
-  )
-
-  if (!enableZoom) return svg
-
-  return (
-    <div style={{ position: 'relative', overflow: 'hidden' }}>
-      {svg}
-      <ZoomControls onZoomIn={zoomIn} onZoomOut={zoomOut} onReset={reset} isZoomed={isZoomed} />
-    </div>
-  )
-}
+} from 'src/shared/utils/cutDrawing'
+import type { SideLine } from 'src/shared/utils/cutDrawing'
 
 // --- Single-piece detail panel (shown inside the modal) ---
 

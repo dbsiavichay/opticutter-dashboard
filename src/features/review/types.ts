@@ -1,3 +1,5 @@
+import type { EdgeSide } from 'src/shared/utils/cutDrawing'
+
 export type ReviewPreOrderStatus =
   | 'draft'
   | 'sent'
@@ -40,6 +42,48 @@ export interface ReviewService {
   lineTotal: number
 }
 
+// Edge banding of a piece in the diagram. Unlike the optimizer's PlacedPieceEdges this carries no
+// catalog identifiers — the public endpoint strips them.
+export interface ReviewPieceEdges {
+  sides: EdgeSide[]
+  color?: string | null
+  bandType?: string | null
+  notation?: string | null
+}
+
+// A piece as laid out on the sheet. `pieceId` is the label the client typed, optionally suffixed
+// `#N` when the label has several physical instances.
+export interface ReviewPlacedPiece {
+  pieceId: string
+  x: number
+  y: number
+  width: number
+  height: number
+  rotated: boolean
+  originalWidth: number
+  originalHeight: number
+  edges?: ReviewPieceEdges | null
+}
+
+export interface ReviewSheet {
+  materialName: string | null
+  width: number
+  height: number
+  thickness: number
+  halfBoard: boolean
+}
+
+// One cutting pattern plus how many physical sheets are cut that way. Carries no saw paths and no
+// efficiency stats: the client is shown the arrangement, not the shop's nesting quality.
+export interface ReviewLayoutGroup {
+  count: number
+  sheetNumbers: number[]
+  sheet: ReviewSheet
+  placedPieces: ReviewPlacedPiece[]
+  remainders: { x: number; y: number; width: number; height: number }[]
+  piecesCount: number
+}
+
 export interface ReviewPreOrder {
   reference: string // pre-order code (PRE-…), displayed as the document reference
   status: ReviewPreOrderStatus
@@ -55,6 +99,7 @@ export interface ReviewPreOrder {
   servicesTotal?: number
   total: number
   totalBoardsUsed: number
+  totalPieces: number
   createdAt: string
   sentAt: string | null
   confirmedAt: string | null
@@ -62,4 +107,5 @@ export interface ReviewPreOrder {
   lines: ReviewLine[]
   additionalServices?: ReviewService[]
   pieces: ReviewPiece[]
+  layoutGroups: ReviewLayoutGroup[]
 }

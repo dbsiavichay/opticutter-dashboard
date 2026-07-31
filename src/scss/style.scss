@@ -56,6 +56,21 @@ body {
   min-height: calc(3rem + 1px); // stylelint-disable-line function-disallowed-list
 }
 
+// Public review page: from `lg` up the right rail (piece list / billing) stays put while the board
+// stack scrolls, so the client can check a piece against the diagram without losing their place.
+// Needs its own scroll area or a tall list would be pinned with its bottom unreachable. Below `lg`
+// the rail is a full-screen tab and must scroll with the page, hence the media query — Bootstrap's
+// `sticky-lg-top` handles the position but has no responsive max-height counterpart.
+@media (min-width: 992px) {
+  .review-rail {
+    position: sticky;
+    top: 1rem;
+    max-height: calc(100dvh - 6rem); // leaves room for the sticky action bar
+    overflow-y: auto;
+    scrollbar-gutter: stable;
+  }
+}
+
 @include color-mode(dark) {
   body {
     background-color: var(--cui-dark-bg-subtle);

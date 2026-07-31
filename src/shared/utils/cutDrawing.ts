@@ -1,8 +1,10 @@
-// Pure drawing primitives for the cut plan, extracted from CutLayoutDiagram.tsx for reuse in the
-// workshop order view (orders/WorkshopBoardSvg). No JSX or state: just the color palette, the
-// dimension signature, and edge banding geometry. Logic is identical to what was inline in the optimizer.
+// Pure drawing primitives for the cut plan: the color palette, the dimension signature, and edge
+// banding geometry. No JSX or state. Lives in shared/ because three features draw the same boards —
+// the optimizer preview, the workshop board, and the client's public review — and shared/ must never
+// import from a feature.
 
-import type { EdgeSide, PlacedPieceEdges } from './types'
+// Geometric side of a piece as drawn (post-rotation).
+export type EdgeSide = 'top' | 'bottom' | 'left' | 'right'
 
 // Paleta estable para colorear piezas por dimensión (firma). Colores tipo Tableau, legibles.
 export const PALETTE = [
@@ -27,8 +29,19 @@ export const SIDE_LABELS_ES: Record<EdgeSide, string> = {
   right: 'Derecho',
 }
 
-// Minimal structural shape shared by PlacedPiece (optimizer) and CutPiece (orders): enough to
-// draw the scaled rectangle, its signature color, and the edge banding strips.
+// Only what the drawing needs from an edge-banding record. Kept minimal on purpose: the optimizer's
+// PlacedPieceEdges carries catalog identifiers that the public review response deliberately omits,
+// so both satisfy this structurally without the drawing code knowing which one it got.
+export interface DrawableEdges {
+  sides: EdgeSide[]
+  notation?: string | null
+  color?: string | null
+  bandType?: string | null
+}
+
+// Minimal structural shape shared by PlacedPiece (optimizer), CutPiece (orders) and
+// ReviewPlacedPiece (review): enough to draw the scaled rectangle, its signature color, and the
+// edge banding strips.
 export interface DrawablePiece {
   x: number
   y: number
@@ -37,7 +50,18 @@ export interface DrawablePiece {
   originalWidth: number
   originalHeight: number
   rotated: boolean
-  edges?: PlacedPieceEdges | null
+  edges?: DrawableEdges | null
+}
+
+// A piece the renderer can also identify, for highlighting and tap callbacks.
+export type DrawnPiece = DrawablePiece & { pieceId: string }
+
+// What SheetSvg needs to render one sheet, regardless of which endpoint produced it. Generic over
+// the piece so callers get their own richer type back from the hover/tap callbacks.
+export interface DrawableLayout<P extends DrawnPiece = DrawnPiece> {
+  material: { width: number; height: number }
+  placedPieces: P[]
+  remainders: { x: number; y: number; width: number; height: number }[]
 }
 
 // Identical pieces share the same nominal dimensions (originalWidth×originalHeight).
@@ -86,4 +110,12 @@ export const insetSideLine = (
     case 'right':
       return { x1: x + w - o, y1: y, x2: x + w - o, y2: y + h }
   }
+}
+
+// The optimizer suffixes a piece label with `#N` when it has several physical instances, so the
+// base label is what a human recognises ("Puerta izq#2" → "Puerta izq"). Auto-generated ids
+// (`piece_7`) carry no meaning and are reported as empty so callers can fall back to dimensions.
+export const pieceLabel = (pieceId: string): string => {
+  const base = pieceId.replace(/#\d+$/, '')
+  return /^piece_\d+$/.test(base) ? '' : base
 }

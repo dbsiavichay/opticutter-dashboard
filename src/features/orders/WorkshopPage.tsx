@@ -21,7 +21,7 @@ import { cilArrowLeft, cilArrowRight, cilCheckAlt, cilPrint } from '@coreui/icon
 
 import { useHasRole } from 'src/features/auth/useAuth'
 import { usePrintLabel } from 'src/features/print/usePrint'
-import { PALETTE, pieceSig } from 'src/features/optimizer/cutDrawing'
+import { PALETTE, pieceSig } from 'src/shared/utils/cutDrawing'
 import { stripHalfSuffix } from 'src/shared/utils/halfBoard'
 import ReferenceNote from 'src/shared/components/ReferenceNote'
 import OrderStatusBadge from './OrderStatusBadge'
