@@ -45,7 +45,11 @@ export interface ReviewService {
 // Edge banding of a piece in the diagram. Unlike the optimizer's PlacedPieceEdges this carries no
 // catalog identifiers — the public endpoint strips them.
 export interface ReviewPieceEdges {
+  // Banded sides in geometric space (post-rotation): where the band physically goes on the sheet.
   sides: EdgeSide[]
+  // The same bands in the piece's own frame — the one originalWidth/originalHeight and `notation`
+  // refer to. Optional: a backend older than this field doesn't send it.
+  nominalSides?: EdgeSide[]
   color?: string | null
   bandType?: string | null
   notation?: string | null
