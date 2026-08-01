@@ -36,22 +36,31 @@ const PieceDetail = ({ piece }: { piece: ReviewPlacedPiece | null }) => {
     )
   }
   const label = pieceLabel(piece.pieceId)
+  // The panel describes the piece as the client ordered it, so the measurement, the figure and the
+  // notation all live in its own frame. `edges.sides` comes rotated into the frame of the drawing
+  // (to paint the band on its physical edge) and is only <SheetSvg>'s business: reading L/C off it
+  // swaps them on every rotated piece.
+  const edges = piece.edges
+    ? { ...piece.edges, sides: piece.edges.nominalSides ?? piece.edges.sides }
+    : null
   return (
     <div className="border rounded p-3">
       <div className="d-flex align-items-center justify-content-between gap-2 mb-2">
         <strong>{label || 'Pieza'}</strong>
-        {piece.edges?.sides?.length ? <CantoPreview sides={cantoSides(piece.edges)} /> : null}
+        {edges?.sides?.length ? <CantoPreview sides={cantoSides(edges)} /> : null}
       </div>
       <Detail label="Medida" value={`${piece.originalWidth} × ${piece.originalHeight} mm`} />
-      <Detail label="Cantos" value={edgesLabel(piece.edges)} />
-      {piece.edges?.sides?.length ? (
-        <Detail label="Notación" value={cantoNotation(piece.edges)} />
+      <Detail label="Cantos" value={edgesLabel(edges)} />
+      {edges?.sides?.length ? (
+        // The server already computes the notation from the unrotated sides; recomputing it here
+        // is only a fallback for a payload that predates the field.
+        <Detail label="Notación" value={edges.notation || cantoNotation(edges)} />
       ) : null}
-      {piece.edges?.color && <Detail label="Color del canto" value={piece.edges.color} />}
+      {edges?.color && <Detail label="Color del canto" value={edges.color} />}
       {piece.rotated && (
         <div className="text-body-secondary small mt-2">
-          Esta pieza se dibuja girada para aprovechar mejor el tablero. La medida que recibes es la
-          de arriba.
+          Esta pieza fue girada 90° para aprovechar mejor el tablero. La medida que recibes es la de
+          arriba.
         </div>
       )}
     </div>

@@ -1,5 +1,10 @@
 // Format helpers for the public review page.
 // Money/date formatting is shared app-wide; `edgesLabel` is review-specific.
+//
+// The three edge helpers below read `sides` in the piece's NOMINAL frame — that's what
+// `notationFromSides` counts as L (left/right) and C (top/bottom). The cut list's edges are
+// nominal already, but a placed piece's `sides` come rotated into the frame of the drawing, so
+// pass its `nominalSides` instead: otherwise every rotated piece reads its 1L as a 1C.
 
 import { notationFromSides } from 'src/features/optimizer/optimizerForm'
 import type { CantoSides } from 'src/shared/components/CantoPreview'
