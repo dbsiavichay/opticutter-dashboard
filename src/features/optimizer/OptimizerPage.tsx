@@ -10,10 +10,11 @@ import {
   buildPayload,
   cloneMaterial,
   emptyCatalogMaterial,
+  isPristineMaterial,
   isRequirementEmpty,
   piecesMissingBandingProduct,
 } from './optimizerForm'
-import type { MaterialForm } from './optimizerForm'
+import type { MaterialForm, RequirementForm } from './optimizerForm'
 import type { OptimizerDraftPayload, PackingStrategy } from './types'
 import { clearAutosave, loadAutosave, saveAutosave } from './optimizerStorage'
 import { downloadCsv, requirementsToCsv } from './piecesCsv'
@@ -255,6 +256,22 @@ const OptimizerPage = () => {
     })
   }
 
+  // Import: pieces plus the material groups the CSV declared. "Replace" makes the workspace mirror
+  // the file, so groups that received no piece are dropped; when appending, only the untouched
+  // starter card is — otherwise every import would leave an empty "Tablero sin elegir" group behind.
+  const handleImport = (
+    rows: RequirementForm[],
+    replace: boolean,
+    newMaterials: MaterialForm[],
+  ) => {
+    const used = new Set(pieces.addMany(rows, replace).map((r) => r.materialUid))
+    setMaterials((ms) => {
+      const merged = [...ms, ...newMaterials]
+      const kept = merged.filter((m) => used.has(m.uid) || (!replace && !isPristineMaterial(m)))
+      return kept.length ? kept : [emptyCatalogMaterial()]
+    })
+  }
+
   const handleExport = () =>
     downloadCsv('piezas.csv', requirementsToCsv(pieces.requirements, materials, boards))
 
@@ -369,7 +386,7 @@ const OptimizerPage = () => {
         visible={showImport}
         materials={materials}
         boards={boards}
-        onImport={(rows, replace) => pieces.addMany(rows, replace)}
+        onImport={handleImport}
         onClose={() => setShowImport(false)}
       />
 

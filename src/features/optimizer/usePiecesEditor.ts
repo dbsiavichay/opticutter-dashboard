@@ -158,15 +158,18 @@ export const usePiecesEditor = (materials: MaterialForm[], initial?: Requirement
 
   // Adds imported/pasted rows. `replace` replaces the list; otherwise appends (replacing a single
   // blank row if that is all that exists). The result is reclustered so multi-material imports group.
-  const addMany = (rows: RequirementForm[], replace: boolean) => {
-    applyWithHistory((rs) => {
-      if (replace) return clusterByMaterial(rows.length ? rows : [emptyRequirement(firstUid())])
-      if (rs.length === 1 && rs[0] && isRequirementEmpty(rs[0])) {
-        return clusterByMaterial(rows.length ? rows : rs)
-      }
-      return clusterByMaterial([...rs, ...rows])
-    })
+  // Returns the resulting list so the caller can prune material groups that ended up with no pieces.
+  const addMany = (rows: RequirementForm[], replace: boolean): RequirementForm[] => {
+    const rs = requirements
+    const next = replace
+      ? clusterByMaterial(rows.length ? rows : [emptyRequirement(firstUid())])
+      : rs.length === 1 && rs[0] && isRequirementEmpty(rs[0])
+        ? clusterByMaterial(rows.length ? rows : rs)
+        : clusterByMaterial([...rs, ...rows])
+    setHistory((h) => [...h.slice(-(MAX_HISTORY - 1)), rs])
+    setRequirements(next)
     setSelected(new Set())
+    return next
   }
 
   const remove = (i: number) => {

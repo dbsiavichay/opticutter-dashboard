@@ -1,7 +1,8 @@
-import { useMutation, useQuery } from '@tanstack/react-query'
-import { productsApi } from 'src/features/products/productsApi'
 import type { BoardProduct, EdgeBandingProduct } from 'src/features/products/types'
+import { useMutation, useQuery } from '@tanstack/react-query'
+
 import { optimizerApi } from './optimizerApi'
+import { productsApi } from 'src/features/products/productsApi'
 
 export const useOptimize = () =>
   useMutation({
@@ -9,6 +10,8 @@ export const useOptimize = () =>
   })
 
 // Catalog boards (products type=board). `select` narrows them to BoardProduct[].
+// The limit caps what the board picker and the CSV import can match against, so it is generous:
+// a board past it is invisible to both. A server-searched select would be the real fix.
 export const useBoards = () =>
   useQuery({
     queryKey: ['boards'],

@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import type { KeyboardEvent } from 'react'
 import { CDropdown, CDropdownMenu, CDropdownToggle, CFormInput } from '@coreui/react'
+import { normalizeText } from 'src/shared/utils/text'
 
 export interface SelectOption {
   value: string
@@ -18,14 +19,6 @@ interface SearchableSelectProps {
   disabled?: boolean
   size?: 'sm' | 'lg'
 }
-
-// Normalizes for case- and accent-insensitive search (Spanish locale).
-const norm = (s: string): string =>
-  s
-    .toLowerCase()
-    .normalize('NFD')
-    .replace(/[\u0300-\u036f]/g, '')
-    .trim()
 
 // Text-filter combobox: select-style toggle + search input + filtered list. Replaces CFormSelect
 // for long lists (CoreUI free does not ship a searchable select).
@@ -46,10 +39,10 @@ const SearchableSelect = ({
   const selected = options.find((o) => o.value === value)
 
   const filtered = useMemo(() => {
-    const tokens = norm(query).split(/\s+/).filter(Boolean)
+    const tokens = normalizeText(query).split(/\s+/).filter(Boolean)
     if (tokens.length === 0) return options
     return options.filter((o) => {
-      const hay = norm(`${o.label} ${o.sublabel ?? ''}`)
+      const hay = normalizeText(`${o.label} ${o.sublabel ?? ''}`)
       return tokens.every((t) => hay.includes(t))
     })
   }, [options, query])
