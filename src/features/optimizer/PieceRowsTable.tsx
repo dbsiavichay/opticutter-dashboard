@@ -24,8 +24,8 @@ import {
 
 import SearchableSelect from 'src/shared/components/SearchableSelect'
 import CantoPreview from 'src/shared/components/CantoPreview'
-import type { BoardProduct, EdgeBandingProduct } from 'src/features/products/types'
-import type { BandType, MaterialForm, RequirementForm } from './optimizerForm'
+import type { EdgeBandingProduct } from 'src/features/products/types'
+import type { BandType, RequirementForm } from './optimizerForm'
 import {
   BANDTYPE_ABBR,
   BAND_TYPES,
@@ -39,6 +39,7 @@ import {
 } from './optimizerForm'
 import type { FillScope, FillableField, PiecesEditor, SortDir, SortField } from './usePiecesEditor'
 import { parsePieces } from './piecesCsv'
+import { rowsToRequirements } from './piecesImport'
 
 interface PieceRowsTableProps {
   materialUid: string
@@ -51,8 +52,6 @@ interface PieceRowsTableProps {
   edgeBandings: EdgeBandingProduct[]
   // Tapacantos coordinated with this group's board (same family + width); empty ⇒ use the global list.
   boardEdgeBandings: EdgeBandingProduct[]
-  materials: MaterialForm[]
-  boards: BoardProduct[]
 }
 
 // Fields that accept a pasted column of values to create rows.
@@ -114,8 +113,6 @@ const PieceRowsTable = ({
   editor,
   edgeBandings,
   boardEdgeBandings,
-  materials,
-  boards,
 }: PieceRowsTableProps) => {
   const {
     selected,
@@ -256,8 +253,11 @@ const PieceRowsTable = ({
 
       if (text.includes('\t')) {
         e.preventDefault()
-        const { rows: parsed } = parsePieces(text, materials, boards)
-        if (parsed.length) pasteRows(startFlat, parsed, materialUid)
+        // The material column of the pasted text is ignored on purpose: a paste inside a group
+        // always belongs to that group. Only the import modal may create groups.
+        const { rows: parsed } = parsePieces(text)
+        if (parsed.length)
+          pasteRows(startFlat, rowsToRequirements(parsed, materialUid), materialUid)
         return
       }
 
@@ -268,7 +268,7 @@ const PieceRowsTable = ({
       pasteIntoField(startFlat, field, lines)
     },
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [materials, boards, pasteRows, pasteIntoField, startIndex, materialUid],
+    [pasteRows, pasteIntoField, startIndex, materialUid],
   )
 
   // Local row under the pointer's Y coordinate (clamped to this group's rows).

@@ -245,7 +245,6 @@ const MaterialGroups = ({
               editor={editor}
               boards={boards}
               edgeBandings={edgeBandings}
-              materials={materials}
               onToggle={() => toggle(m.uid)}
               onUpdate={onUpdateMaterial}
               onRequestDelete={onRequestDeleteMaterial}

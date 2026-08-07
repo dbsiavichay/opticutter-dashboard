@@ -134,6 +134,18 @@ export const emptyRequirement = (materialUid = ''): RequirementForm => ({
   edgeBanding: emptyEdgeBanding(),
 })
 
+// A starter group the user never touched: a catalog material with nothing filled in. Used after a
+// CSV import to drop the blank card the page opens with once the import brought its own groups.
+export const isPristineMaterial = (m: MaterialForm): boolean =>
+  m.source === 'catalog' &&
+  !m.boardId &&
+  !m.label.trim() &&
+  m.height === '' &&
+  m.width === '' &&
+  m.thickness === '' &&
+  m.costPerUnit === '' &&
+  (m.offcuts ?? []).length === 0
+
 export const isMaterialValid = (m: MaterialForm): boolean =>
   m.source === 'catalog'
     ? !!m.boardId
@@ -213,7 +225,9 @@ export const materialLabel = (m: MaterialForm, boards: BoardProduct[]): string =
   if (m.source === 'catalog') {
     // Product id may arrive as a number at runtime; compare as string to be safe.
     const b = boards.find((x) => String(x.id) === String(m.boardId))
-    return b ? `${b.name} (${b.code})` : 'Tablero sin elegir'
+    if (b) return `${b.name} (${b.code})`
+    // CSV import pre-labels a group with the text that created it, before a board is picked.
+    return m.label.trim() || 'Tablero sin elegir'
   }
   if (m.label.trim()) return m.label.trim()
   const dims = [m.height, m.width, m.thickness].filter((v) => v !== '' && v != null).join('×')

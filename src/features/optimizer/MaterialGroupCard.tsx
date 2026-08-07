@@ -52,7 +52,6 @@ interface MaterialGroupCardProps {
   editor: PiecesEditor
   boards: BoardProduct[]
   edgeBandings: EdgeBandingProduct[]
-  materials: MaterialForm[]
   onToggle: () => void
   onUpdate: <K extends keyof MaterialForm>(uid: string, field: K, value: MaterialForm[K]) => void
   onRequestDelete: (m: MaterialForm) => void
@@ -125,7 +124,6 @@ const MaterialGroupCard = ({
   editor,
   boards,
   edgeBandings,
-  materials,
   onToggle,
   onUpdate,
   onRequestDelete,
@@ -148,6 +146,10 @@ const MaterialGroupCard = ({
     m.source === 'catalog'
       ? boardDims(boards.find((b) => String(b.id) === String(m.boardId)))
       : null
+
+  // A CSV import labels the groups it creates with the text that produced them. Until a board is
+  // picked, that text is the only thing telling two pending groups apart, so it takes the dims slot.
+  const pendingLabel = m.source === 'catalog' && !m.boardId ? m.label.trim() : ''
 
   // When the board CHANGES, re-infer the tapacanto for every banded piece from its band type: a
   // new board invalidates prior tapacanto choices (manual picks included). The change is detected
@@ -246,7 +248,17 @@ const MaterialGroupCard = ({
                 as the others and all selects stay vertically aligned. */}
             <div className="d-flex justify-content-between align-items-baseline gap-2 mb-1">
               <CFormLabel className="small mb-0">Tablero</CFormLabel>
-              {dims && <span className="small text-body-secondary text-nowrap">{dims}</span>}
+              {pendingLabel ? (
+                <span
+                  className="small text-warning-emphasis text-truncate"
+                  style={{ maxWidth: 180 }}
+                  title={`Importado como “${pendingLabel}”`}
+                >
+                  {pendingLabel}
+                </span>
+              ) : (
+                dims && <span className="small text-body-secondary text-nowrap">{dims}</span>
+              )}
             </div>
             <SearchableSelect
               size="sm"
@@ -500,8 +512,6 @@ const MaterialGroupCard = ({
             editor={editor}
             edgeBandings={edgeBandings}
             boardEdgeBandings={boardEdgeBandings}
-            materials={materials}
-            boards={boards}
           />
           <div className="d-flex align-items-center gap-2 mt-2 flex-wrap">
             <CButton

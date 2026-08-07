@@ -1,7 +1,8 @@
 import type { BoardProduct } from 'src/features/products/types'
-import { emptyRequirement, materialLabel } from './optimizerForm'
+import { materialLabel } from './optimizerForm'
 import type { MaterialForm, RequirementForm } from './optimizerForm'
 import { downloadBlob } from 'src/shared/utils/download'
+import { normalizeText } from 'src/shared/utils/text'
 
 // CSV/TSV import and export for the pieces list. No dependencies: the parser handles
 // paste from Excel/Sheets (tab-delimited) and CSV files (comma or semicolon).
@@ -41,10 +42,8 @@ const HEADER_WORDS = [
   'giro',
 ]
 
+// Anything outside this set (including 'no', '0', 'false' and a blank cell) reads as "do not rotate".
 const TRUE_WORDS = new Set(['si', 'sí', 'x', '1', 'true', 'verdadero', 'yes', '✓'])
-const FALSE_WORDS = new Set(['no', '0', 'false', 'falso', ''])
-
-const normalize = (s: string): string => s.trim().toLowerCase().replace(/\s+/g, ' ')
 
 // Converts text to a number, accepting comma as decimal separator. Returns '' if not a number.
 const parseNum = (s: string): number | string => {
@@ -92,42 +91,44 @@ const splitLine = (line: string, delimiter: string): string[] => {
 // for labels that happen to contain "alto", "ancho", etc.).
 const looksLikeHeader = (cells: string[]): boolean => {
   const words = new Set(HEADER_WORDS)
-  const hits = cells.filter((c) => words.has(normalize(c))).length
+  const hits = cells.filter((c) => words.has(normalizeText(c))).length
   return hits >= 2
 }
 
-// Resolves the Material column text against the loaded materials. No match → first material + warning.
-const resolveMaterialUid = (
-  text: string,
-  materials: MaterialForm[],
-  boards: BoardProduct[],
-): { uid: string; matched: boolean } => {
-  const target = normalize(text)
-  if (target) {
-    const match = materials.find(
-      (m) =>
-        normalize(materialLabel(m, boards)) === target ||
-        (m.label.trim() !== '' && normalize(m.label) === target),
-    )
-    if (match) return { uid: match.uid, matched: true }
-  }
-  return { uid: materials[0]?.uid ?? '', matched: false }
+// A CSV row before it is bound to a material group: it keeps the raw Material cell so the
+// destination can be resolved — and overridden by the user — at confirm time. See piecesImport.ts.
+export interface RawPieceRow {
+  materialText: string // Material cell, '' when missing or blank
+  height: number | string
+  width: number | string
+  quantity: number | string
+  priority: number | string
+  label: string
+  canRotate: boolean
+  lineNo: number // 1-based source line, for warnings
 }
 
-export interface ParseResult {
-  rows: RequirementForm[]
-  warnings: string[]
+// A distinct Material value found in the CSV. `key` is the accent/case-insensitive dedupe key
+// (so "Melamina Blanca" and "melamina blanca" are ONE entry); `text` is the first raw spelling.
+export interface CsvMaterialText {
+  key: string
+  text: string
+  count: number // CSV rows carrying it
 }
 
-// Parses pasted or file text into pieces resolved against `materials`. Collects human-readable warnings.
-export const parsePieces = (
-  text: string,
-  materials: MaterialForm[],
-  boards: BoardProduct[],
-): ParseResult => {
+export interface ParsedPieces {
+  rows: RawPieceRow[]
+  materialTexts: CsvMaterialText[] // first-appearance order
+  warnings: string[] // dimension problems only — material resolution warns from the mapping UI
+}
+
+// Parses pasted or file text into raw rows. Pure: it depends on neither the form state nor the
+// catalog, so it is cheap to re-run on every keystroke and never allocates material uids.
+export const parsePieces = (text: string): ParsedPieces => {
   const warnings: string[] = []
-  const rows: RequirementForm[] = []
-  if (!text.trim()) return { rows, warnings }
+  const rows: RawPieceRow[] = []
+  const byKey = new Map<string, CsvMaterialText>()
+  if (!text.trim()) return { rows, materialTexts: [], warnings }
 
   const delimiter = detectDelimiter(text)
   const lines = text.split(/\r?\n/).filter((l) => l.trim() !== '')
@@ -140,34 +141,40 @@ export const parsePieces = (
       cells
     const lineNo = idx + 1
 
-    const { uid, matched } = resolveMaterialUid(material, materials, boards)
-    if (!matched && material.trim()) {
-      warnings.push(
-        `Fila ${lineNo}: material "${material.trim()}" no encontrado; se asignó el primero.`,
-      )
+    const q = parseNum(cant)
+    const p = parseNum(prior)
+    const rot = normalizeText(rotar)
+
+    const row: RawPieceRow = {
+      materialText: material.trim(),
+      height: parseNum(alto),
+      width: parseNum(ancho),
+      quantity: q === '' ? 1 : q,
+      priority: p === '' ? 0 : p,
+      label: etiqueta.trim(),
+      canRotate: TRUE_WORDS.has(rot),
+      lineNo,
     }
 
-    const req = emptyRequirement(uid)
-    req.height = parseNum(alto)
-    req.width = parseNum(ancho)
-    const q = parseNum(cant)
-    req.quantity = q === '' ? 1 : q
-    const p = parseNum(prior)
-    req.priority = p === '' ? 0 : p
-    req.label = etiqueta.trim()
-
-    const rot = normalize(rotar)
-    if (TRUE_WORDS.has(rot)) req.canRotate = true
-    else if (FALSE_WORDS.has(rot)) req.canRotate = rot === '' ? req.canRotate : false
-
-    if (Number(req.height) <= 0 || Number(req.width) <= 0) {
+    if (Number(row.height) <= 0 || Number(row.width) <= 0) {
       warnings.push(`Fila ${lineNo}: medidas inválidas (largo/ancho).`)
     }
-    rows.push(req)
+
+    const key = normalizeText(row.materialText)
+    const seen = byKey.get(key)
+    if (seen) seen.count += 1
+    else byKey.set(key, { key, text: row.materialText, count: 1 })
+
+    rows.push(row)
   })
 
-  return { rows, warnings }
+  return { rows, materialTexts: [...byKey.values()], warnings }
 }
+
+// A Material column full of numbers almost always means the CSV omitted that column: the parser is
+// positional, so Largo lands in it. Used to warn instead of silently importing garbage material names.
+export const looksLikeMissingMaterialColumn = (texts: CsvMaterialText[]): boolean =>
+  texts.length >= 3 && texts.every((t) => t.text !== '' && parseNum(t.text) !== '')
 
 const csvCell = (v: string | number): string => {
   const s = String(v)
