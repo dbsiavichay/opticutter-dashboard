@@ -84,7 +84,8 @@ const OptimizerPage = () => {
     isSupported: canFullscreen,
     toggle,
   } = useFullscreen<HTMLDivElement>()
-  // Modals must portal INSIDE the fullscreen host, not into document.body which sits outside it.
+  // Modals and dropdown menus must portal INSIDE the fullscreen host: document.body sits outside
+  // the fullscreen element, so anything portaled there mounts but is never painted.
   const modalContainer = useCallback(() => containerRef.current, [containerRef])
   const addToast = useToastStore((s) => s.addToast)
 

@@ -55,7 +55,8 @@ interface MaterialGroupCardProps {
   editor: PiecesEditor
   boards: BoardProduct[]
   edgeBandings: EdgeBandingProduct[]
-  // Fullscreen portal target for modals opened from inside the pieces table.
+  // Fullscreen portal target for the portaled overlays in this card: the board / tapacanto dropdown
+  // menus and the modals opened from inside the pieces table.
   container?: ModalContainer
   onToggle: () => void
   onUpdate: <K extends keyof MaterialForm>(uid: string, field: K, value: MaterialForm[K]) => void
@@ -286,6 +287,7 @@ const MaterialGroupCard = ({
                 sublabel: b.code,
               }))}
               onChange={(v) => onUpdate(m.uid, 'boardId', v)}
+              container={container}
             />
           </div>
         ) : (

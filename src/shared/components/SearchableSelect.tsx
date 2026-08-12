@@ -22,6 +22,10 @@ interface SearchableSelectProps {
   // picker). Both props must be set for it to render; the menu closes before it fires.
   footerLabel?: string
   onFooterClick?: () => void
+  // Where to portal the menu. It defaults to document.body, which sits OUTSIDE an element handed to
+  // the Fullscreen API — there the menu mounts but is never painted, so the select looks dead.
+  // Callers inside a fullscreen host pass that host. Resolved once, on mount.
+  container?: () => Element | null
 }
 
 // Text-filter combobox: select-style toggle + search input + filtered list. Replaces CFormSelect
@@ -37,6 +41,7 @@ const SearchableSelect = ({
   size,
   footerLabel,
   onFooterClick,
+  container,
 }: SearchableSelectProps) => {
   const [visible, setVisible] = useState(false)
   const [query, setQuery] = useState('')
@@ -97,6 +102,7 @@ const SearchableSelect = ({
       onShow={() => setVisible(true)}
       onHide={close}
       portal
+      container={container}
     >
       {/* `custom` clones this button and attaches the toggle, bypassing the .btn class (transparent border)
           so the grey form-select border appears like the rest of the form fields. */}

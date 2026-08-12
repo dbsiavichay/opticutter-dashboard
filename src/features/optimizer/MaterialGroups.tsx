@@ -34,7 +34,7 @@ interface MaterialGroupsProps {
   materials: MaterialForm[]
   boards: BoardProduct[]
   edgeBandings: EdgeBandingProduct[]
-  // Fullscreen portal target for modals opened from inside a group's pieces table.
+  // Fullscreen portal target for a group's portaled overlays (dropdown menus, modals).
   container?: ModalContainer
   onAddMaterial: () => void
   onUpdateMaterial: <K extends keyof MaterialForm>(

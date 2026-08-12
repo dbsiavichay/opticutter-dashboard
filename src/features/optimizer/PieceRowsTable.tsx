@@ -59,7 +59,8 @@ interface PieceRowsTableProps {
   // Board thickness (catalog materials only), used to pre-filter the full-catalog picker to the
   // banding width that physically covers this board.
   boardThickness?: number
-  // Fullscreen portal target for the picker modal; omitted where there is no fullscreen host.
+  // Fullscreen portal target for the tapacanto dropdown menu and the picker modal, both of which
+  // portal out of this table; omitted where there is no fullscreen host.
   container?: ModalContainer
 }
 
@@ -707,6 +708,7 @@ const PieceRowsTable = ({
                     onChange={(v) => setBandingProduct(i, req, v)}
                     footerLabel="Seleccionar otro…"
                     onFooterClick={() => setPickerRow(local)}
+                    container={container}
                   />
                   {renderHandle(local, 7)}
                 </CTableDataCell>
