@@ -18,6 +18,10 @@ interface SearchableSelectProps {
   emptyText?: string
   disabled?: boolean
   size?: 'sm' | 'lg'
+  // Optional action pinned under the list (e.g. "Seleccionar otro…" opening a full-catalog
+  // picker). Both props must be set for it to render; the menu closes before it fires.
+  footerLabel?: string
+  onFooterClick?: () => void
 }
 
 // Text-filter combobox: select-style toggle + search input + filtered list. Replaces CFormSelect
@@ -31,6 +35,8 @@ const SearchableSelect = ({
   emptyText = 'Sin resultados',
   disabled = false,
   size,
+  footerLabel,
+  onFooterClick,
 }: SearchableSelectProps) => {
   const [visible, setVisible] = useState(false)
   const [query, setQuery] = useState('')
@@ -136,6 +142,22 @@ const SearchableSelect = ({
             ))
           )}
         </div>
+        {footerLabel && onFooterClick && (
+          <>
+            <hr className="dropdown-divider" />
+            {/* `autoClose="outside"` ignores clicks inside the menu, so close it by hand. */}
+            <button
+              type="button"
+              className="dropdown-item text-primary"
+              onClick={() => {
+                close()
+                onFooterClick()
+              }}
+            >
+              {footerLabel}
+            </button>
+          </>
+        )}
       </CDropdownMenu>
     </CDropdown>
   )

@@ -427,6 +427,7 @@ const OptimizerPage = () => {
               materials={materials}
               boards={boards}
               edgeBandings={edgeBandings}
+              container={modalContainer}
               onAddMaterial={addMaterial}
               onUpdateMaterial={updateMaterial}
               onRequestDeleteMaterial={requestDeleteMaterial}

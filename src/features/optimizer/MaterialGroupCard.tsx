@@ -6,7 +6,7 @@ import { cilChevronBottom, cilChevronRight, cilCopy, cilPlus, cilTrash } from '@
 
 import SearchableSelect from 'src/shared/components/SearchableSelect'
 import type { BoardProduct, EdgeBandingProduct } from 'src/features/products/types'
-import type { MaterialSourceKind, PoolFillOrder } from './types'
+import type { MaterialSourceKind, ModalContainer, PoolFillOrder } from './types'
 import type {
   BandType,
   MaterialForm,
@@ -55,6 +55,8 @@ interface MaterialGroupCardProps {
   editor: PiecesEditor
   boards: BoardProduct[]
   edgeBandings: EdgeBandingProduct[]
+  // Fullscreen portal target for modals opened from inside the pieces table.
+  container?: ModalContainer
   onToggle: () => void
   onUpdate: <K extends keyof MaterialForm>(uid: string, field: K, value: MaterialForm[K]) => void
   onRequestDelete: (m: MaterialForm) => void
@@ -128,6 +130,7 @@ const MaterialGroupCard = ({
   editor,
   boards,
   edgeBandings,
+  container,
   onToggle,
   onUpdate,
   onRequestDelete,
@@ -146,10 +149,9 @@ const MaterialGroupCard = ({
       !(materialValid && Number(r.height) > 0 && Number(r.width) > 0) && !isRequirementEmpty(r),
   ).length
 
-  const dims =
-    m.source === 'catalog'
-      ? boardDims(boards.find((b) => String(b.id) === String(m.boardId)))
-      : null
+  const board =
+    m.source === 'catalog' ? boards.find((b) => String(b.id) === String(m.boardId)) : undefined
+  const dims = m.source === 'catalog' ? boardDims(board) : null
 
   // A CSV import labels the groups it creates with the text that produced them. Until a board is
   // picked, that text is the only thing telling two pending groups apart, so it takes the dims slot.
@@ -524,6 +526,8 @@ const MaterialGroupCard = ({
             editor={editor}
             edgeBandings={edgeBandings}
             boardEdgeBandings={boardEdgeBandings}
+            boardThickness={board?.attributes.thickness}
+            container={container}
           />
           <div className="d-flex align-items-center gap-2 mt-2 flex-wrap">
             <CButton

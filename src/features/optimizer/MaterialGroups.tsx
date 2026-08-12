@@ -22,6 +22,7 @@ import {
 } from '@coreui/icons'
 
 import type { BoardProduct, EdgeBandingProduct } from 'src/features/products/types'
+import type { ModalContainer } from './types'
 import type { MaterialForm, RequirementForm } from './optimizerForm'
 import { materialLabel, piecesSummary, validMaterialUids } from './optimizerForm'
 import type { PiecesEditor } from './usePiecesEditor'
@@ -33,6 +34,8 @@ interface MaterialGroupsProps {
   materials: MaterialForm[]
   boards: BoardProduct[]
   edgeBandings: EdgeBandingProduct[]
+  // Fullscreen portal target for modals opened from inside a group's pieces table.
+  container?: ModalContainer
   onAddMaterial: () => void
   onUpdateMaterial: <K extends keyof MaterialForm>(
     uid: string,
@@ -67,6 +70,7 @@ const MaterialGroups = ({
   materials,
   boards,
   edgeBandings,
+  container,
   onAddMaterial,
   onUpdateMaterial,
   onRequestDeleteMaterial,
@@ -299,6 +303,7 @@ const MaterialGroups = ({
               editor={editor}
               boards={boards}
               edgeBandings={edgeBandings}
+              container={container}
               onToggle={() => toggle(m.uid)}
               onUpdate={onUpdateMaterial}
               onRequestDelete={onRequestDeleteMaterial}
