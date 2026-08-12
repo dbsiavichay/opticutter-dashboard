@@ -44,6 +44,9 @@ export interface ProductListParams {
   search?: string
   offset?: number
   limit?: number
+  // snake_case on purpose: `toQuery` sends keys verbatim and the API param is `is_active`.
+  // Omit it to list active and inactive alike (what the catalog admin needs).
+  is_active?: boolean
 }
 
 export interface ProductPayload {

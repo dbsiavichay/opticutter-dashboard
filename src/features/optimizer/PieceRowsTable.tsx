@@ -23,6 +23,7 @@ import {
 } from '@coreui/icons'
 
 import SearchableSelect from 'src/shared/components/SearchableSelect'
+import type { SelectOption } from 'src/shared/components/SearchableSelect'
 import CantoPreview from 'src/shared/components/CantoPreview'
 import type { EdgeBandingProduct } from 'src/features/products/types'
 import type { BandType, RequirementForm } from './optimizerForm'
@@ -31,12 +32,15 @@ import {
   BAND_TYPES,
   CANTO_NOTATIONS,
   displayedBandType,
+  edgeWidthForThickness,
   inferBandingProductId,
   isRequirementEmpty,
   needsBandingProduct,
   notationFromSides,
   sidesFromNotation,
 } from './optimizerForm'
+import type { ModalContainer } from './types'
+import EdgeBandingPickerModal from './EdgeBandingPickerModal'
 import type { FillScope, FillableField, PiecesEditor, SortDir, SortField } from './usePiecesEditor'
 import { parsePieces } from './piecesCsv'
 import { rowsToRequirements } from './piecesImport'
@@ -52,6 +56,11 @@ interface PieceRowsTableProps {
   edgeBandings: EdgeBandingProduct[]
   // Tapacantos coordinated with this group's board (same family + width); empty ⇒ use the global list.
   boardEdgeBandings: EdgeBandingProduct[]
+  // Board thickness (catalog materials only), used to pre-filter the full-catalog picker to the
+  // banding width that physically covers this board.
+  boardThickness?: number
+  // Fullscreen portal target for the picker modal; omitted where there is no fullscreen host.
+  container?: ModalContainer
 }
 
 // Fields that accept a pasted column of values to create rows.
@@ -113,6 +122,8 @@ const PieceRowsTable = ({
   editor,
   edgeBandings,
   boardEdgeBandings,
+  boardThickness,
+  container,
 }: PieceRowsTableProps) => {
   const {
     selected,
@@ -149,8 +160,22 @@ const PieceRowsTable = ({
   // Active row-reorder drag (from the "#" grip). Separate from the fill drag above.
   const [rowDrag, setRowDrag] = useState<{ srcRow: number; targetRow: number } | null>(null)
   const [sort, setSort] = useState<{ field: SortField; dir: SortDir } | null>(null)
+  // Local row whose full-catalog tapacanto picker is open (one shared modal instance).
+  const [pickerRow, setPickerRow] = useState<number | null>(null)
 
   const flatOf = (local: number) => startIndex + local
+
+  // Applies a tapacanto choice to a piece, keeping the band type in sync with the chosen
+  // product so the "Tipo" column never contradicts it. Shared by the dropdown and the picker.
+  const setBandingProduct = (flat: number, req: RequirementForm, productId: string) => {
+    const bandType =
+      (byId.get(productId)?.attributes.bandType as BandType | undefined) ??
+      req.edgeBanding.bandType ??
+      ''
+    update(flat, 'edgeBanding', { ...req.edgeBanding, productId, bandType })
+  }
+
+  const pickerReq = pickerRow == null ? undefined : rows[pickerRow]
 
   // Programmatically focus a cell by local position (data-row / data-col).
   const focusCell = useCallback((row: number, col: number) => {
@@ -477,6 +502,22 @@ const PieceRowsTable = ({
               (p) => !cantoBandType || p.attributes.bandType === cantoBandType,
             )
             const tapacantoOptions = scoped.length ? scoped : edgeBandings
+            // A tapacanto picked from the full catalog (deliberate contrast) is not in the
+            // coordinated list, and an option the select can't find renders as the placeholder —
+            // so the assigned product is always appended when missing.
+            const options: SelectOption[] = [
+              { value: '', label: '— Sin tapacanto —' },
+              ...tapacantoOptions.map((p) => ({
+                value: String(p.id),
+                label: p.name,
+                sublabel: p.code,
+              })),
+            ]
+            const assignedId = String(req.edgeBanding.productId)
+            const assigned = assignedId ? byId.get(assignedId) : undefined
+            if (assigned && !options.some((o) => o.value === assignedId)) {
+              options.push({ value: assignedId, label: assigned.name, sublabel: assigned.code })
+            }
             const isDropTarget =
               !!rowDrag && rowDrag.srcRow !== rowDrag.targetRow && rowDrag.targetRow === local
             return (
@@ -662,22 +703,10 @@ const PieceRowsTable = ({
                     placeholder={bandingMissing ? '⚠ Falta tapacanto' : '—'}
                     searchPlaceholder="Buscar tapacanto…"
                     emptyText="Sin tapacantos que coincidan"
-                    options={[
-                      { value: '', label: '— Sin tapacanto —' },
-                      ...tapacantoOptions.map((p) => ({
-                        value: String(p.id),
-                        label: p.name,
-                        sublabel: p.code,
-                      })),
-                    ]}
-                    onChange={(v) => {
-                      // Manual pick: keep the band type in sync with the chosen product's type.
-                      const bandType =
-                        (byId.get(v)?.attributes.bandType as BandType | undefined) ??
-                        req.edgeBanding.bandType ??
-                        ''
-                      update(i, 'edgeBanding', { ...req.edgeBanding, productId: v, bandType })
-                    }}
+                    options={options}
+                    onChange={(v) => setBandingProduct(i, req, v)}
+                    footerLabel="Seleccionar otro…"
+                    onFooterClick={() => setPickerRow(local)}
                   />
                   {renderHandle(local, 7)}
                 </CTableDataCell>
@@ -715,6 +744,27 @@ const PieceRowsTable = ({
           )}
         </CTableBody>
       </CTable>
+
+      {pickerReq && pickerRow != null && (
+        <EdgeBandingPickerModal
+          key={pickerRow}
+          visible
+          products={edgeBandings}
+          value={String(pickerReq.edgeBanding.productId)}
+          compatibleWidth={edgeWidthForThickness(boardThickness)}
+          pieceLabel={pickerReq.label.trim() || `Pieza ${flatOf(pickerRow) + 1}`}
+          container={container}
+          onSelect={(p) => {
+            setBandingProduct(flatOf(pickerRow), pickerReq, String(p.id))
+            setPickerRow(null)
+          }}
+          onClear={() => {
+            setBandingProduct(flatOf(pickerRow), pickerReq, '')
+            setPickerRow(null)
+          }}
+          onClose={() => setPickerRow(null)}
+        />
+      )}
     </div>
   )
 }

@@ -15,18 +15,21 @@ export const useOptimize = () =>
 export const useBoards = () =>
   useQuery({
     queryKey: ['boards'],
-    queryFn: () => productsApi.list({ type: 'board', limit: 100 }),
+    queryFn: () => productsApi.list({ type: 'board', limit: 100, is_active: true }),
     staleTime: 5 * 60 * 1000,
     select: (data) => data.items.filter((p): p is BoardProduct => p.type === 'board'),
   })
 
-// Catalog edge bandings (products type=edge_banding).
+// Every active edge banding in the catalog. Unlike the boards query this pages through the whole
+// list: it backs the "Seleccionar otro…" picker (which promises the complete catalog) and the
+// id→product lookup that derives a saved tapacanto's band type, so a silent cut at 100 would
+// show a quote's tapacanto as missing. Paging is safe because the endpoint orders by name.
 export const useEdgeBandings = () =>
   useQuery({
     queryKey: ['edge-bandings'],
-    queryFn: () => productsApi.list({ type: 'edge_banding', limit: 100 }),
+    queryFn: () => productsApi.listAll({ type: 'edge_banding', is_active: true }),
     staleTime: 5 * 60 * 1000,
-    select: (data) => data.items.filter((p): p is EdgeBandingProduct => p.type === 'edge_banding'),
+    select: (items) => items.filter((p): p is EdgeBandingProduct => p.type === 'edge_banding'),
   })
 
 // Edge bandings coordinated with a board (same `family` + width rule), from

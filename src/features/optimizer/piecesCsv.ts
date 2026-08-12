@@ -6,7 +6,8 @@ import { normalizeText } from 'src/shared/utils/text'
 
 // CSV/TSV import and export for the pieces list. No dependencies: the parser handles
 // paste from Excel/Sheets (tab-delimited) and CSV files (comma or semicolon).
-// Edge banding is not included in this format (it's a product + sides); it is edited per-row in its modal.
+// Edge banding is not included in this format (it's a product + sides); it is edited per row in
+// the Canto / Tipo / Tapacanto columns of the table.
 
 // Column order matches the visual order of the table.
 export const CSV_COLUMNS = [

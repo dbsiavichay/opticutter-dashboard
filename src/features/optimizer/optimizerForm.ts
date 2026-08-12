@@ -415,6 +415,18 @@ export const BAND_TYPES: { value: BandType; label: string; abbr: string }[] = [
 
 export const CS_CD_TO_BANDTYPE: Record<string, BandType> = { CS: 'Soft', CD: 'Hard' }
 export const BANDTYPE_ABBR: Record<BandType, string> = { Soft: 'CS', Hard: 'CD' }
+export const BANDTYPE_LABEL: Record<BandType, string> = { Soft: 'Suave', Hard: 'Duro' }
+
+// Edge banding width (mm) that physically covers a board of this thickness. Mirrors
+// BOARD_THICKNESS_TO_EDGE_WIDTH in the backend's src/modules/products/service.py — keep both in
+// sync. Read from the board's thickness rather than from its coordinated list, because that list
+// is empty when the board has no `family` loaded and the width rule still applies.
+export const EDGE_WIDTH_FOR_THICKNESS: Record<number, number> = { 15: 19, 36: 40 }
+
+// The banding width coordinated with a board thickness, or undefined when no rule applies
+// (non-catalog material, or a thickness outside the table) — callers then skip the filter.
+export const edgeWidthForThickness = (thickness?: number): number | undefined =>
+  thickness == null ? undefined : EDGE_WIDTH_FOR_THICKNESS[thickness]
 
 // A trailing quick-entry token declaring the band type (e.g. "…2L1C CS").
 export const BAND_TYPE_TOKEN_RE = /^C[SD]$/i
