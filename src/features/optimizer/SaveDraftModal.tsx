@@ -15,12 +15,14 @@ import { useCurrentUser, useHasRole, useIsGlobalBranchRole } from 'src/features/
 import { ApiError } from 'src/shared/api/types'
 import { useActiveBranches } from 'src/features/branches/useBranches'
 import { useState } from 'react'
+import type { ModalContainer } from './types'
 
 interface SaveDraftModalProps {
   visible: boolean
   isSaving: boolean
   // Global admin must pick a branch; for non-admin staff this is null and not sent.
   onSave: (name: string, branchId: number | null) => void
+  container?: ModalContainer
   onClose: () => void
   error?: Error | null
 }
@@ -35,7 +37,14 @@ const suggestedName = () =>
     year: 'numeric',
   })}`
 
-const SaveDraftModal = ({ visible, isSaving, onSave, onClose, error }: SaveDraftModalProps) => {
+const SaveDraftModal = ({
+  visible,
+  isSaving,
+  onSave,
+  container,
+  onClose,
+  error,
+}: SaveDraftModalProps) => {
   const [name, setName] = useState(suggestedName)
 
   const user = useCurrentUser()
@@ -72,7 +81,7 @@ const SaveDraftModal = ({ visible, isSaving, onSave, onClose, error }: SaveDraft
   }
 
   return (
-    <CModal visible={visible} onClose={onClose} alignment="center">
+    <CModal visible={visible} onClose={onClose} alignment="center" container={container}>
       <CModalHeader>
         <CModalTitle>Guardar borrador</CModalTitle>
       </CModalHeader>

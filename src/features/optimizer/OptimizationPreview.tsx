@@ -2,6 +2,7 @@ import {
   CAlert,
   CBadge,
   CButton,
+  CButtonGroup,
   CCard,
   CCardBody,
   CCardHeader,
@@ -16,23 +17,40 @@ import {
   CTableRow,
 } from '@coreui/react'
 import CIcon from '@coreui/icons-react'
-import { cilCalculator } from '@coreui/icons'
+import { cilCalculator, cilLoopCircular } from '@coreui/icons'
 
 import { fmtMoney } from 'src/features/review/format'
 import PricingBlock from 'src/shared/components/PricingBlock'
 import { stripHalfSuffix } from 'src/shared/utils/halfBoard'
-import type { OptimizeResponse } from './types'
+import type { OptimizeResponse, PackingStrategy } from './types'
 import CutLayoutDiagram from './CutLayoutDiagram'
 
 interface OptimizationPreviewProps {
   result?: OptimizeResponse
   isPending: boolean
   error?: Error | null
-  // When provided, the header shows an "Optimizar" button (used by pre-orders as Save+Recalculate).
-  // The optimizer omits it and triggers optimization from its sticky action bar instead.
+  // When provided, the header shows an "Optimizar" button. Pre-orders use it as Save+Recalculate
+  // alongside their sticky action bar; the optimizer drives everything from here.
   canOptimize?: boolean
   onOptimize?: () => void
+  // Primary button label. Defaults to "Optimizar".
+  optimizeLabel?: string
+  // Cut heuristic picker, rendered in the header when both are provided. Omitted by pre-orders,
+  // which keep it in their action bar.
+  strategy?: PackingStrategy
+  onStrategyChange?: (s: PackingStrategy) => void
+  // "Otra alternativa": bumps the variant seed for a different deterministic layout. Shown only
+  // once there is a result to vary.
+  onAlternative?: () => void
+  variant?: number
+  // Portal target for the expanded-sheet modal; see CutLayoutDiagram.modalContainer.
+  modalContainer?: () => Element | null
 }
+
+const STRATEGY_OPTIONS: { value: PackingStrategy; label: string }[] = [
+  { value: 'longOffcuts', label: 'Retazos largos' },
+  { value: 'default', label: 'Máxima eficiencia' },
+]
 
 const meters = (n?: number | null) => (n != null ? `${n.toFixed(2)} m` : '—')
 
@@ -57,37 +75,88 @@ const OptimizationPreview = ({
   error,
   canOptimize,
   onOptimize,
+  optimizeLabel = 'Optimizar',
+  strategy,
+  onStrategyChange,
+  onAlternative,
+  variant = 0,
+  modalContainer,
 }: OptimizationPreviewProps) => {
+  const showStrategy = strategy != null && !!onStrategyChange
   return (
     <CCard className="mb-3">
-      <CCardHeader className="d-flex justify-content-between align-items-center">
+      {/* Actions live in this header rather than a bar pinned to the bottom of the viewport: with
+          the results pane sticky, they stay reachable without permanently spending a strip of
+          screen height. */}
+      <CCardHeader className="d-flex flex-wrap justify-content-between align-items-center gap-2">
         <strong>Vista previa de optimización</strong>
-        {onOptimize ? (
-          <CButton
-            size="sm"
-            color="secondary"
-            variant="outline"
-            type="button"
-            disabled={!canOptimize || isPending}
-            onClick={onOptimize}
-          >
-            {isPending ? (
-              <CSpinner size="sm" />
-            ) : (
-              <>
-                <CIcon icon={cilCalculator} className="me-1" />
-                Optimizar
-              </>
-            )}
-          </CButton>
-        ) : (
-          isPending && (
-            <span className="text-body-secondary small d-flex align-items-center gap-2">
-              <CSpinner size="sm" />
-              Optimizando…
-            </span>
-          )
-        )}
+        <div className="d-flex flex-wrap align-items-center gap-2">
+          {showStrategy && (
+            <CButtonGroup size="sm" role="group" aria-label="Heurística de corte">
+              {STRATEGY_OPTIONS.map((o) => {
+                const active = strategy === o.value
+                return (
+                  <CButton
+                    key={o.value}
+                    type="button"
+                    color="primary"
+                    variant={active ? undefined : 'outline'}
+                    active={active}
+                    disabled={isPending}
+                    title={
+                      o.value === 'longOffcuts'
+                        ? 'Agrupa el sobrante en una tira larga reutilizable'
+                        : 'Minimiza el desperdicio total'
+                    }
+                    onClick={() => onStrategyChange?.(o.value)}
+                  >
+                    {o.label}
+                  </CButton>
+                )
+              })}
+            </CButtonGroup>
+          )}
+          {result && onAlternative && (
+            <CButton
+              size="sm"
+              color="secondary"
+              variant="outline"
+              type="button"
+              disabled={!canOptimize || isPending}
+              onClick={onAlternative}
+              title="Genera una distribución alternativa con las mismas piezas"
+            >
+              <CIcon icon={cilLoopCircular} className="me-1" />
+              Otra alternativa
+              {variant > 0 && <span className="ms-1 badge text-bg-secondary">#{variant}</span>}
+            </CButton>
+          )}
+          {onOptimize ? (
+            <CButton
+              size="sm"
+              color="primary"
+              type="button"
+              disabled={!canOptimize || isPending}
+              onClick={onOptimize}
+            >
+              {isPending ? (
+                <CSpinner size="sm" />
+              ) : (
+                <>
+                  <CIcon icon={cilCalculator} className="me-1" />
+                  {optimizeLabel}
+                </>
+              )}
+            </CButton>
+          ) : (
+            isPending && (
+              <span className="text-body-secondary small d-flex align-items-center gap-2">
+                <CSpinner size="sm" />
+                Optimizando…
+              </span>
+            )
+          )}
+        </div>
       </CCardHeader>
       <CCardBody>
         {error && (
@@ -198,6 +267,7 @@ const OptimizationPreview = ({
             <CutLayoutDiagram
               layoutGroups={result.layoutGroups}
               materialsSummary={result.materialsSummary}
+              modalContainer={modalContainer}
             />
           </>
         )}

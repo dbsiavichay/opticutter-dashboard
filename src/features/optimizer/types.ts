@@ -8,6 +8,11 @@ import type { MaterialForm, RequirementForm } from './optimizerForm'
 
 export type PackingStrategy = 'default' | 'longOffcuts'
 
+// Portal target for the optimizer's modals. CModal portals to document.body by default, which sits
+// OUTSIDE the element handed to the Fullscreen API — the modal would render behind the fullscreen
+// page and be invisible. Pointing it at the fullscreen host keeps it visible in both modes.
+export type ModalContainer = () => Element | null
+
 // Fill order for a catalog board that carries pooled offcuts (same material).
 // 'auto' lets the backend pick the least-waste layout; the others force it.
 export type PoolFillOrder = 'auto' | 'offcutsFirst' | 'catalogFirst'

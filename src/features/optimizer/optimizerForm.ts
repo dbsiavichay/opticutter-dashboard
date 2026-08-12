@@ -220,6 +220,31 @@ export const piecesSummary = (
   return { pieces, units, areaM2, invalid }
 }
 
+// A row the user started but left unusable. `piecesSummary` only counts these; optimizing needs to
+// say which row and what is missing, so the user can fix it without hunting through the grid.
+export interface RequirementIssue {
+  index: number // flat index into requirements (displayed as index + 1)
+  reasons: string[]
+}
+
+export const requirementIssues = (
+  requirements: RequirementForm[],
+  materials: MaterialForm[],
+): RequirementIssue[] => {
+  const validUids = validMaterialUids(materials)
+  const issues: RequirementIssue[] = []
+  requirements.forEach((r, index) => {
+    // Blank rows are dropped before this runs, so anything invalid here is genuinely half-filled.
+    if (isRequirementEmpty(r) || isRequirementValid(r, validUids)) return
+    const reasons: string[] = []
+    if (!validUids.has(r.materialUid)) reasons.push('sin material definido')
+    if (!(Number(r.height) > 0)) reasons.push('falta el largo')
+    if (!(Number(r.width) > 0)) reasons.push('falta el ancho')
+    issues.push({ index, reasons })
+  })
+  return issues
+}
+
 // Human-readable label for a material, used in the pieces dropdown and diagram.
 export const materialLabel = (m: MaterialForm, boards: BoardProduct[]): string => {
   if (m.source === 'catalog') {

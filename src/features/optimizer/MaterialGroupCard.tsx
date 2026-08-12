@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import type { KeyboardEvent } from 'react'
+import type { CSSProperties, KeyboardEvent } from 'react'
 import { CBadge, CButton, CFormInput, CFormLabel, CFormSelect } from '@coreui/react'
 import CIcon from '@coreui/icons-react'
 import { cilChevronBottom, cilChevronRight, cilCopy, cilPlus, cilTrash } from '@coreui/icons'
@@ -45,6 +45,9 @@ const OFFCUT_SOURCES: { value: OffcutSource; label: string }[] = [
 
 interface MaterialGroupCardProps {
   material: MaterialForm
+  // Color identifying this group at a glance: a bar down the card's left edge plus a matching dot in
+  // its header. With several groups stacked, the border alone doesn't say where one ends.
+  accent: string
   rows: RequirementForm[]
   startIndex: number
   materialValid: boolean
@@ -117,6 +120,7 @@ const parseQuickEntry = (
 
 const MaterialGroupCard = ({
   material: m,
+  accent,
   rows,
   startIndex,
   materialValid,
@@ -213,8 +217,16 @@ const MaterialGroupCard = ({
   }
 
   return (
-    <div className="border rounded mb-2">
+    <div
+      className="material-group rounded mb-2"
+      style={{ '--group-accent': accent } as CSSProperties}
+    >
       <div className="d-flex flex-wrap gap-2 align-items-end p-2 border-bottom bg-body-tertiary">
+        <span
+          aria-hidden="true"
+          className="rounded-circle flex-shrink-0 align-self-center"
+          style={{ width: 10, height: 10, background: accent }}
+        />
         <CButton
           size="sm"
           color="secondary"

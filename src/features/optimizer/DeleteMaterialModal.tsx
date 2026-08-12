@@ -13,6 +13,7 @@ import {
 import type { BoardProduct } from 'src/features/products/types'
 import type { MaterialForm } from './optimizerForm'
 import { materialLabel } from './optimizerForm'
+import type { ModalContainer } from './types'
 
 interface DeleteMaterialModalProps {
   material: MaterialForm | null // target; the modal is visible while non-null
@@ -21,6 +22,7 @@ interface DeleteMaterialModalProps {
   boards: BoardProduct[]
   onMove: (destUid: string) => void
   onDeleteWithPieces: () => void
+  container?: ModalContainer
   onClose: () => void
 }
 
@@ -31,6 +33,7 @@ const DeleteMaterialModal = ({
   boards,
   onMove,
   onDeleteWithPieces,
+  container,
   onClose,
 }: DeleteMaterialModalProps) => {
   const [destUid, setDestUid] = useState('')
@@ -44,7 +47,7 @@ const DeleteMaterialModal = ({
     : (otherMaterials[0]?.uid ?? '')
 
   return (
-    <CModal visible={!!material} onClose={onClose} alignment="center">
+    <CModal visible={!!material} onClose={onClose} alignment="center" container={container}>
       <CModalHeader>
         <CModalTitle>Eliminar material</CModalTitle>
       </CModalHeader>

@@ -23,7 +23,7 @@ import { useCurrentUser, useHasRole, useIsGlobalBranchRole } from 'src/features/
 import { useActiveBranches } from 'src/features/branches/useBranches'
 import { ApiError } from 'src/shared/api/types'
 import PriceTierSelect from 'src/features/settings/PriceTierSelect'
-import type { MaterialInput, PackingStrategy, RequirementInput } from './types'
+import type { MaterialInput, ModalContainer, PackingStrategy, RequirementInput } from './types'
 
 const fullClientLabel = (c: Client) => {
   const name = [c.firstName, c.lastName].filter(Boolean).join(' ')
@@ -43,6 +43,7 @@ interface CreateQuoteModalProps {
   variant?: number
   // Called after the order is successfully created (e.g. to clear the optimizer autosave).
   onCreated?: () => void
+  container?: ModalContainer
 }
 
 const CreateQuoteModal = ({
@@ -55,6 +56,7 @@ const CreateQuoteModal = ({
   strategy,
   variant = 0,
   onCreated,
+  container,
 }: CreateQuoteModalProps) => {
   const navigate = useNavigate()
 
@@ -110,7 +112,7 @@ const CreateQuoteModal = ({
       : undefined
 
   return (
-    <CModal visible={visible} onClose={onClose} size="lg" alignment="center">
+    <CModal visible={visible} onClose={onClose} size="lg" alignment="center" container={container}>
       <CModalHeader>
         <CModalTitle>Crear cotización</CModalTitle>
       </CModalHeader>
