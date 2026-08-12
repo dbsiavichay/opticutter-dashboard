@@ -20,6 +20,9 @@ export interface AppRoute {
   element?: ComponentType<unknown> | LazyExoticComponent<ComponentType<unknown>>
   exact?: boolean
   roles?: Role[]
+  // Renders the route in a full-width container instead of the centered one. For pages whose value
+  // is horizontal room (the optimizer's side-by-side panes), where the 1320px cap is the constraint.
+  fluid?: boolean
 }
 
 export const routes: AppRoute[] = [

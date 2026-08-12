@@ -1,5 +1,5 @@
 import { memo, Suspense } from 'react'
-import { Navigate, Route, Routes, useLocation } from 'react-router-dom'
+import { matchPath, Navigate, Route, Routes, useLocation } from 'react-router-dom'
 import { CContainer, CSpinner } from '@coreui/react'
 
 import { routes } from '../routes'
@@ -12,9 +12,11 @@ const AppContent = () => {
   const location = useLocation()
   // Role-based home path: lands on an accessible route to avoid the / → /dashboard → / redirect loop.
   const home = homePathForRole(userRole)
+  // Routes that opt out of the centered container's max-width (see AppRoute.fluid).
+  const fluid = routes.some((r) => r.fluid && matchPath(r.path, location.pathname))
 
   return (
-    <CContainer className="px-4" lg>
+    <CContainer className="px-4" {...(fluid ? { fluid: true } : { lg: true })}>
       {/* Keyed by pathname so navigating away from a crashed route clears the error state. */}
       <ErrorBoundary key={location.pathname}>
         <Suspense fallback={<CSpinner color="primary" />}>

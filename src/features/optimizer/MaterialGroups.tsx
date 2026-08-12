@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import {
   CButton,
   CButtonGroup,
@@ -25,6 +25,7 @@ import type { BoardProduct, EdgeBandingProduct } from 'src/features/products/typ
 import type { MaterialForm, RequirementForm } from './optimizerForm'
 import { materialLabel, piecesSummary, validMaterialUids } from './optimizerForm'
 import type { PiecesEditor } from './usePiecesEditor'
+import { accentFor } from './groupColors'
 import MaterialGroupCard from './MaterialGroupCard'
 
 interface MaterialGroupsProps {
@@ -42,6 +43,21 @@ interface MaterialGroupsProps {
   onDuplicateMaterial: (m: MaterialForm) => void
   onImportOpen: () => void
   onExport: () => void
+  // When provided, "Limpiar" also drops the material groups, not just their pieces. Pre-orders omit
+  // it: their materials come from the saved order, so wiping them is a different decision.
+  onClearMaterials?: () => void
+}
+
+// Whether a keystroke is the user typing into a field, in which case editor-wide shortcuts must not
+// fire. Checkboxes and radios are excluded on purpose: selecting a row leaves focus on its checkbox,
+// and that is exactly when Delete should remove it.
+const isTextEntry = (el: EventTarget | null): boolean => {
+  if (!(el instanceof HTMLElement)) return false
+  const tag = el.tagName
+  if (tag === 'TEXTAREA' || tag === 'SELECT') return true
+  if (tag !== 'INPUT') return false
+  const type = (el as HTMLInputElement).type
+  return type !== 'checkbox' && type !== 'radio'
 }
 
 const areaFmt = new Intl.NumberFormat('es-EC', { maximumFractionDigits: 2 })
@@ -57,6 +73,7 @@ const MaterialGroups = ({
   onDuplicateMaterial,
   onImportOpen,
   onExport,
+  onClearMaterials,
 }: MaterialGroupsProps) => {
   const {
     requirements,
@@ -72,22 +89,42 @@ const MaterialGroups = ({
   // Collapsed pieces tables, keyed by material uid (expanded by default = not in the set).
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set())
 
-  // Ctrl+Z / Cmd+Z: undoes the last structural operation (no-op when a field is focused).
+  const hasSelection = selected.size > 0
+
+  // Read through a ref so the listener can be mounted once. `removeSelected` is a fresh closure on
+  // every render, and this component re-renders on every keystroke in the grid — putting it in the
+  // dependency array would re-subscribe the window listener on each one.
+  const shortcuts = useRef({ undo, removeSelected, hasSelection })
+  useEffect(() => {
+    shortcuts.current = { undo, removeSelected, hasSelection }
+  })
+
+  // Editor-wide shortcuts, inert while the user is typing into a field or a modal is open:
+  //   Ctrl/Cmd+Z        undo the last structural operation
+  //   Supr / Retroceso  delete the selected rows (undoable with the above)
   useEffect(() => {
     const handler = (e: globalThis.KeyboardEvent) => {
-      if (!(e.ctrlKey || e.metaKey) || e.key !== 'z') return
-      const tag = (e.target as HTMLElement).tagName
-      if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return
-      e.preventDefault()
-      undo()
+      if (isTextEntry(e.target)) return
+      // A modal covers the editor: the expanded-sheet view pages with the keyboard, and silently
+      // dropping rows behind it would be invisible until the modal closes.
+      if (document.body.classList.contains('modal-open')) return
+      const { undo, removeSelected, hasSelection } = shortcuts.current
+      if ((e.ctrlKey || e.metaKey) && e.key === 'z') {
+        e.preventDefault()
+        undo()
+        return
+      }
+      if ((e.key === 'Delete' || e.key === 'Backspace') && hasSelection) {
+        e.preventDefault()
+        removeSelected()
+      }
     }
     window.addEventListener('keydown', handler)
     return () => window.removeEventListener('keydown', handler)
-  }, [undo])
+  }, [])
 
   const validUids = validMaterialUids(materials)
   const summary = piecesSummary(requirements, materials)
-  const hasSelection = selected.size > 0
 
   // Contiguous group slice for each material uid (requirements is kept clustered by material).
   const groups = useMemo(() => {
@@ -164,7 +201,13 @@ const MaterialGroups = ({
                   <CIcon icon={cilCopy} className="me-1" />
                   Duplicar ({selected.size})
                 </CButton>
-                <CButton color="danger" variant="outline" type="button" onClick={removeSelected}>
+                <CButton
+                  color="danger"
+                  variant="outline"
+                  type="button"
+                  title="Eliminar las piezas seleccionadas (Supr)"
+                  onClick={removeSelected}
+                >
                   <CIcon icon={cilTrash} className="me-1" />
                   Eliminar ({selected.size})
                 </CButton>
@@ -208,8 +251,18 @@ const MaterialGroups = ({
             color="secondary"
             variant="outline"
             type="button"
+            title={
+              onClearMaterials
+                ? 'Vaciar piezas y grupos de materiales'
+                : 'Vaciar la lista de piezas'
+            }
             onClick={() => {
-              if (window.confirm('¿Vaciar la lista de piezas?')) clear()
+              const message = onClearMaterials
+                ? '¿Vaciar las piezas y los grupos de materiales?'
+                : '¿Vaciar la lista de piezas?'
+              if (!window.confirm(message)) return
+              clear()
+              onClearMaterials?.()
             }}
           >
             <CIcon icon={cilTrash} className="me-1" />
@@ -232,12 +285,13 @@ const MaterialGroups = ({
           <div className="text-body-secondary small">Agrega al menos un material para empezar.</div>
         )}
 
-        {materials.map((m) => {
+        {materials.map((m, i) => {
           const g = groups.get(m.uid)
           return (
             <MaterialGroupCard
               key={m.uid}
               material={m}
+              accent={accentFor(i)}
               rows={g?.rows ?? []}
               startIndex={g?.start ?? requirements.length}
               materialValid={validUids.has(m.uid)}

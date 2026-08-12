@@ -306,6 +306,21 @@ export const usePiecesEditor = (materials: MaterialForm[], initial?: Requirement
     setSelected(new Set())
   }
 
+  // Drops the blank rows the grid accumulates (every "add piece" and every Enter on the last row
+  // leaves one behind) so they never reach validation as "incomplete". Returns the resulting list,
+  // like `addMany`, so the caller can build a payload from it in the same tick instead of waiting
+  // for the next render. Undoable: a mis-click on Optimizar is recoverable with Ctrl+Z.
+  const pruneEmpty = (): RequirementForm[] => {
+    const rs = requirements
+    const kept = rs.filter((r) => !isRequirementEmpty(r))
+    const next = kept.length ? kept : [emptyRequirement(firstUid())]
+    if (next.length === rs.length) return rs
+    setHistory((h) => [...h.slice(-(MAX_HISTORY - 1)), rs])
+    setRequirements(next)
+    setSelected(new Set())
+    return next
+  }
+
   // Grouped view: moves every piece of `fromUid` to `toUid` (keep pieces when deleting a material).
   const movePiecesTo = (fromUid: string, toUid: string) => {
     applyWithHistory((rs) =>
@@ -434,6 +449,7 @@ export const usePiecesEditor = (materials: MaterialForm[], initial?: Requirement
     sortGroup,
     updateGroup,
     clear,
+    pruneEmpty,
     movePiecesTo,
     moveSelectedTo,
     removePiecesOf,

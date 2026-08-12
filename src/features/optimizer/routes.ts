@@ -9,5 +9,7 @@ export const optimizerRoutes: AppRoute[] = [
     name: 'Optimizador',
     element: OptimizerPage,
     roles: ['administrador', 'vendedor'],
+    // Side-by-side pieces grid and cut diagrams need every pixel of width available.
+    fluid: true,
   },
 ]

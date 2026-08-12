@@ -3,6 +3,7 @@ import { BrowserRouter, Navigate, Route, Routes, useLocation } from 'react-route
 import useUIStore from 'src/shared/store/uiStore'
 import { useAuthStore } from 'src/shared/store/authStore'
 import { authApi } from 'src/features/auth/authApi'
+import useNumberInputWheelGuard from 'src/shared/hooks/useNumberInputWheelGuard'
 
 import { CSpinner, useColorModes } from '@coreui/react'
 import './scss/style.scss'
@@ -73,6 +74,9 @@ const RequireAuth = ({ children }: { children: React.ReactNode }) => {
 const App = () => {
   const { isColorModeSet, setColorMode } = useColorModes('coreui-free-react-admin-template-theme')
   const storedTheme = useUIStore((state) => state.theme)
+
+  // Public routes included: the review page has number inputs too.
+  useNumberInputWheelGuard()
 
   useEffect(() => {
     const urlParams = new URLSearchParams(window.location.search)

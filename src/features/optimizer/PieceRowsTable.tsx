@@ -120,6 +120,7 @@ const PieceRowsTable = ({
     clearFocus,
     addTo,
     remove,
+    removeSelected,
     duplicate,
     update,
     fillDownGroup,
@@ -177,6 +178,30 @@ const PieceRowsTable = ({
     const dir: SortDir = sort?.field === field && sort.dir === 'asc' ? 'desc' : 'asc'
     setSort({ field, dir })
     sortGroup(materialUid, field, dir)
+  }
+
+  // Supr deletes the row the caret is in, from any cell — no need to reach for the checkbox or the
+  // trash icon first. Bound on the row so it also covers the selects and the Rotar checkbox, which
+  // have no key handler of their own.
+  //
+  // The cost is that Supr no longer deletes characters forward inside these cells; Retroceso still
+  // does, and it stays the text-editing key (the window-level shortcut ignores it while typing).
+  // With rows checked, Supr deletes the whole selection instead, matching the "Eliminar (n)" button.
+  const handleRowKeyDown = (e: KeyboardEvent<HTMLElement>, local: number) => {
+    if (e.key !== 'Delete') return
+    e.preventDefault()
+    // Stops the event reaching the window-level shortcut in MaterialGroups, which would otherwise
+    // delete the selection a second time.
+    e.stopPropagation()
+    const col = Number((e.target as HTMLElement).dataset?.col)
+    if (selected.size > 0) removeSelected()
+    else remove(flatOf(local))
+    // Keep the caret in the grid: the row below slides into this position, so re-focus the same
+    // column there (or the new last row when the deleted one was at the bottom).
+    if (!Number.isNaN(col)) {
+      const target = Math.max(0, Math.min(local, rows.length - 2))
+      requestAnimationFrame(() => focusCell(target, col))
+    }
   }
 
   // Keyboard navigation within this group's grid.
@@ -388,7 +413,7 @@ const PieceRowsTable = ({
 
   return (
     <div style={{ maxHeight: '55vh', overflow: 'auto' }} ref={containerRef} onPaste={handlePaste}>
-      <CTable small bordered className="mb-0">
+      <CTable small bordered className="mb-0 pieces-table">
         <CTableHead>
           <CTableRow>
             <CTableHeaderCell className="text-center" style={{ ...thStyle, width: 36 }}>
@@ -459,6 +484,7 @@ const PieceRowsTable = ({
                 key={i}
                 color={isError ? 'danger' : undefined}
                 style={rowDrag?.srcRow === local ? { opacity: 0.5 } : undefined}
+                onKeyDown={(e) => handleRowKeyDown(e, local)}
               >
                 <CTableDataCell className="text-center">
                   <CFormCheck checked={selected.has(i)} onChange={() => toggleSelect(i)} />
@@ -476,7 +502,7 @@ const PieceRowsTable = ({
                     <span>{i + 1}</span>
                   </div>
                 </CTableDataCell>
-                <CTableDataCell style={cellStyle(0, local, 80)}>
+                <CTableDataCell style={cellStyle(0, local, 64)}>
                   <CFormInput
                     size="sm"
                     type="number"
@@ -491,7 +517,7 @@ const PieceRowsTable = ({
                   />
                   {renderHandle(local, 0)}
                 </CTableDataCell>
-                <CTableDataCell style={cellStyle(1, local, 80)}>
+                <CTableDataCell style={cellStyle(1, local, 64)}>
                   <CFormInput
                     size="sm"
                     type="number"
@@ -506,7 +532,7 @@ const PieceRowsTable = ({
                   />
                   {renderHandle(local, 1)}
                 </CTableDataCell>
-                <CTableDataCell style={cellStyle(2, local, 70)}>
+                <CTableDataCell style={cellStyle(2, local, 56)}>
                   <CFormInput
                     size="sm"
                     type="number"
@@ -522,7 +548,7 @@ const PieceRowsTable = ({
                   />
                   {renderHandle(local, 2)}
                 </CTableDataCell>
-                <CTableDataCell style={cellStyle(3, local, 70)}>
+                <CTableDataCell style={cellStyle(3, local, 56)}>
                   <CFormInput
                     size="sm"
                     type="number"
@@ -537,7 +563,7 @@ const PieceRowsTable = ({
                   />
                   {renderHandle(local, 3)}
                 </CTableDataCell>
-                <CTableDataCell style={cellStyle(4, local, 120)}>
+                <CTableDataCell style={cellStyle(4, local, 110)}>
                   <CFormInput
                     size="sm"
                     data-row={local}
@@ -671,7 +697,7 @@ const PieceRowsTable = ({
                     variant="ghost"
                     color="danger"
                     type="button"
-                    title="Eliminar pieza"
+                    title="Eliminar pieza (Supr)"
                     onClick={() => remove(i)}
                   >
                     <CIcon icon={cilTrash} />

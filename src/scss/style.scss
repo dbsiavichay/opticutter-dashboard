@@ -56,6 +56,101 @@ body {
   min-height: calc(3rem + 1px); // stylelint-disable-line function-disallowed-list
 }
 
+// The native spinner arrows sit under the cursor on a dense grid and step the value on a stray
+// click-drag, so a cut measurement changes with no visible cause. Removed everywhere; the wheel half
+// of the same problem is handled by `useNumberInputWheelGuard`.
+input[type='number'] {
+  appearance: textfield;
+  -moz-appearance: textfield;
+
+  &::-webkit-outer-spin-button,
+  &::-webkit-inner-spin-button {
+    appearance: none;
+    -webkit-appearance: none;
+    margin: 0;
+  }
+}
+
+// Optimizer workspace: pieces tables on the left, cut diagrams on the right, with a divider the user
+// drags to trade width between them. Stacked below `lg`, where two panes leave neither one usable.
+// `minmax(0, …)` on both panes is load-bearing: grid items default to `min-width: auto`, so without
+// it the 12-column pieces table refuses to shrink and blows the layout out instead of scrolling.
+.optimizer-split {
+  display: grid;
+  gap: 1rem;
+  grid-template-columns: minmax(0, 1fr);
+
+  > .optimizer-split-divider {
+    display: none;
+  }
+
+  @media (min-width: 992px) {
+    grid-template-columns: minmax(0, var(--split-left, 58%)) auto minmax(0, 1fr);
+    align-items: start;
+
+    > .optimizer-split-divider {
+      display: block;
+      width: 0.5rem;
+      align-self: stretch;
+      border-radius: 0.25rem;
+      cursor: col-resize;
+      background-color: var(--cui-border-color);
+      opacity: 0.5;
+      touch-action: none;
+      transition: opacity 0.15s;
+
+      &:hover,
+      &:focus-visible,
+      &.is-dragging {
+        opacity: 1;
+        background-color: var(--cui-primary);
+      }
+    }
+  }
+}
+
+// Right pane keeps its own scroll so the diagrams stay in view while a long pieces list scrolls,
+// mirroring `.review-rail` below. Only from `lg`, where the panes actually sit side by side.
+@media (min-width: 992px) {
+  .optimizer-rail {
+    position: sticky;
+    top: 1rem;
+    max-height: calc(100dvh - 2rem);
+    overflow-y: auto;
+    scrollbar-gutter: stable;
+  }
+}
+
+// Fullscreen host for the optimizer: the Fullscreen API paints its own black backdrop and stretches
+// the element, so the theme background and scrolling have to be restored explicitly.
+.optimizer-workspace:fullscreen {
+  height: 100vh;
+  overflow: auto;
+  padding: 1rem;
+  background-color: var(--cui-body-bg);
+}
+
+// Material group card. The accent bar down the left edge tracks which group a row belongs to while
+// a long pieces list scrolls. It lives here rather than as an inline `border-left` because the
+// `.border` utility declares the shorthand `!important`, which beats any inline value.
+.material-group {
+  border: var(--cui-border-width) var(--cui-border-style) var(--cui-border-color);
+  border-left: 4px solid var(--group-accent, var(--cui-border-color));
+}
+
+// Pieces grid: 12 columns of mostly 3-4 digit numbers. Shrinking the header type and cell padding
+// buys back horizontal room so the table fits its pane without scrolling.
+.pieces-table {
+  th {
+    font-size: 0.72rem;
+    line-height: 1.2;
+  }
+
+  > :not(caption) > * > * {
+    padding: 0.25rem 0.35rem;
+  }
+}
+
 // Public review page: from `lg` up the right rail (piece list / billing) stays put while the board
 // stack scrolls, so the client can check a piece against the diagram without losing their place.
 // Needs its own scroll area or a tall list would be pinned with its bottom unreachable. Below `lg`

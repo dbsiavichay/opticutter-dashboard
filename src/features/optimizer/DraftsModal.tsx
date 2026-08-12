@@ -18,15 +18,17 @@ import { useActiveBranches } from 'src/features/branches/useBranches'
 import { useIsGlobalBranchRole } from 'src/features/auth/useAuth'
 import { useState } from 'react'
 import { fmtDate } from 'src/shared/utils/format'
+import type { ModalContainer } from './types'
 
 interface DraftsModalProps {
   visible: boolean
   loadingId: number | null
   onLoad: (id: number) => void
+  container?: ModalContainer
   onClose: () => void
 }
 
-const DraftsModal = ({ visible, loadingId, onLoad, onClose }: DraftsModalProps) => {
+const DraftsModal = ({ visible, loadingId, onLoad, container, onClose }: DraftsModalProps) => {
   const isGlobalBranch = useIsGlobalBranchRole()
   const [branchId, setBranchId] = useState('')
   const { data: branches = [] } = useActiveBranches()
@@ -41,7 +43,7 @@ const DraftsModal = ({ visible, loadingId, onLoad, onClose }: DraftsModalProps) 
   }
 
   return (
-    <CModal visible={visible} onClose={onClose} size="lg" alignment="center">
+    <CModal visible={visible} onClose={onClose} size="lg" alignment="center" container={container}>
       <CModalHeader>
         <CModalTitle>Borradores guardados</CModalTitle>
       </CModalHeader>

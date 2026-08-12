@@ -35,6 +35,7 @@ import {
   targetToValue,
 } from './piecesImport'
 import type { ImportTarget, MaterialMapping } from './piecesImport'
+import type { ModalContainer } from './types'
 
 // Cap on the mapping rows we render: a CSV using the Material column as free text can produce
 // hundreds of distinct values, and each row carries a select with the whole board catalog.
@@ -45,6 +46,7 @@ interface ImportPiecesModalProps {
   materials: MaterialForm[]
   boards: BoardProduct[]
   onImport: (rows: RequirementForm[], replace: boolean, newMaterials: MaterialForm[]) => void
+  container?: ModalContainer
   onClose: () => void
 }
 
@@ -60,6 +62,7 @@ const ImportPiecesModal = ({
   materials,
   boards,
   onImport,
+  container,
   onClose,
 }: ImportPiecesModalProps) => {
   const [text, setText] = useState('')
@@ -128,7 +131,14 @@ const ImportPiecesModal = ({
   }
 
   return (
-    <CModal visible={visible} onClose={close} size="lg" alignment="center" scrollable>
+    <CModal
+      visible={visible}
+      onClose={close}
+      size="lg"
+      alignment="center"
+      scrollable
+      container={container}
+    >
       <CModalHeader>
         <CModalTitle>Importar piezas</CModalTitle>
       </CModalHeader>
