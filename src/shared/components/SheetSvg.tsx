@@ -30,6 +30,8 @@ interface SheetSvgProps<P extends DrawnPiece> {
   showDimensions?: boolean
   // Enables zoom + pan (pinch/wheel/drag + buttons). Expanded view only.
   enableZoom?: boolean
+  // Corner for the zoom buttons; see ZoomControls.placement.
+  zoomPlacement?: 'top-right' | 'top-left'
   // Text drawn inside each piece when it's big enough. Defaults to its nominal dimensions.
   labelFor?: (p: P) => string
 }
@@ -50,6 +52,7 @@ const SheetSvg = <P extends DrawnPiece>({
   maxHeight = 420,
   showDimensions = false,
   enableZoom = false,
+  zoomPlacement,
   labelFor = defaultLabel,
 }: SheetSvgProps<P>) => {
   const rawId = useId()
@@ -227,7 +230,13 @@ const SheetSvg = <P extends DrawnPiece>({
   return (
     <div style={{ position: 'relative', overflow: 'hidden' }}>
       {svg}
-      <ZoomControls onZoomIn={zoomIn} onZoomOut={zoomOut} onReset={reset} isZoomed={isZoomed} />
+      <ZoomControls
+        onZoomIn={zoomIn}
+        onZoomOut={zoomOut}
+        onReset={reset}
+        isZoomed={isZoomed}
+        placement={zoomPlacement}
+      />
     </div>
   )
 }
