@@ -145,6 +145,12 @@ const rowToRequirement = (row: RawPieceRow, materialUid: string): RequirementFor
   req.priority = row.priority
   req.label = row.label
   req.canRotate = row.canRotate
+  // Sides and soft/hard come from the file's Etiqueta; the tapacanto PRODUCT does not — it depends
+  // on the catalog, so it is left empty and filled in by the group once its board is known
+  // (MaterialGroupCard). That also keeps this function pure and catalog-free.
+  if (row.canto && row.canto.notation !== '—') {
+    req.edgeBanding = { productId: '', sides: { ...row.canto.sides }, bandType: row.canto.bandType }
+  }
   return req
 }
 

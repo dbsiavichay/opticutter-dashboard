@@ -383,7 +383,10 @@ const SheetDetailModal = ({
                   setHoverSig(null)
                 }}
                 onPieceLeave={() => setHoverPiece(null)}
-                maxHeight={640}
+                // The column is sticky, so anything taller than the modal's scrollport can never be
+                // scrolled into view: its bottom edge stays clipped right where the pager sits.
+                // Reserve is the modal chrome around the body — margins, header, footer, padding.
+                maxHeight="min(640px, calc(100dvh - 17rem))"
                 showDimensions
                 enableZoom
               />
