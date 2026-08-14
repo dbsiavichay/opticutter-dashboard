@@ -3,7 +3,11 @@ import { useId } from 'react'
 import useZoomPan from 'src/shared/hooks/useZoomPan'
 import ZoomControls from 'src/shared/components/ZoomControls'
 import {
+  BOARD_OUTLINE,
   EDGE_COLOR,
+  PIECE_LABEL,
+  WASTE_FILL,
+  WASTE_OUTLINE,
   bandedSides,
   boardRotation,
   clamp,
@@ -88,8 +92,8 @@ const SheetSvg = <P extends DrawnPiece>({
     >
       <defs>
         <pattern id={wasteId} patternUnits="userSpaceOnUse" width={48} height={48}>
-          <rect width={48} height={48} fill="#f1f3f5" />
-          <path d="M0,48 L48,0" stroke="#ced4da" strokeWidth={3} />
+          <rect width={48} height={48} fill={WASTE_FILL} />
+          <path d="M0,48 L48,0" stroke={WASTE_OUTLINE} strokeWidth={3} />
         </pattern>
       </defs>
 
@@ -97,7 +101,7 @@ const SheetSvg = <P extends DrawnPiece>({
       {showDimensions && (
         <g
           transform={enableZoom ? groupTransform : undefined}
-          fill="#868e96"
+          fill={BOARD_OUTLINE}
           style={{ userSelect: 'none' }}
         >
           <text
@@ -130,7 +134,7 @@ const SheetSvg = <P extends DrawnPiece>({
           width={W}
           height={H}
           fill="#ffffff"
-          stroke="#868e96"
+          stroke={BOARD_OUTLINE}
           strokeWidth={1.5}
           vectorEffect="non-scaling-stroke"
         />
@@ -144,7 +148,7 @@ const SheetSvg = <P extends DrawnPiece>({
             width={r.width}
             height={r.height}
             fill={`url(#${wasteId})`}
-            stroke="#ced4da"
+            stroke={WASTE_OUTLINE}
             strokeWidth={1}
             strokeDasharray="6 6"
             vectorEffect="non-scaling-stroke"
@@ -182,7 +186,7 @@ const SheetSvg = <P extends DrawnPiece>({
                 height={p.height}
                 fill={color}
                 fillOpacity={0.85}
-                stroke={highlightId === p.pieceId ? '#212529' : 'rgba(0,0,0,0.35)'}
+                stroke={highlightId === p.pieceId ? BOARD_OUTLINE : 'rgba(0,0,0,0.35)'}
                 strokeWidth={highlightId === p.pieceId ? 3 : 1}
                 vectorEffect="non-scaling-stroke"
               />
@@ -211,7 +215,7 @@ const SheetSvg = <P extends DrawnPiece>({
                   fontSize={fontSize}
                   textAnchor="middle"
                   dominantBaseline="central"
-                  fill="#212529"
+                  fill={PIECE_LABEL}
                   transform={uprightText(p.x + p.width / 2, p.y + p.height / 2)}
                   style={{ pointerEvents: 'none', userSelect: 'none' }}
                 >

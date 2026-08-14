@@ -97,12 +97,14 @@ const MaterialGroups = ({
       })}
 
       {/* Full width and dashed: the one action that stays in the flow, reading as the next slot in
-          the list rather than as another button competing with the group's own controls. */}
+          the list rather than as another button competing with the group's own controls. It keeps
+          the slot shape but not the ghost treatment — transparent fill plus muted text made it a
+          grey outline the eye skipped over. */}
       <CButton
-        color="secondary"
+        color="primary"
         variant="ghost"
         type="button"
-        className="add-material w-100 text-body-secondary"
+        className="add-slot w-100"
         onClick={onAddMaterial}
       >
         <CIcon icon={cilPlus} className="me-1" />

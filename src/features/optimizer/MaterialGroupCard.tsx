@@ -236,7 +236,7 @@ const MaterialGroupCard = ({
   }
 
   return (
-    <div className="material-group mb-2" style={{ '--group-accent': accent } as CSSProperties}>
+    <div className="material-group mb-3" style={{ '--group-accent': accent } as CSSProperties}>
       <div className="d-flex flex-wrap gap-2 align-items-end py-2">
         <CButton
           size="sm"
@@ -518,7 +518,7 @@ const MaterialGroupCard = ({
                 row of the table does the same. This is the explicit affordance, not the main path. */}
             <CButton
               size="sm"
-              color="secondary"
+              color="primary"
               variant="outline"
               type="button"
               title="Agregar pieza"
@@ -543,9 +543,9 @@ const MaterialGroupCard = ({
               <CButton
                 size="sm"
                 color="secondary"
-                variant="ghost"
+                variant="outline"
                 type="button"
-                className="ms-auto text-body-secondary"
+                className="ms-auto"
                 title="El cliente puede aportar retazos del mismo material; las piezas se optimizan sobre ellos y el tablero de catálogo."
                 onClick={addOffcut}
               >

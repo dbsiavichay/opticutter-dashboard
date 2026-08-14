@@ -224,6 +224,10 @@ export interface OptimizerDraftPayload {
   version: 1
   materials: MaterialForm[]
   requirements: RequirementForm[]
+  // Billed additional services. Optional because drafts saved before the wizard had a services step
+  // do not carry the key; the backend stores `payload` as an opaque JSON object, so adding it needed
+  // no schema change on that side.
+  additionalServices?: AdditionalServiceInput[]
 }
 
 // List item (no payload).

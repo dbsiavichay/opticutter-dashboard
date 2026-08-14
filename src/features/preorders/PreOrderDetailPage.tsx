@@ -59,12 +59,13 @@ import CIcon from '@coreui/icons-react'
 import DeleteMaterialModal from 'src/features/optimizer/DeleteMaterialModal'
 import ImportPiecesModal from 'src/features/optimizer/ImportPiecesModal'
 import MaterialGroups from 'src/features/optimizer/MaterialGroups'
-import ServiceLines, {
+import ServiceLines from './ServiceLines'
+import {
   buildServiceLines,
-  emptyServiceLine,
   serviceLineFromApi,
+  useServiceLines,
   type ServiceLineForm,
-} from './ServiceLines'
+} from './useServiceLines'
 import { useServices } from 'src/features/services/useServices'
 import OptimizationPreview from 'src/features/optimizer/OptimizationPreview'
 import OptimizeActionBar from 'src/features/optimizer/OptimizeActionBar'
@@ -216,9 +217,10 @@ const PreOrderView = ({ preOrder }: { preOrder: PreOrder }) => {
   const [materials, setMaterials] = useState<MaterialForm[]>(
     () => initialFormData?.materials ?? [emptyCatalogMaterial()],
   )
-  const [services, setServices] = useState<ServiceLineForm[]>(() =>
+  const serviceLines = useServiceLines(() =>
     (preOrder.additionalServices ?? []).map(serviceLineFromApi),
   )
+  const services = serviceLines.lines
   const [notes, setNotes] = useState(preOrder.notes ?? '')
   const [priceTierCode, setPriceTierCode] = useState(preOrder.priceTierCode ?? 'consumidor')
   const [strategy, setStrategy] = useState<PackingStrategy>(
@@ -243,6 +245,11 @@ const PreOrderView = ({ preOrder }: { preOrder: PreOrder }) => {
     onUndo: editor.canUndo ? editor.undo : undefined,
     onDeleteSelection: editor.selected.size > 0 ? editor.removeSelected : undefined,
     onToggleCollapseAll: groups.toggleAll,
+    // Bound because this page's menu renders (and now hints) Importar/Exportar. The "Trabajo"
+    // shortcuts are not: drafts belong to the optimizer's scratch workspace, and that section of
+    // the menu is not rendered here.
+    onImport: canEdit ? () => setShowImport(true) : undefined,
+    onExport: canEdit && editor.requirements.length > 0 ? () => exportPiecesCsv() : undefined,
   })
 
   // "Dirty" tracking: keep "Actualizar" disabled until the editable state differs from the loaded
@@ -262,6 +269,11 @@ const PreOrderView = ({ preOrder }: { preOrder: PreOrder }) => {
 
   const { data: boards = [] } = useBoards()
   const { data: edgeBandings = [] } = useEdgeBandings()
+
+  // Named because both the menu entry and its Ctrl+Shift+S shortcut point at it.
+  const exportPiecesCsv = () =>
+    downloadCsv('piezas.csv', requirementsToCsv(editor.requirements, materials, boards))
+
   const { data: servicesCatalog } = useServices({ isActive: true, limit: 100 })
   const serviceCatalog = servicesCatalog?.items ?? []
   const updatePreOrder = useUpdatePreOrder()
@@ -341,14 +353,6 @@ const PreOrderView = ({ preOrder }: { preOrder: PreOrder }) => {
     field: K,
     value: MaterialForm[K],
   ) => setMaterials((ms) => ms.map((m) => (m.uid === uid ? { ...m, [field]: value } : m)))
-
-  const addService = () => setServices((ss) => [...ss, emptyServiceLine()])
-  const updateService = <K extends keyof ServiceLineForm>(
-    uid: string,
-    field: K,
-    value: ServiceLineForm[K],
-  ) => setServices((ss) => ss.map((s) => (s.uid === uid ? { ...s, [field]: value } : s)))
-  const removeService = (uid: string) => setServices((ss) => ss.filter((s) => s.uid !== uid))
 
   // Duplicates a material section together with all of its pieces (same behavior as the optimizer).
   const duplicateMaterial = (m: MaterialForm) => {
@@ -661,12 +665,7 @@ const PreOrderView = ({ preOrder }: { preOrder: PreOrder }) => {
               <PiecesSelectionBar editor={editor} materials={materials} boards={boards} />
               <OptimizerActionsMenu
                 onImport={() => setShowImport(true)}
-                onExport={() =>
-                  downloadCsv(
-                    'piezas.csv',
-                    requirementsToCsv(editor.requirements, materials, boards),
-                  )
-                }
+                onExport={exportPiecesCsv}
                 exportDisabled={editor.requirements.length === 0}
                 onClear={editor.clear}
                 onToggleCollapseAll={groups.toggleAll}
@@ -704,16 +703,24 @@ const PreOrderView = ({ preOrder }: { preOrder: PreOrder }) => {
         </CAlert>
       )}
 
-      {/* Additional services (perforación, armado, …): billed on top of the cut,
-          default price from the catalog but editable per line. */}
+      {/* Additional services (perforación, armado, …): billed on top of the cut, default price from
+          the catalog but editable per line. The card lives here, not in the component: this is one
+          section among many on this page, while in the optimizer's Costos step it is bare. */}
       {canEdit && (
-        <ServiceLines
-          services={services}
-          catalog={serviceCatalog}
-          onAdd={addService}
-          onUpdate={updateService}
-          onRemove={removeService}
-        />
+        <CCard className="mb-3">
+          <CCardHeader>
+            <strong>Servicios adicionales</strong>
+          </CCardHeader>
+          <CCardBody>
+            <ServiceLines
+              services={services}
+              catalog={serviceCatalog}
+              onAdd={serviceLines.add}
+              onUpdate={serviceLines.update}
+              onRemove={serviceLines.remove}
+            />
+          </CCardBody>
+        </CCard>
       )}
 
       {/* Optimization result — the sticky action bar below drives "Optimizar" (Save+Recalculate) */}

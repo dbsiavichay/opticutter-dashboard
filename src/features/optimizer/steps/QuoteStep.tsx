@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
+import { useQueryClient } from '@tanstack/react-query'
 import {
   CAlert,
   CButton,
@@ -8,21 +9,37 @@ import {
   CFormLabel,
   CFormSelect,
   CFormTextarea,
+  CModal,
+  CModalHeader,
+  CModalTitle,
   CRow,
   CSpinner,
 } from '@coreui/react'
 import CIcon from '@coreui/icons-react'
-import { cilCart } from '@coreui/icons'
+import { cilCart, cilUserPlus } from '@coreui/icons'
 
-import type { Client } from 'src/features/clients/types'
+import ClientForm from 'src/features/clients/ClientForm'
+import { useCreateClient, useUpdateClient } from 'src/features/clients/useClients'
+import type { Client, ClientPayload } from 'src/features/clients/types'
 import { useClientsMin } from 'src/features/orders/useOrders'
 import { useCreatePreOrder } from 'src/features/preorders/usePreOrders'
+import {
+  buildServiceLines,
+  pricingWithServices,
+  type ServiceLineForm,
+} from 'src/features/preorders/useServiceLines'
 import { useCurrentUser, useHasRole, useIsGlobalBranchRole } from 'src/features/auth/useAuth'
 import { useActiveBranches } from 'src/features/branches/useBranches'
 import { useDebounce } from 'src/shared/hooks/useDebounce'
 import { ApiError } from 'src/shared/api/types'
 import { fmtMoney } from 'src/features/review/format'
-import type { MaterialInput, OptimizeResponse, PackingStrategy, RequirementInput } from '../types'
+import type {
+  MaterialInput,
+  ModalContainer,
+  OptimizeResponse,
+  PackingStrategy,
+  RequirementInput,
+} from '../types'
 
 // Step 4. What used to be CreateQuoteModal, in a full-width step: the same four inputs the optimizer
 // cannot infer (client, branch, price tier, reference) plus the confirmation summary that never fit
@@ -44,6 +61,10 @@ interface QuoteStepProps {
   // Alternative-solution seed of the layout on screen; persisted with the pre-order so every
   // recompute reproduces the chosen alternative.
   variant: number
+  // Billed services entered in the Costos step. They ride along with the pre-order so a quote built
+  // in the wizard is complete on arrival instead of needing a second pass on the detail page.
+  services: ServiceLineForm[]
+  container?: ModalContainer
   // Called after the pre-order is created (the page clears its autosave).
   onCreated?: () => void
 }
@@ -55,14 +76,19 @@ const QuoteStep = ({
   priceTierCode,
   strategy,
   variant,
+  services,
+  container,
   onCreated,
 }: QuoteStepProps) => {
   const navigate = useNavigate()
+  const qc = useQueryClient()
 
   const [clientSearch, setClientSearch] = useState('')
   const debouncedSearch = useDebounce(clientSearch)
   const [selectedClientId, setSelectedClientId] = useState('')
   const [notes, setNotes] = useState('')
+  // null = closed. `{ client: null }` is the new-client form, `{ client }` the edit form.
+  const [clientModal, setClientModal] = useState<{ client: Client | null } | null>(null)
 
   const user = useCurrentUser()
   const isAdmin = useHasRole('administrador')
@@ -77,9 +103,42 @@ const QuoteStep = ({
   const selectedClient = clients.find((c) => String(c.id) === String(selectedClientId))
   const missingPhone = !!selectedClient && selectedClient.phone == null
 
+  const createClient = useCreateClient()
+  const updateClient = useUpdateClient()
+  const clientMutation = clientModal?.client ? updateClient : createClient
+
+  // Both mutations are reset on open: a rejected save ("El identificador ya existe") leaves its
+  // error on the mutation, and without this it would greet the next person to open the form.
+  const openClientModal = (client: Client | null) => {
+    createClient.reset()
+    updateClient.reset()
+    setClientModal({ client })
+  }
+
+  // Leaving the wizard to fix the client costs the unsaved workspace, so both dead ends — the client
+  // does not exist yet, and the client exists but has no phone (which `blocked` enforces below) —
+  // are answered here with the same form the /clients page uses.
+  //
+  // `useClientsMin` caches under ['clients-min', search] while the CRUD hooks invalidate ['clients'],
+  // so the list this step reads would NOT refresh on its own. Invalidate it explicitly, then select
+  // the client and put its identifier in the search box so the refetch is certain to contain it.
+  const handleClientSubmit = (data: ClientPayload) => {
+    const editing = clientModal?.client
+    const onSuccess = (client: Client) => {
+      void qc.invalidateQueries({ queryKey: ['clients-min'] })
+      setSelectedClientId(String(client.id))
+      setClientSearch(client.identifier)
+      setClientModal(null)
+    }
+    if (editing) updateClient.mutate({ id: editing.id, data }, { onSuccess })
+    else createClient.mutate(data, { onSuccess })
+  }
+
   const createPreOrder = useCreatePreOrder()
   const isPending = createPreOrder.isPending
   const blocked = !selectedClientId || missingPhone || (isAdmin && !branchId)
+
+  const pricing = result?.pricing ? pricingWithServices(result.pricing, services) : undefined
 
   const handleCreate = () => {
     if (blocked) return
@@ -93,6 +152,7 @@ const QuoteStep = ({
         variant,
         materials,
         requirements,
+        additionalServices: buildServiceLines(services),
         branchId: isGlobalBranch && branchId ? Number(branchId) : undefined,
       },
       {
@@ -116,14 +176,26 @@ const QuoteStep = ({
   return (
     <CRow className="g-3">
       <CCol xs={12} lg={7}>
-        <CFormLabel>
-          Buscar cliente <span className="text-danger">*</span>
-        </CFormLabel>
+        <div className="d-flex justify-content-between align-items-center gap-2">
+          <CFormLabel className="mb-0">
+            Buscar cliente <span className="text-danger">*</span>
+          </CFormLabel>
+          <CButton
+            size="sm"
+            color="primary"
+            variant="outline"
+            type="button"
+            onClick={() => openClientModal(null)}
+          >
+            <CIcon icon={cilUserPlus} className="me-1" />
+            Nuevo cliente
+          </CButton>
+        </div>
         <CFormInput
           placeholder="Nombre o identificador…"
           value={clientSearch}
           onChange={(e) => setClientSearch(e.target.value)}
-          className="mb-1"
+          className="mb-1 mt-1"
         />
         {/* Server-searched list, so this stays a plain listbox rather than SearchableSelect,
             which filters what it already has in memory. */}
@@ -139,10 +211,24 @@ const QuoteStep = ({
             </option>
           ))}
         </CFormSelect>
-        {missingPhone && (
-          <CAlert color="warning" className="mt-2 mb-0 py-2 small">
-            Este cliente no tiene celular registrado. La cotización no podrá crearse hasta que se
-            registre un número.
+        {missingPhone && selectedClient && (
+          <CAlert
+            color="warning"
+            className="mt-2 mb-0 py-2 small d-flex flex-wrap gap-2 align-items-center"
+          >
+            <span>
+              Este cliente no tiene celular registrado. La cotización no podrá crearse hasta que se
+              registre un número.
+            </span>
+            <CButton
+              size="sm"
+              color="warning"
+              type="button"
+              className="ms-auto"
+              onClick={() => openClientModal(selectedClient)}
+            >
+              Completar datos
+            </CButton>
           </CAlert>
         )}
 
@@ -213,11 +299,15 @@ const QuoteStep = ({
               {result?.pricing?.priceTierName ?? priceTierCode}
             </span>
           </div>
+          {!!pricing?.servicesTotal && (
+            <div className="d-flex justify-content-between gap-3 py-1 border-bottom">
+              <span className="text-body-secondary small">Servicios adicionales</span>
+              <span className="small fw-semibold text-end">{fmtMoney(pricing.servicesTotal)}</span>
+            </div>
+          )}
           <div className="d-flex justify-content-between gap-3 py-2">
             <span className="fw-semibold">Total</span>
-            <span className="fw-semibold text-end">
-              {result?.pricing ? fmtMoney(result.pricing.total) : '—'}
-            </span>
+            <span className="fw-semibold text-end">{pricing ? fmtMoney(pricing.total) : '—'}</span>
           </div>
 
           <div className="text-body-secondary small mb-3">
@@ -241,6 +331,29 @@ const QuoteStep = ({
           </CButton>
         </div>
       </CCol>
+
+      {/* The same form the /clients page uses. It renders its own CModalBody/CModalFooter, so it
+          drops in here untouched; `container` is what keeps it painted in fullscreen. */}
+      <CModal
+        visible={clientModal !== null}
+        onClose={() => setClientModal(null)}
+        backdrop="static"
+        container={container}
+      >
+        <CModalHeader>
+          <CModalTitle>{clientModal?.client ? 'Editar cliente' : 'Nuevo cliente'}</CModalTitle>
+        </CModalHeader>
+        {clientModal && (
+          <ClientForm
+            key={clientModal.client?.id ?? 'new'}
+            client={clientModal.client}
+            onSubmit={handleClientSubmit}
+            onCancel={() => setClientModal(null)}
+            isSubmitting={clientMutation.isPending}
+            error={clientMutation.error}
+          />
+        )}
+      </CModal>
     </CRow>
   )
 }

@@ -1,8 +1,30 @@
+// MADERABLE brand palette, the same one the backend samples off the official letterhead
+// (`opticutter-api/src/modules/optimizations/proforma.py`). Screen and document have to look like
+// the same company, so the hexes are duplicated here rather than approximated — nothing serves them
+// over the wire.
+//
+// The coral against white text is 3.58:1, under the AA floor for body text. Two consequences:
+//   - Buttons need no help. Bootstrap runs `color-contrast()` against `$min-contrast-ratio` (4.5)
+//     and picks the dark foreground on its own, which lands at 4.69:1.
+//   - Links DO, because they are body text. They get the coral shaded down to 5.85:1 on white.
 @use '@coreui/coreui/scss/coreui' as * with (
-  $enable-deprecation-messages: false
+  $enable-deprecation-messages: false,
+  $primary: #e8564b,
+  $link-color: #ae4038,
+  $link-hover-color: #8f342d
 );
 @use '@coreui/chartjs/scss/coreui-chartjs';
 @use 'vendors/simplebar';
+
+// The rest of the letterhead palette, for the places that need a brand colour which is not the
+// theme's primary — the cut diagram, the footer accent, tinted fills.
+:root {
+  --brand-coral: #e8564b; // proforma.py BRAND_CORAL
+  --brand-orange: #ec7829; // proforma.py BRAND_ORANGE
+  --brand-black: #1d1d1b; // proforma.py BRAND_BLACK
+  --brand-coral-soft: #fce9e6; // proforma.py LIGHT_CORAL
+  --brand-grey: #424242; // proforma.py TEXT_GREY
+}
 
 body {
   background-color: var(--cui-tertiary-bg);
@@ -110,11 +132,13 @@ input[type='number'] {
     background-color: var(--cui-border-color);
   }
 
+  // Done steps are the brand coral, not green: the trail reads as one progress bar filling up in a
+  // single colour, instead of a green tail handing over to a coral head at the current step.
   &[data-state='done'] {
     color: var(--cui-body-color);
 
     &::after {
-      background-color: var(--cui-success);
+      background-color: var(--cui-primary);
     }
   }
 
@@ -168,11 +192,23 @@ input[type='number'] {
     box-shadow: 0 0 0 0.2rem rgba(var(--cui-primary-rgb), 0.15);
   }
 
+  // The check is dark on coral for the same reason the buttons are (white would be 3.58:1).
   .wizard-step[data-state='done'] & {
-    border-color: var(--cui-success);
-    background-color: var(--cui-success);
-    color: #fff;
+    border-color: var(--cui-primary);
+    background-color: var(--cui-primary);
+    color: var(--brand-black);
   }
+}
+
+// The plane the active step is drawn on. Dropping the per-step CCard was right — its header only
+// repeated the step's name from the trail — but it also left every control sitting straight on the
+// page's tertiary-bg, where an outline-secondary button is grey on grey. This gives the content back
+// a surface without giving it back a card: no header, no shadow, nothing to read as a section.
+.wizard-surface {
+  padding: 1rem;
+  border: var(--cui-border-width) var(--cui-border-style) var(--cui-border-color);
+  border-radius: var(--cui-border-radius-lg);
+  background-color: var(--cui-body-bg);
 }
 
 // Wizard footer, pinned to the bottom of the viewport so "Siguiente" is reachable without scrolling
@@ -318,36 +354,77 @@ input[type='number'] {
 
 // Fullscreen host for the optimizer: the Fullscreen API paints its own black backdrop and stretches
 // the element, so the theme background and scrolling have to be restored explicitly.
+//
+// Tertiary, not body-bg: the step content is a `--cui-body-bg` surface now, and painting the host
+// the same shade would dissolve it exactly where the workspace is at its largest. This is the page
+// background, so the footer — which already uses the same token — needs no override of its own.
 .optimizer-workspace:fullscreen {
   height: 100vh;
   overflow: auto;
   padding: 1rem;
-  background-color: var(--cui-body-bg);
-
-  // The sticky footer paints the page background behind itself; in fullscreen that background
-  // changes, so it has to follow or it shows as a band in the wrong shade.
-  .wizard-footer {
-    background-color: var(--cui-body-bg);
-  }
+  background-color: var(--cui-tertiary-bg);
 }
 
 // Material group. No longer a card: the full border, the rounded corners and the tinted header strip
 // stacked a box inside a box inside a box before the first table row. What is left is the accent bar
 // down the left edge — which is functional, it tracks which group a row belongs to while a long
-// pieces list scrolls — plus a hairline separating one group from the next.
+// pieces list scrolls — plus the rule separating one group from the next.
+//
+// That separation carries the whole job of telling two materials apart, so it is deliberately loud:
+// a 6px rounded spine, real breathing room, and a 2px rule rather than a hairline. At 4px flush with
+// a hairline the boundary read as another table border and the groups ran together.
 //
 // The accent lives here rather than as an inline `border-left` because the `.border` utility declares
 // the shorthand `!important`, which beats any inline value.
 .material-group {
-  border-left: 4px solid var(--group-accent, var(--cui-border-color));
-  border-bottom: var(--cui-border-width) var(--cui-border-style) var(--cui-border-color);
-  padding: 0 0 0.5rem 0.75rem;
+  border-left: 6px solid var(--group-accent, var(--cui-border-color));
+  border-start-start-radius: 0.3rem;
+  border-end-start-radius: 0.3rem;
+  padding: 0.35rem 0 1rem 0.9rem;
+
+  // `last-of-type`, not `last-child`: "Agregar material" is the last child of the list, so every
+  // group would still match `:not(:last-child)` and the final one would draw a trailing rule.
+  //
+  // Deliberately darker than `--cui-border-color`: at #dbdfe6 the rule was indistinguishable from
+  // the table's own cell borders, which is the whole problem it exists to solve. Translucent rather
+  // than a fixed grey so it tracks the theme.
+  &:not(:last-of-type) {
+    border-bottom: 2px solid rgba(var(--cui-body-color-rgb), 0.3);
+  }
 }
 
-// "Agregar material", the only control left in the flow of the list. Dashed and full width so it
-// reads as the next empty slot rather than as another button competing with the group's own.
-.add-material {
-  border: var(--cui-border-width) dashed var(--cui-border-color);
+// "Agregar material" / "Agregar servicio": the one control each list keeps in its own flow. Dashed
+// and full width so it reads as the next empty slot rather than as another button competing with the
+// row's own. The dash is the primary colour, not the border grey: still a slot, but a slot you can
+// see — against the step surface a grey dashed outline on a muted label was invisible.
+.add-slot {
+  border: var(--cui-border-width) dashed rgba(var(--cui-primary-rgb), 0.5);
+
+  &:hover,
+  &:focus-visible {
+    border-color: var(--cui-primary);
+  }
+}
+
+// Cost summary tables, in the brand palette instead of the generic grey they had.
+//
+// The tint is LIGHT_CORAL with a solid coral rule under it, not the solid coral band the proforma
+// prints. On paper that band heads a full page of rows; here the tables run one or two rows, and a
+// saturated header outweighed its own content — two of them stacked turned the step red. The rule
+// carries the brand cue at full strength, the fill stays out of the way.
+.summary-table > thead > tr > th {
+  background-color: var(--brand-coral-soft);
+  color: var(--brand-black);
+  border-bottom: 2px solid var(--brand-coral);
+}
+
+// The soft coral is a light tint and would swallow the dark theme's text, so dark mode keeps the
+// same structure with the fill dropped to a translucent wash of the accent.
+@include color-mode(dark) {
+  .summary-table > thead > tr > th {
+    background-color: rgba(var(--cui-primary-rgb), 0.18);
+    color: var(--cui-body-color);
+  }
 }
 
 // Pieces grid: 12 columns of mostly 3-4 digit numbers. Shrinking the header type and cell padding
@@ -431,9 +508,9 @@ input[type='number'] {
   animation: optimizing-piece 3.6s ease-out infinite both;
 }
 
-// The saw pass, in the brand red of the wordmark's "BLE".
+// The saw pass, in the brand coral of the wordmark's "BLE".
 .optimizing-saw {
-  fill: #e85050;
+  fill: var(--brand-coral);
   animation: optimizing-saw 3.6s linear infinite;
 }
 
@@ -503,6 +580,18 @@ input[type='number'] {
 @include color-mode(dark) {
   body {
     background-color: var(--cui-dark-bg-subtle);
+
+    // In dark mode CoreUI lightens the primary and points links at it, which measures 4.38:1
+    // against a card surface — just under AA for body text, and the breadcrumb in the app header is
+    // exactly that. Nudged one step lighter: 5.07:1, still unmistakably the brand coral.
+    //
+    // The `-rgb` pair is the one that actually lands: Bootstrap resolves anchors as
+    // `rgba(var(--cui-link-color-rgb), var(--cui-link-opacity, 1))`, so setting only the hex form
+    // compiles fine and changes nothing on screen.
+    --cui-link-color: #ec7268;
+    --cui-link-color-rgb: 236, 114, 104;
+    --cui-link-hover-color: #f08a80;
+    --cui-link-hover-color-rgb: 240, 138, 128;
   }
 
   .footer {
