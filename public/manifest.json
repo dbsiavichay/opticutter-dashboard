@@ -1,15 +1,20 @@
 {
-  "short_name": "CoreUI-React",
-  "name": "CoreUI-React sample",
+  "short_name": "Maderable",
+  "name": "Maderable — tableros + accesorios",
   "icons": [
     {
-      "src": "./assets/img/favicon.png",
-      "sizes": "100x100",
-      "type": "image/png"
+      "src": "/favicon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml"
+    },
+    {
+      "src": "/favicon.ico",
+      "sizes": "48x48",
+      "type": "image/x-icon"
     }
   ],
-  "start_url": ".",
+  "start_url": "/",
   "display": "standalone",
-  "theme_color": "#000000",
-  "background_color": "#ffffff"
+  "theme_color": "#E8564B",
+  "background_color": "#FFFFFF"
 }

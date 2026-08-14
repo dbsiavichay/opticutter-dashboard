@@ -17,6 +17,8 @@ import {
 import CIcon from '@coreui/icons-react'
 import { cilEnvelopeClosed, cilLockLocked } from '@coreui/icons'
 import { useLogin } from './useAuth'
+import { logo } from 'src/assets/brand/logo'
+import { sygnet } from 'src/assets/brand/sygnet'
 import { ApiError } from 'src/shared/api/types'
 
 const LoginPage = () => {
@@ -45,6 +47,13 @@ const LoginPage = () => {
       <CContainer>
         <CRow className="justify-content-center">
           <CCol md={5} lg={4}>
+            {/* The full letterhead lockup — isotype over wordmark — rather than the wordmark alone
+                the header and the review page use. This is the one screen with room for it, and the
+                first thing anyone sees of the app. */}
+            <div className="text-center mb-4">
+              <CIcon icon={sygnet} height={56} className="d-block mx-auto mb-3" />
+              <CIcon icon={logo} height={44} />
+            </div>
             <CCard className="p-4">
               <CCardBody>
                 <CForm onSubmit={handleSubmit}>

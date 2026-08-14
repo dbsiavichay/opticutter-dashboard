@@ -20,6 +20,20 @@ export const PALETTE = [
   '#86bcb6',
 ] as const
 
+// Board chrome, taken from the backend's own diagram renderer
+// (`opticutter-api/src/modules/optimizations/visualization.py`), which is itself aligned with the
+// MADERABLE letterhead. The client sees the same cut plan twice — here and in the PDF — so the two
+// have to be the same drawing, not two drawings of the same thing.
+//
+// Only the chrome is shared. PALETTE above stays as it is: on screen the hue identifies a piece
+// size (and drives cross-highlighting), a job the printed diagram solves by labelling instead.
+export const BOARD_OUTLINE = '#1d1d1b' // COLOR_BOARD_OUTLINE, and COLOR_DIM for the mm labels
+export const PIECE_LABEL = '#212121' // COLOR_LABEL
+export const WASTE_FILL = '#ececec' // COLOR_WASTE_FILL
+export const WASTE_OUTLINE = '#9e9e9e' // COLOR_WASTE_OUTLINE
+
+// Edge banding has no counterpart in the backend diagram (it is drawn only on screen), so this one
+// answers to legibility over the piece fills rather than to the document.
 export const EDGE_COLOR = '#d9480f' // edge banding color in the diagram
 
 export const SIDE_LABELS_ES: Record<EdgeSide, string> = {

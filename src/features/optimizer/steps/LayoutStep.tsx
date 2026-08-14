@@ -1,5 +1,6 @@
 import { CAlert, CRow } from '@coreui/react'
 
+import { KEY } from 'src/shared/utils/platform'
 import type { OptimizeResponse } from '../types'
 import { Kpi, meters } from '../summaryTables'
 import OptimizingOverlay from '../OptimizingOverlay'
@@ -9,7 +10,7 @@ import SheetViewer from '../SheetViewer'
 // which is what freed the room for the sheets to be shown big instead of behind an "Ampliar" modal.
 //
 // Nothing but the result: no card, no heading, and no control row. The heuristic picker and
-// "Volver a optimizar" moved into the page's actions menu (`OptimizerActionsMenu`, `Ctrl+↵`), which
+// "Volver a optimizar" moved into the page's actions menu (`OptimizerActionsMenu`, `Ctrl+Enter`), which
 // is where every other action already lives — so the sheet gets the full width and the full height.
 
 interface LayoutStepProps {
@@ -36,8 +37,8 @@ const LayoutStep = ({ result, isPending, error, variant, isStale }: LayoutStepPr
 
     {!result && !error && !isPending && (
       <div className="text-body-secondary small">
-        Todavía no hay un resultado. Usa “Optimizar” en el menú ⋮ (Ctrl+↵) para calcular la
-        distribución de las piezas en los tableros.
+        Todavía no hay un resultado. Usa “Optimizar” en el menú ⋮ ({`${KEY.mod}+${KEY.enter}`}) para
+        calcular la distribución de las piezas en los tableros.
       </div>
     )}
 

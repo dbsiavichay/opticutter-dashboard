@@ -1,6 +1,7 @@
 import type { ReactNode } from 'react'
 import { CButton, CProgress, CProgressBar } from '@coreui/react'
 
+import { KEY } from 'src/shared/utils/platform'
 import { STEPS } from './useOptimizerWizard'
 import type { StepId } from './useOptimizerWizard'
 
@@ -99,7 +100,13 @@ export const WizardFooter = ({
   <div className="wizard-footer">
     <div className="d-flex flex-wrap align-items-center gap-2 p-2 border rounded-3 bg-body shadow-sm">
       {onBack && (
-        <CButton color="secondary" variant="outline" type="button" onClick={onBack}>
+        <CButton
+          color="secondary"
+          variant="outline"
+          type="button"
+          title={`${KEY.alt}+←`}
+          onClick={onBack}
+        >
           ‹ Atrás
         </CButton>
       )}
@@ -110,7 +117,13 @@ export const WizardFooter = ({
         )}
         {children}
         {onNext && (
-          <CButton color="primary" type="button" disabled={nextDisabled} onClick={onNext}>
+          <CButton
+            color="primary"
+            type="button"
+            disabled={nextDisabled}
+            title={nextDisabled ? nextHint : `${KEY.alt}+→`}
+            onClick={onNext}
+          >
             {nextLabel} ›
           </CButton>
         )}

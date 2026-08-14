@@ -26,6 +26,7 @@ import {
   cilTrash,
 } from '@coreui/icons'
 
+import { KEY } from 'src/shared/utils/platform'
 import type { ModalContainer, PackingStrategy } from './types'
 import { STRATEGY_OPTIONS, strategyHint } from './OptimizationPreview'
 
@@ -73,8 +74,12 @@ interface OptimizerActionsMenuProps {
 }
 
 // Muted shortcut hint pushed to the right of an item's label.
+//
+// Labels come from `KEY`, which names the modifiers for the keyboard in front of the user (Ctrl /
+// Shift / Alt / Enter on Windows, ⌘ ⇧ ⌥ ↵ on a Mac). `text-nowrap` because the spelled-out Windows
+// forms are wide enough to wrap onto a second line inside the menu.
 const Hint = ({ children }: { children: ReactNode }) => (
-  <span className="ms-auto ps-4 text-body-secondary small">{children}</span>
+  <span className="ms-auto ps-4 text-body-secondary small text-nowrap">{children}</span>
 )
 
 const OptimizerActionsMenu = ({
@@ -125,15 +130,28 @@ const OptimizerActionsMenu = ({
           <>
             <CDropdownHeader className="text-body-secondary small">Piezas</CDropdownHeader>
             {onImport && (
-              <CDropdownItem as="button" type="button" onClick={onImport}>
+              <CDropdownItem
+                as="button"
+                type="button"
+                className="d-flex align-items-center"
+                onClick={onImport}
+              >
                 <CIcon icon={cilCloudUpload} className="me-2" />
                 Importar / Pegar
+                <Hint>{`${KEY.mod}+I`}</Hint>
               </CDropdownItem>
             )}
             {onExport && (
-              <CDropdownItem as="button" type="button" disabled={exportDisabled} onClick={onExport}>
+              <CDropdownItem
+                as="button"
+                type="button"
+                className="d-flex align-items-center"
+                disabled={exportDisabled}
+                onClick={onExport}
+              >
                 <CIcon icon={cilCloudDownload} className="me-2" />
                 Exportar CSV
+                <Hint>{`${KEY.mod}+${KEY.shift}+S`}</Hint>
               </CDropdownItem>
             )}
             {onClear && (
@@ -173,7 +191,7 @@ const OptimizerActionsMenu = ({
                 )}
                 {hasResult ? 'Volver a optimizar' : 'Optimizar'}
                 {variant > 0 && <span className="ms-1 text-body-secondary">#{variant}</span>}
-                <Hint>Ctrl+↵</Hint>
+                <Hint>{`${KEY.mod}+${KEY.enter}`}</Hint>
               </CDropdownItem>
             )}
             {onStrategyChange && (
@@ -217,7 +235,7 @@ const OptimizerActionsMenu = ({
                   className="me-2"
                 />
                 {allCollapsed ? 'Expandir todos' : 'Plegar todos'}
-                <Hint>Ctrl+⇧+E</Hint>
+                <Hint>{`${KEY.mod}+${KEY.shift}+E`}</Hint>
               </CDropdownItem>
             )}
             {onToggleFullscreen && (
@@ -229,7 +247,7 @@ const OptimizerActionsMenu = ({
               >
                 <CIcon icon={isFullscreen ? cilFullscreenExit : cilFullscreen} className="me-2" />
                 {isFullscreen ? 'Salir de pantalla completa' : 'Pantalla completa'}
-                <Hint>Ctrl+⇧+F</Hint>
+                <Hint>{`${KEY.mod}+${KEY.shift}+F`}</Hint>
               </CDropdownItem>
             )}
           </>
@@ -241,21 +259,34 @@ const OptimizerActionsMenu = ({
           <>
             <CDropdownHeader className="text-body-secondary small">Trabajo</CDropdownHeader>
             {onNew && (
-              <CDropdownItem as="button" type="button" onClick={onNew}>
+              <CDropdownItem
+                as="button"
+                type="button"
+                className="d-flex align-items-center"
+                onClick={onNew}
+              >
                 <CIcon icon={cilPlus} className="me-2" />
                 Nuevo
+                <Hint>{`${KEY.mod}+${KEY.alt}+N`}</Hint>
               </CDropdownItem>
             )}
             {onOpenDrafts && (
-              <CDropdownItem as="button" type="button" onClick={onOpenDrafts}>
+              <CDropdownItem
+                as="button"
+                type="button"
+                className="d-flex align-items-center"
+                onClick={onOpenDrafts}
+              >
                 <CIcon icon={cilFolderOpen} className="me-2" />
                 Borradores…
+                <Hint>{`${KEY.mod}+O`}</Hint>
               </CDropdownItem>
             )}
             {onSaveDraft && (
               <CDropdownItem
                 as="button"
                 type="button"
+                className="d-flex align-items-center"
                 disabled={isSavingDraft}
                 onClick={onSaveDraft}
               >
@@ -265,6 +296,7 @@ const OptimizerActionsMenu = ({
                   <CIcon icon={savedFlash ? cilCheckAlt : cilSave} className="me-2" />
                 )}
                 {savedFlash ? 'Guardado' : 'Guardar borrador'}
+                <Hint>{`${KEY.mod}+S`}</Hint>
               </CDropdownItem>
             )}
           </>

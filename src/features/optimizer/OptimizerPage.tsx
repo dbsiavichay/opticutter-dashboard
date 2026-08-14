@@ -18,6 +18,11 @@ import {
 import type { MaterialForm, RequirementForm, RequirementIssue } from './optimizerForm'
 import type { OptimizeResponse, OptimizerDraftPayload, PackingStrategy } from './types'
 import { clearAutosave, loadAutosave, saveAutosave } from './optimizerStorage'
+import {
+  buildServiceLines,
+  serviceLineFromApi,
+  useServiceLines,
+} from 'src/features/preorders/useServiceLines'
 import { downloadCsv, requirementsToCsv } from './piecesCsv'
 import { usePiecesEditor } from './usePiecesEditor'
 import { useCollapsedGroups } from './useCollapsedGroups'
@@ -90,6 +95,9 @@ const OptimizerPage = () => {
   const { data: edgeBandings = [] } = useEdgeBandings()
   const optimize = useOptimize()
   const pieces = usePiecesEditor(materials, bootstrap?.requirements)
+  // Billed additional services (Costos step). Workspace state like the pieces: it has to survive
+  // stepping between Costos and Cotización, land in the autosave, and ride in a saved draft.
+  const services = useServiceLines(() => (bootstrap?.services ?? []).map(serviceLineFromApi))
   const saveDraft = useSaveDraft()
   const groups = useCollapsedGroups(materials)
 
@@ -199,13 +207,14 @@ const OptimizerPage = () => {
           draftName,
           materials,
           requirements: pieces.requirements,
+          services: buildServiceLines(services.lines),
         })
       } else {
         clearAutosave()
       }
     }, 800)
     return () => clearTimeout(t)
-  }, [materials, pieces.requirements, draftId, draftName, hasWork])
+  }, [materials, pieces.requirements, services.lines, draftId, draftName, hasWork])
 
   // Clean up the "Guardado" flash timer on unmount.
   useEffect(
@@ -238,11 +247,13 @@ const OptimizerPage = () => {
     version: 1,
     materials,
     requirements: pieces.requirements,
+    additionalServices: buildServiceLines(services.lines),
   })
 
   const resetWorkspace = () => {
     setMaterials([emptyCatalogMaterial()])
     pieces.clear()
+    services.set([])
     setDraftId(null)
     setDraftName('')
     setVariant(0)
@@ -297,6 +308,8 @@ const OptimizerPage = () => {
       const d = await draftsApi.get(id)
       setMaterials(d.payload.materials)
       pieces.addMany(d.payload.requirements, true)
+      // Optional: drafts saved before services existed have no such key.
+      services.set((d.payload.additionalServices ?? []).map(serviceLineFromApi))
       setDraftId(d.id)
       setDraftName(d.name)
       setShowDrafts(false)
@@ -424,19 +437,34 @@ const OptimizerPage = () => {
     runOptimize({ variant: next })
   }
 
-  // What the menu's "Optimizar / Volver a optimizar" and Ctrl+↵ both do: with a result on screen a
+  // What the menu's "Optimizar / Volver a optimizar" and Ctrl+Enter both do: with a result on screen a
   // plain re-run would return the identical layout (the backend caches by input hash), so it becomes
   // "explore another alternative" instead.
   const handleRun = hasResult ? handleAlternative : handleOptimize
 
   // With the toolbars gone these shortcuts ARE the affordance; the actions menu only documents them.
-  // Each one is scoped to the step that owns it — the same reach the buttons had.
+  // Each one is scoped to the step that owns it — the same reach its menu entry has, so a hint the
+  // menu shows is always a hint that works. The "Trabajo" ones are unscoped for the same reason:
+  // that section of the menu is on every step.
+  //
+  // `onExport` is wrapped rather than passed: `handleExport` is declared further down, and a bare
+  // reference here would read it before its initialiser. The thunk defers that to keypress time
+  // while the conditional keeps the scoping.
   useEditorShortcuts({
     onUndo: onPieces && pieces.canUndo ? pieces.undo : undefined,
     onDeleteSelection: onPieces && pieces.selected.size > 0 ? pieces.removeSelected : undefined,
     onToggleCollapseAll: onPieces ? groups.toggleAll : undefined,
     onToggleFullscreen: canFullscreen ? toggle : undefined,
     onOptimize: onLayout && canRunOptimize && !optimize.isPending ? handleRun : undefined,
+    onImport: onPieces ? () => setShowImport(true) : undefined,
+    onExport: onPieces && hasPieceData ? () => handleExport() : undefined,
+    onNew: handleNew,
+    onOpenDrafts: () => setShowDrafts(true),
+    onSaveDraft: saveDraft.isPending ? undefined : handleSaveDraft,
+    onPrevStep: wizard.index > 0 ? wizard.back : undefined,
+    // Through `handleNext`, never `wizard.next`: leaving Despiece has to run the same half-filled-row
+    // validation the "Siguiente" button runs.
+    onNextStep: wizard.canGoNext && !optimize.isPending ? handleNext : undefined,
   })
 
   // Import: pieces plus the material groups the CSV declared. "Replace" makes the workspace mirror
@@ -503,56 +531,67 @@ const OptimizerPage = () => {
         }
       />
 
-      {wizard.step === 'pieces' && (
-        <PiecesStep
-          editor={pieces}
-          materials={materials}
-          boards={boards}
-          edgeBandings={edgeBandings}
-          container={modalContainer}
-          issues={issues}
-          onDismissIssues={() => setIssues([])}
-          missingBanding={missingBanding}
-          collapsed={groups.collapsed}
-          onToggleGroup={groups.toggle}
-          onAddMaterial={addMaterial}
-          onUpdateMaterial={updateMaterial}
-          onRequestDeleteMaterial={requestDeleteMaterial}
-          onDuplicateMaterial={duplicateMaterial}
-        />
-      )}
+      {/* One surface for whichever step is active. The trail above it and the footer below stay on
+          the page background — that contrast is what separates them from the work. */}
+      <div className="wizard-surface">
+        {wizard.step === 'pieces' && (
+          <PiecesStep
+            editor={pieces}
+            materials={materials}
+            boards={boards}
+            edgeBandings={edgeBandings}
+            container={modalContainer}
+            issues={issues}
+            onDismissIssues={() => setIssues([])}
+            missingBanding={missingBanding}
+            collapsed={groups.collapsed}
+            onToggleGroup={groups.toggle}
+            onAddMaterial={addMaterial}
+            onUpdateMaterial={updateMaterial}
+            onRequestDeleteMaterial={requestDeleteMaterial}
+            onDuplicateMaterial={duplicateMaterial}
+          />
+        )}
 
-      {wizard.step === 'layout' && (
-        <LayoutStep
-          result={result}
-          isPending={optimize.isPending}
-          error={optimize.error}
-          variant={variant}
-          isStale={isStale}
-        />
-      )}
+        {wizard.step === 'layout' && (
+          <LayoutStep
+            result={result}
+            isPending={optimize.isPending}
+            error={optimize.error}
+            variant={variant}
+            isStale={isStale}
+          />
+        )}
 
-      {wizard.step === 'costs' && result && (
-        <CostsStep
-          result={result}
-          missingBanding={missingBanding}
-          priceTierCode={priceTierCode}
-          onPriceTierChange={handlePriceTierChange}
-          isPending={optimize.isPending}
-        />
-      )}
+        {wizard.step === 'costs' && result && (
+          <CostsStep
+            result={result}
+            missingBanding={missingBanding}
+            priceTierCode={priceTierCode}
+            onPriceTierChange={handlePriceTierChange}
+            isPending={optimize.isPending}
+            services={services.lines}
+            onAddService={services.add}
+            onUpdateService={services.update}
+            onRemoveService={services.remove}
+            container={modalContainer}
+          />
+        )}
 
-      {wizard.step === 'quote' && (
-        <QuoteStep
-          result={result}
-          materials={built.materials}
-          requirements={built.requirements}
-          priceTierCode={priceTierCode}
-          strategy={strategy}
-          variant={variant}
-          onCreated={clearAutosave}
-        />
-      )}
+        {wizard.step === 'quote' && (
+          <QuoteStep
+            result={result}
+            materials={built.materials}
+            requirements={built.requirements}
+            priceTierCode={priceTierCode}
+            strategy={strategy}
+            variant={variant}
+            services={services.lines}
+            container={modalContainer}
+            onCreated={clearAutosave}
+          />
+        )}
+      </div>
 
       <WizardFooter
         onBack={wizard.index > 0 ? wizard.back : undefined}

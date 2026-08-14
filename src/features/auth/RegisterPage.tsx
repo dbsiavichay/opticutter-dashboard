@@ -12,6 +12,7 @@ import {
 } from '@coreui/react'
 import CIcon from '@coreui/icons-react'
 import { cilLockLocked, cilUser } from '@coreui/icons'
+import { logo } from 'src/assets/brand/logo'
 
 const Register = () => {
   return (
@@ -19,6 +20,9 @@ const Register = () => {
       <CContainer>
         <CRow className="justify-content-center">
           <CCol md={9} lg={7} xl={6}>
+            <div className="text-center mb-4">
+              <CIcon icon={logo} height={44} />
+            </div>
             <CCard className="mx-4">
               <CCardBody className="p-4">
                 <CForm>

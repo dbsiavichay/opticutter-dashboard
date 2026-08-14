@@ -38,14 +38,16 @@ export const meters = (n?: number | null) => (n != null ? `${n.toFixed(2)} m` : 
 export const MaterialsSummaryTable = ({ rows }: { rows: MaterialSummary[] }) => {
   if (!rows.length) return null
   return (
-    <CTable small responsive className="mb-3">
+    <CTable small responsive className="summary-table mb-3">
       <CTableHead>
         <CTableRow>
-          <CTableHeaderCell className="bg-body-tertiary">Material</CTableHeaderCell>
-          <CTableHeaderCell className="bg-body-tertiary">Medida</CTableHeaderCell>
-          <CTableHeaderCell className="bg-body-tertiary text-end">Tableros</CTableHeaderCell>
-          <CTableHeaderCell className="bg-body-tertiary text-end">Efic. avg</CTableHeaderCell>
-          <CTableHeaderCell className="bg-body-tertiary text-end">Costo</CTableHeaderCell>
+          {/* "Tablero", not "Material": every row here IS a board, and the old wording clashed with
+              the "Tableros" count column beside it — now "Cant." */}
+          <CTableHeaderCell>Tablero</CTableHeaderCell>
+          <CTableHeaderCell>Medida</CTableHeaderCell>
+          <CTableHeaderCell className="text-end">Cant.</CTableHeaderCell>
+          <CTableHeaderCell className="text-end">Efic. avg</CTableHeaderCell>
+          <CTableHeaderCell className="text-end">Costo</CTableHeaderCell>
         </CTableRow>
       </CTableHead>
       <CTableBody>
@@ -73,14 +75,14 @@ export const MaterialsSummaryTable = ({ rows }: { rows: MaterialSummary[] }) => 
 export const EdgeBandingSummaryTable = ({ rows }: { rows: EdgeBandingSummary[] }) => {
   if (!rows.length) return null
   return (
-    <CTable small responsive className="mb-3">
+    <CTable small responsive className="summary-table mb-3">
       <CTableHead>
         <CTableRow>
-          <CTableHeaderCell className="bg-body-tertiary">Tapacanto</CTableHeaderCell>
-          <CTableHeaderCell className="bg-body-tertiary text-end">m netos</CTableHeaderCell>
-          <CTableHeaderCell className="bg-body-tertiary text-end">m facturados</CTableHeaderCell>
-          <CTableHeaderCell className="bg-body-tertiary text-end">Precio/m</CTableHeaderCell>
-          <CTableHeaderCell className="bg-body-tertiary text-end">Costo</CTableHeaderCell>
+          <CTableHeaderCell>Tapacanto</CTableHeaderCell>
+          <CTableHeaderCell className="text-end">m netos</CTableHeaderCell>
+          <CTableHeaderCell className="text-end">m facturados</CTableHeaderCell>
+          <CTableHeaderCell className="text-end">Precio/m</CTableHeaderCell>
+          <CTableHeaderCell className="text-end">Costo</CTableHeaderCell>
         </CTableRow>
       </CTableHead>
       <CTableBody>
