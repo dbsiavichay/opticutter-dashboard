@@ -48,8 +48,19 @@ body {
   }
 }
 
-.header > .container-fluid + .container-fluid {
-  min-height: 3rem;
+// The breadcrumb moved into the header's only row, where it also serves as the page title. It has to
+// give way rather than push the bell and the user menu off the right edge, so the trail is a single
+// non-wrapping line that ellipsizes — deep paths like "Home / Órdenes / Orden #1234" get truncated
+// from the left-hand crumbs, which are the ones the user already knows.
+.header-breadcrumb .breadcrumb {
+  flex-wrap: nowrap;
+  margin-bottom: 0;
+  white-space: nowrap;
+
+  .breadcrumb-item {
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
 }
 
 .footer {
@@ -71,34 +82,22 @@ input[type='number'] {
   }
 }
 
-// Wizard step trail. Each step is a button with three states (done / current / locked), joined by a
-// connector drawn as a pseudo-element so it tracks the buttons' own width instead of needing spacer
-// elements between them. Replaced below `md` by a position label plus a progress bar.
+// Wizard step trail. Each step has three states (done / current / locked), joined by a connector
+// drawn as a pseudo-element so it tracks the cells' own width instead of needing spacer elements
+// between them. Replaced below `md` by a position label plus a progress bar.
 .wizard-steps {
   grid-auto-flow: column;
   grid-auto-columns: 1fr;
   gap: 0;
 }
 
+// The grid cell: a quarter of the row, which is what the connector math needs. It is NOT the button
+// — a cell-wide hit area meant a click 200px away from a step still switched to it.
 .wizard-step {
   position: relative;
   display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 0.35rem;
-  padding: 0.25rem 0.5rem;
-  border: 0;
-  background: none;
+  justify-content: center;
   color: var(--cui-secondary-color);
-
-  &:not(:disabled) {
-    cursor: pointer;
-  }
-
-  &:disabled {
-    opacity: 0.5;
-    cursor: not-allowed;
-  }
 
   // Connector to the next step, stopping short of both markers.
   &:not(:last-child)::after {
@@ -121,6 +120,31 @@ input[type='number'] {
 
   &[data-state='current'] {
     color: var(--cui-body-color);
+  }
+}
+
+// The clickable part, shrink-wrapped around the marker and its label so the hit area matches what
+// the user is actually aiming at.
+.wizard-step-hit {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.25rem 0.75rem;
+  border: 0;
+  border-radius: var(--cui-border-radius);
+  background: none;
+  color: inherit;
+
+  // No hover background: the connector runs behind this box, so any fill here paints over the green
+  // segment of a completed step and reads as the line pulling back.
+  &:not(:disabled) {
+    cursor: pointer;
+  }
+
+  &:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
   }
 }
 
@@ -157,7 +181,10 @@ input[type='number'] {
 .wizard-footer {
   position: sticky;
   bottom: 0;
-  z-index: 1020;
+  // Below Bootstrap's $zindex-dropdown (1000), not above it: the bar now hosts the actions menu's
+  // sibling controls and "Mover a…" opens upward out of it. At the sticky tier (1020) the bar
+  // painted over its own menus. Everything it must cover — the table's sticky cells — sits at 3.
+  z-index: 990;
   padding-block: 0.75rem;
   margin-top: 0.25rem;
   background-color: var(--cui-tertiary-bg);
@@ -304,12 +331,23 @@ input[type='number'] {
   }
 }
 
-// Material group card. The accent bar down the left edge tracks which group a row belongs to while
-// a long pieces list scrolls. It lives here rather than as an inline `border-left` because the
-// `.border` utility declares the shorthand `!important`, which beats any inline value.
+// Material group. No longer a card: the full border, the rounded corners and the tinted header strip
+// stacked a box inside a box inside a box before the first table row. What is left is the accent bar
+// down the left edge — which is functional, it tracks which group a row belongs to while a long
+// pieces list scrolls — plus a hairline separating one group from the next.
+//
+// The accent lives here rather than as an inline `border-left` because the `.border` utility declares
+// the shorthand `!important`, which beats any inline value.
 .material-group {
-  border: var(--cui-border-width) var(--cui-border-style) var(--cui-border-color);
   border-left: 4px solid var(--group-accent, var(--cui-border-color));
+  border-bottom: var(--cui-border-width) var(--cui-border-style) var(--cui-border-color);
+  padding: 0 0 0.5rem 0.75rem;
+}
+
+// "Agregar material", the only control left in the flow of the list. Dashed and full width so it
+// reads as the next empty slot rather than as another button competing with the group's own.
+.add-material {
+  border: var(--cui-border-width) dashed var(--cui-border-color);
 }
 
 // Pieces grid: 12 columns of mostly 3-4 digit numbers. Shrinking the header type and cell padding
@@ -318,6 +356,10 @@ input[type='number'] {
   th {
     font-size: 0.72rem;
     line-height: 1.2;
+    // The label and its fill-down button stay on one line, which makes the header the column's
+    // min-content width. Before this the button wrapped underneath and every header was two rows
+    // tall — the reason "(mm)" had to go from Largo/Ancho, whose tooltips still carry the unit.
+    white-space: nowrap;
   }
 
   > :not(caption) > * > * {
@@ -341,13 +383,19 @@ input[type='number'] {
 }
 
 // Optimizing overlay. The cut search runs for tens of seconds on a real job, so the wait covers the
-// results pane with a board filling up with pieces instead of leaving a stale result and a 12px
-// spinner on screen. Semi-transparent on purpose: the previous result stays legible underneath, so
-// it reads as "recalculating this" rather than "everything is gone".
+// screen with a board filling up with pieces instead of leaving a stale result and a 12px spinner.
+// Semi-transparent on purpose: the previous result stays legible underneath, so it reads as
+// "recalculating this" rather than "everything is gone".
+//
+// Fixed, not absolute: pinned to its pane it was cut off by the pane's own bounds and scrolled out
+// of view on a long result, so the wait could end up off screen. Fixed also survives fullscreen —
+// there the fullscreen element IS the viewport, so `inset: 0` still lands on the workspace.
 .optimizing-overlay {
-  position: absolute;
+  position: fixed;
   inset: 0;
-  z-index: 3;
+  // Above the sticky app header (1030) and the wizard footer (990); below modals (1055), which
+  // cannot be open during a run anyway.
+  z-index: 1040;
   display: flex;
   align-items: center;
   justify-content: center;

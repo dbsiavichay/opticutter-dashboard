@@ -21,6 +21,9 @@ interface PiecesStepProps {
   // Indexes of pieces with banding sides but no tapacanto product. Only a warning here — it blocks
   // the Cotización step, not this one, because the geometry optimizes fine without it.
   missingBanding: number[]
+  // Folded groups: owned by the page, because the actions menu toggles them all at once.
+  collapsed: Set<string>
+  onToggleGroup: (uid: string) => void
   onAddMaterial: () => void
   onUpdateMaterial: <K extends keyof MaterialForm>(
     uid: string,
@@ -29,9 +32,6 @@ interface PiecesStepProps {
   ) => void
   onRequestDeleteMaterial: (m: MaterialForm) => void
   onDuplicateMaterial: (m: MaterialForm) => void
-  onImportOpen: () => void
-  onExport: () => void
-  onClearMaterials: () => void
 }
 
 const PiecesStep = ({
@@ -43,13 +43,12 @@ const PiecesStep = ({
   issues,
   onDismissIssues,
   missingBanding,
+  collapsed,
+  onToggleGroup,
   onAddMaterial,
   onUpdateMaterial,
   onRequestDeleteMaterial,
   onDuplicateMaterial,
-  onImportOpen,
-  onExport,
-  onClearMaterials,
 }: PiecesStepProps) => (
   <>
     {/* Above the pieces, not below them: a list long enough to need this warning is long enough to
@@ -77,13 +76,12 @@ const PiecesStep = ({
       boards={boards}
       edgeBandings={edgeBandings}
       container={container}
+      collapsed={collapsed}
+      onToggleGroup={onToggleGroup}
       onAddMaterial={onAddMaterial}
       onUpdateMaterial={onUpdateMaterial}
       onRequestDeleteMaterial={onRequestDeleteMaterial}
       onDuplicateMaterial={onDuplicateMaterial}
-      onImportOpen={onImportOpen}
-      onExport={onExport}
-      onClearMaterials={onClearMaterials}
     />
 
     {missingBanding.length > 0 && (

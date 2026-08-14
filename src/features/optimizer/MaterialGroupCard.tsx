@@ -236,16 +236,8 @@ const MaterialGroupCard = ({
   }
 
   return (
-    <div
-      className="material-group rounded mb-2"
-      style={{ '--group-accent': accent } as CSSProperties}
-    >
-      <div className="d-flex flex-wrap gap-2 align-items-end p-2 border-bottom bg-body-tertiary">
-        <span
-          aria-hidden="true"
-          className="rounded-circle flex-shrink-0 align-self-center"
-          style={{ width: 10, height: 10, background: accent }}
-        />
+    <div className="material-group mb-2" style={{ '--group-accent': accent } as CSSProperties}>
+      <div className="d-flex flex-wrap gap-2 align-items-end py-2">
         <CButton
           size="sm"
           color="secondary"
@@ -394,146 +386,120 @@ const MaterialGroupCard = ({
       </div>
 
       {!collapsed && (
-        <div className="p-2">
-          {m.source === 'catalog' && (
-            <div className="border rounded bg-body-tertiary p-2 mb-2">
-              <div className="d-flex align-items-center justify-content-between gap-2 mb-2 flex-wrap">
-                <span className="small fw-semibold">
-                  Retazos{' '}
-                  <span className="text-body-secondary fw-normal">
-                    (mismo material, stock adicional del cliente/empresa)
-                  </span>
-                </span>
-                <div className="d-flex align-items-center gap-2 flex-wrap">
-                  {offcuts.length > 0 && (
-                    <div className="d-flex align-items-center gap-1">
-                      <CFormLabel className="small mb-0 text-nowrap">Orden de llenado</CFormLabel>
-                      <CFormSelect
-                        size="sm"
-                        style={{ width: 230 }}
-                        value={m.fillOrder ?? 'auto'}
-                        onChange={(e) =>
-                          onUpdate(m.uid, 'fillOrder', e.target.value as PoolFillOrder)
-                        }
-                      >
-                        {FILL_ORDER_OPTIONS.map((o) => (
-                          <option key={o.value} value={o.value}>
-                            {o.label}
-                          </option>
-                        ))}
-                      </CFormSelect>
-                    </div>
-                  )}
-                  <CButton
-                    size="sm"
-                    color="secondary"
-                    variant="outline"
-                    type="button"
-                    onClick={addOffcut}
-                  >
-                    <CIcon icon={cilPlus} className="me-1" />
-                    Agregar retazo
-                  </CButton>
-                </div>
+        <div>
+          {/* Offcuts, when there are any. The panel they used to live in — a bordered, tinted box
+              with a two-line explanation, shown even when empty — was the deepest nesting on the
+              screen. Empty is now just the "+ Retazo" button in the row below the table, which
+              carries the explanation in its tooltip. */}
+          {m.source === 'catalog' && offcuts.length > 0 && (
+            <div className="mb-2">
+              <div className="d-flex align-items-center gap-2 mb-1 flex-wrap">
+                <span className="small fw-semibold">Retazos</span>
+                <CFormLabel className="small mb-0 ms-auto text-nowrap">Orden de llenado</CFormLabel>
+                <CFormSelect
+                  size="sm"
+                  style={{ width: 230 }}
+                  value={m.fillOrder ?? 'auto'}
+                  onChange={(e) => onUpdate(m.uid, 'fillOrder', e.target.value as PoolFillOrder)}
+                >
+                  {FILL_ORDER_OPTIONS.map((o) => (
+                    <option key={o.value} value={o.value}>
+                      {o.label}
+                    </option>
+                  ))}
+                </CFormSelect>
               </div>
 
-              {offcuts.length === 0 ? (
-                <div className="small text-body-secondary">
-                  El cliente puede aportar retazos del mismo material; las piezas se optimizan sobre
-                  ellos y el tablero de catálogo.
-                </div>
-              ) : (
-                offcuts.map((o) => (
-                  <div key={o.uid} className="d-flex flex-wrap gap-2 align-items-end mb-2">
-                    <div style={{ width: 140 }}>
-                      <CFormLabel className="small mb-1">Tipo</CFormLabel>
-                      <CFormSelect
-                        size="sm"
-                        value={o.source}
-                        onChange={(e) =>
-                          updateOffcut(o.uid, 'source', e.target.value as OffcutSource)
-                        }
-                      >
-                        {OFFCUT_SOURCES.map((s) => (
-                          <option key={s.value} value={s.value}>
-                            {s.label}
-                          </option>
-                        ))}
-                      </CFormSelect>
-                    </div>
-                    <div style={{ flex: '1 1 140px', minWidth: 120 }}>
-                      <CFormLabel className="small mb-1">Etiqueta</CFormLabel>
-                      <CFormInput
-                        size="sm"
-                        value={o.label}
-                        placeholder="Retazo cliente"
-                        onChange={(e) => updateOffcut(o.uid, 'label', e.target.value)}
-                      />
-                    </div>
-                    <div style={{ width: 80 }}>
-                      <CFormLabel className="small mb-1">Largo</CFormLabel>
-                      <CFormInput
-                        size="sm"
-                        type="number"
-                        min={1}
-                        value={o.height}
-                        onChange={(e) => updateOffcut(o.uid, 'height', e.target.value)}
-                      />
-                    </div>
-                    <div style={{ width: 80 }}>
-                      <CFormLabel className="small mb-1">Ancho</CFormLabel>
-                      <CFormInput
-                        size="sm"
-                        type="number"
-                        min={1}
-                        value={o.width}
-                        onChange={(e) => updateOffcut(o.uid, 'width', e.target.value)}
-                      />
-                    </div>
-                    <div style={{ width: 80 }}>
-                      <CFormLabel className="small mb-1">Grosor</CFormLabel>
-                      <CFormInput
-                        size="sm"
-                        type="number"
-                        min={1}
-                        value={o.thickness}
-                        onChange={(e) => updateOffcut(o.uid, 'thickness', e.target.value)}
-                      />
-                    </div>
-                    <div style={{ width: 90 }}>
-                      <CFormLabel className="small mb-1">Costo</CFormLabel>
-                      <CFormInput
-                        size="sm"
-                        type="number"
-                        min={0}
-                        step="0.01"
-                        value={o.costPerUnit}
-                        onChange={(e) => updateOffcut(o.uid, 'costPerUnit', e.target.value)}
-                      />
-                    </div>
-                    <div style={{ width: 70 }}>
-                      <CFormLabel className="small mb-1">Cant.</CFormLabel>
-                      <CFormInput
-                        size="sm"
-                        type="number"
-                        min={1}
-                        value={o.quantity}
-                        onChange={(e) => updateOffcut(o.uid, 'quantity', e.target.value)}
-                      />
-                    </div>
-                    <CButton
+              {offcuts.map((o) => (
+                <div key={o.uid} className="d-flex flex-wrap gap-2 align-items-end mb-2">
+                  <div style={{ width: 140 }}>
+                    <CFormLabel className="small mb-1">Tipo</CFormLabel>
+                    <CFormSelect
                       size="sm"
-                      variant="ghost"
-                      color="danger"
-                      type="button"
-                      title="Quitar retazo"
-                      onClick={() => removeOffcut(o.uid)}
+                      value={o.source}
+                      onChange={(e) =>
+                        updateOffcut(o.uid, 'source', e.target.value as OffcutSource)
+                      }
                     >
-                      <CIcon icon={cilTrash} />
-                    </CButton>
+                      {OFFCUT_SOURCES.map((s) => (
+                        <option key={s.value} value={s.value}>
+                          {s.label}
+                        </option>
+                      ))}
+                    </CFormSelect>
                   </div>
-                ))
-              )}
+                  <div style={{ flex: '1 1 140px', minWidth: 120 }}>
+                    <CFormLabel className="small mb-1">Etiqueta</CFormLabel>
+                    <CFormInput
+                      size="sm"
+                      value={o.label}
+                      placeholder="Retazo cliente"
+                      onChange={(e) => updateOffcut(o.uid, 'label', e.target.value)}
+                    />
+                  </div>
+                  <div style={{ width: 80 }}>
+                    <CFormLabel className="small mb-1">Largo</CFormLabel>
+                    <CFormInput
+                      size="sm"
+                      type="number"
+                      min={1}
+                      value={o.height}
+                      onChange={(e) => updateOffcut(o.uid, 'height', e.target.value)}
+                    />
+                  </div>
+                  <div style={{ width: 80 }}>
+                    <CFormLabel className="small mb-1">Ancho</CFormLabel>
+                    <CFormInput
+                      size="sm"
+                      type="number"
+                      min={1}
+                      value={o.width}
+                      onChange={(e) => updateOffcut(o.uid, 'width', e.target.value)}
+                    />
+                  </div>
+                  <div style={{ width: 80 }}>
+                    <CFormLabel className="small mb-1">Grosor</CFormLabel>
+                    <CFormInput
+                      size="sm"
+                      type="number"
+                      min={1}
+                      value={o.thickness}
+                      onChange={(e) => updateOffcut(o.uid, 'thickness', e.target.value)}
+                    />
+                  </div>
+                  <div style={{ width: 90 }}>
+                    <CFormLabel className="small mb-1">Costo</CFormLabel>
+                    <CFormInput
+                      size="sm"
+                      type="number"
+                      min={0}
+                      step="0.01"
+                      value={o.costPerUnit}
+                      onChange={(e) => updateOffcut(o.uid, 'costPerUnit', e.target.value)}
+                    />
+                  </div>
+                  <div style={{ width: 70 }}>
+                    <CFormLabel className="small mb-1">Cant.</CFormLabel>
+                    <CFormInput
+                      size="sm"
+                      type="number"
+                      min={1}
+                      value={o.quantity}
+                      onChange={(e) => updateOffcut(o.uid, 'quantity', e.target.value)}
+                    />
+                  </div>
+                  <CButton
+                    size="sm"
+                    variant="ghost"
+                    color="danger"
+                    type="button"
+                    title="Quitar retazo"
+                    onClick={() => removeOffcut(o.uid)}
+                  >
+                    <CIcon icon={cilTrash} />
+                  </CButton>
+                </div>
+              ))}
             </div>
           )}
           <PieceRowsTable
@@ -548,15 +514,17 @@ const MaterialGroupCard = ({
             container={container}
           />
           <div className="d-flex align-items-center gap-2 mt-2 flex-wrap">
+            {/* Icon-only: the input beside it already says how to add a piece, and Enter on the last
+                row of the table does the same. This is the explicit affordance, not the main path. */}
             <CButton
               size="sm"
               color="secondary"
               variant="outline"
               type="button"
+              title="Agregar pieza"
               onClick={() => editor.addTo(m.uid)}
             >
-              <CIcon icon={cilPlus} className="me-1" />
-              Agregar pieza
+              <CIcon icon={cilPlus} />
             </CButton>
             <CFormInput
               size="sm"
@@ -571,6 +539,20 @@ const MaterialGroupCard = ({
               style={{ maxWidth: 380 }}
             />
             {quickError && <small className="text-danger">{quickError}</small>}
+            {m.source === 'catalog' && (
+              <CButton
+                size="sm"
+                color="secondary"
+                variant="ghost"
+                type="button"
+                className="ms-auto text-body-secondary"
+                title="El cliente puede aportar retazos del mismo material; las piezas se optimizan sobre ellos y el tablero de catálogo."
+                onClick={addOffcut}
+              >
+                <CIcon icon={cilPlus} className="me-1" />
+                Retazo
+              </CButton>
+            )}
           </div>
         </div>
       )}

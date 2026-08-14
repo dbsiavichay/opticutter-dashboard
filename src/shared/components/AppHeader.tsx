@@ -1,7 +1,5 @@
 import { useEffect, useRef } from 'react'
-import { NavLink } from 'react-router-dom'
 import useUIStore from 'src/shared/store/uiStore'
-import { useAuthStore } from 'src/shared/store/authStore'
 import {
   CContainer,
   CDropdown,
@@ -11,8 +9,6 @@ import {
   CHeader,
   CHeaderNav,
   CHeaderToggler,
-  CNavLink,
-  CNavItem,
   useColorModes,
 } from '@coreui/react'
 import CIcon from '@coreui/icons-react'
@@ -22,30 +18,16 @@ import AppBreadcrumb from './AppBreadcrumb'
 import AppHeaderDropdown from './AppHeaderDropdown'
 import NotificationBell from 'src/features/notifications/NotificationBell'
 
+// One row, not two. The breadcrumb used to have a strip of its own below this one, and the role
+// shortcuts that sat here duplicated the sidebar link for link — so the breadcrumb took their place
+// and the second strip is gone. It doubles as the page title now: pages that dropped their own
+// heading (the optimizer) still say what they are, without paying a row for it.
 const AppHeader = () => {
   const headerRef = useRef<HTMLDivElement>(null)
   const { colorMode, setColorMode } = useColorModes('coreui-free-react-admin-template-theme')
 
   const sidebarShow = useUIStore((state) => state.sidebarShow)
   const setSidebarShow = useUIStore((state) => state.setSidebarShow)
-  const userRole = useAuthStore((s) => s.user?.role)
-
-  const navLinks: Record<string, { label: string; to: string }[]> = {
-    administrador: [
-      { label: 'Dashboard', to: '/dashboard' },
-      { label: 'Usuarios', to: '/users' },
-      { label: 'Configuración', to: '/settings' },
-    ],
-    vendedor: [
-      { label: 'Optimizador', to: '/optimizer' },
-      { label: 'Cotizaciones', to: '/preorders' },
-      { label: 'Órdenes', to: '/orders' },
-    ],
-    operador: [{ label: 'Tablero', to: '/workshop-board' }],
-    canteador: [{ label: 'Tablero', to: '/workshop-board' }],
-  }
-
-  const links = (userRole && navLinks[userRole]) ?? []
 
   useEffect(() => {
     const handleScroll = () => {
@@ -59,7 +41,7 @@ const AppHeader = () => {
   }, [])
 
   return (
-    <CHeader position="sticky" className="mb-4 p-0" ref={headerRef}>
+    <CHeader position="sticky" className="mb-3 p-0" ref={headerRef}>
       <CContainer className="border-bottom px-4" fluid>
         <CHeaderToggler
           onClick={() => setSidebarShow(!sidebarShow)}
@@ -67,16 +49,12 @@ const AppHeader = () => {
         >
           <CIcon icon={cilMenu} size="lg" />
         </CHeaderToggler>
-        <CHeaderNav className="d-none d-md-flex">
-          {links.map(({ label, to }) => (
-            <CNavItem key={to}>
-              <CNavLink to={to} as={NavLink}>
-                {label}
-              </CNavLink>
-            </CNavItem>
-          ))}
-        </CHeaderNav>
-        <CHeaderNav className="ms-auto">
+        {/* `min-width: 0` is what lets a long trail ellipsize instead of pushing the icons off the
+            right edge — a flex item's default `min-width: auto` refuses to shrink past its content. */}
+        <div className="header-breadcrumb me-auto overflow-hidden" style={{ minWidth: 0 }}>
+          <AppBreadcrumb />
+        </div>
+        <CHeaderNav>
           <NotificationBell />
         </CHeaderNav>
         <CHeaderNav>
@@ -128,9 +106,6 @@ const AppHeader = () => {
           </li>
           <AppHeaderDropdown />
         </CHeaderNav>
-      </CContainer>
-      <CContainer className="px-4" fluid>
-        <AppBreadcrumb />
       </CContainer>
     </CHeader>
   )

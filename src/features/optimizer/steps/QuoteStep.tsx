@@ -3,9 +3,6 @@ import { useNavigate } from 'react-router-dom'
 import {
   CAlert,
   CButton,
-  CCard,
-  CCardBody,
-  CCardHeader,
   CCol,
   CFormInput,
   CFormLabel,
@@ -113,143 +110,136 @@ const QuoteStep = ({
       ? mutationError.errors.find((e) => e.field === 'branchId')?.message
       : undefined
 
+  // The form needs no card — its own labels say what each field is, and "Datos de la cotización"
+  // only repeated the step's name. The summary keeps a frame because it is a different KIND of
+  // thing next to the form: a read-only receipt of what is about to be created.
   return (
     <CRow className="g-3">
       <CCol xs={12} lg={7}>
-        <CCard className="mb-0">
-          <CCardHeader>
-            <strong>Datos de la cotización</strong>
-          </CCardHeader>
-          <CCardBody>
-            <CFormLabel>
-              Buscar cliente <span className="text-danger">*</span>
+        <CFormLabel>
+          Buscar cliente <span className="text-danger">*</span>
+        </CFormLabel>
+        <CFormInput
+          placeholder="Nombre o identificador…"
+          value={clientSearch}
+          onChange={(e) => setClientSearch(e.target.value)}
+          className="mb-1"
+        />
+        {/* Server-searched list, so this stays a plain listbox rather than SearchableSelect,
+            which filters what it already has in memory. */}
+        <CFormSelect
+          htmlSize={6}
+          value={selectedClientId}
+          onChange={(e) => setSelectedClientId(e.target.value)}
+        >
+          <option value="">— Seleccionar cliente —</option>
+          {clients.map((c) => (
+            <option key={c.id} value={c.id}>
+              {fullClientLabel(c)}
+            </option>
+          ))}
+        </CFormSelect>
+        {missingPhone && (
+          <CAlert color="warning" className="mt-2 mb-0 py-2 small">
+            Este cliente no tiene celular registrado. La cotización no podrá crearse hasta que se
+            registre un número.
+          </CAlert>
+        )}
+
+        {isGlobalBranch && (
+          <>
+            <CFormLabel className="mt-3">
+              Sucursal {isAdmin && <span className="text-danger">*</span>}
             </CFormLabel>
-            <CFormInput
-              placeholder="Nombre o identificador…"
-              value={clientSearch}
-              onChange={(e) => setClientSearch(e.target.value)}
-              className="mb-1"
-            />
-            {/* Server-searched list, so this stays a plain listbox rather than SearchableSelect,
-                which filters what it already has in memory. */}
             <CFormSelect
-              htmlSize={6}
-              value={selectedClientId}
-              onChange={(e) => setSelectedClientId(e.target.value)}
+              value={branchId}
+              onChange={(e) => setBranchId(e.target.value)}
+              invalid={!!branchError}
             >
-              <option value="">— Seleccionar cliente —</option>
-              {clients.map((c) => (
-                <option key={c.id} value={c.id}>
-                  {fullClientLabel(c)}
+              <option value="">— Seleccionar sucursal —</option>
+              {branches.map((b) => (
+                <option key={b.id} value={b.id}>
+                  {b.name}
                 </option>
               ))}
             </CFormSelect>
-            {missingPhone && (
-              <CAlert color="warning" className="mt-2 mb-0 py-2 small">
-                Este cliente no tiene celular registrado. La cotización no podrá crearse hasta que
-                se registre un número.
-              </CAlert>
-            )}
+            {branchError && <div className="invalid-feedback d-block">{branchError}</div>}
+          </>
+        )}
 
-            {isGlobalBranch && (
-              <>
-                <CFormLabel className="mt-3">
-                  Sucursal {isAdmin && <span className="text-danger">*</span>}
-                </CFormLabel>
-                <CFormSelect
-                  value={branchId}
-                  onChange={(e) => setBranchId(e.target.value)}
-                  invalid={!!branchError}
-                >
-                  <option value="">— Seleccionar sucursal —</option>
-                  {branches.map((b) => (
-                    <option key={b.id} value={b.id}>
-                      {b.name}
-                    </option>
-                  ))}
-                </CFormSelect>
-                {branchError && <div className="invalid-feedback d-block">{branchError}</div>}
-              </>
-            )}
+        <CFormLabel className="mt-3">Referencia</CFormLabel>
+        <CFormTextarea
+          rows={2}
+          maxLength={512}
+          value={notes}
+          onChange={(e) => setNotes(e.target.value)}
+          placeholder="Ej.: Proyecto Casa Pérez — cocina y closet"
+        />
+        <div className="form-text">
+          Nombre del proyecto u obra para distinguir este pedido de otros del mismo cliente. Se
+          imprime en todos los documentos y la ve el cliente.
+        </div>
 
-            <CFormLabel className="mt-3">Referencia</CFormLabel>
-            <CFormTextarea
-              rows={2}
-              maxLength={512}
-              value={notes}
-              onChange={(e) => setNotes(e.target.value)}
-              placeholder="Ej.: Proyecto Casa Pérez — cocina y closet"
-            />
-            <div className="form-text">
-              Nombre del proyecto u obra para distinguir este pedido de otros del mismo cliente. Se
-              imprime en todos los documentos y la ve el cliente.
-            </div>
-
-            {mutationError && (
-              <CAlert color="danger" className="mt-3 mb-0 py-2 small">
-                {mutationError.message || 'Error al crear la cotización. Intente nuevamente.'}
-              </CAlert>
-            )}
-          </CCardBody>
-        </CCard>
+        {mutationError && (
+          <CAlert color="danger" className="mt-3 mb-0 py-2 small">
+            {mutationError.message || 'Error al crear la cotización. Intente nuevamente.'}
+          </CAlert>
+        )}
       </CCol>
 
       <CCol xs={12} lg={5}>
-        <CCard className="mb-0">
-          <CCardHeader>
-            <strong>Resumen</strong>
-          </CCardHeader>
-          <CCardBody>
-            <div className="d-flex justify-content-between gap-3 py-1 border-bottom">
-              <span className="text-body-secondary small">Cliente</span>
-              <span className="small fw-semibold text-end">
-                {selectedClient ? fullClientLabel(selectedClient) : 'Sin seleccionar'}
-              </span>
-            </div>
-            <div className="d-flex justify-content-between gap-3 py-1 border-bottom">
-              <span className="text-body-secondary small">Piezas</span>
-              <span className="small fw-semibold text-end">
-                {requirements.reduce((n, r) => n + r.quantity, 0)}
-              </span>
-            </div>
-            <div className="d-flex justify-content-between gap-3 py-1 border-bottom">
-              <span className="text-body-secondary small">Tableros</span>
-              <span className="small fw-semibold text-end">{result?.totalBoardsUsed ?? '—'}</span>
-            </div>
-            <div className="d-flex justify-content-between gap-3 py-1 border-bottom">
-              <span className="text-body-secondary small">Nivel de precio</span>
-              <span className="small fw-semibold text-end">
-                {result?.pricing?.priceTierName ?? priceTierCode}
-              </span>
-            </div>
-            <div className="d-flex justify-content-between gap-3 py-2">
-              <span className="fw-semibold">Total</span>
-              <span className="fw-semibold text-end">
-                {result?.pricing ? fmtMoney(result.pricing.total) : '—'}
-              </span>
-            </div>
+        {/* Same frame as the KPI tiles in the other steps (`Kpi` in summaryTables). */}
+        <div className="border rounded-3 p-3">
+          <div className="text-body-secondary small text-uppercase fw-semibold mb-2">Resumen</div>
+          <div className="d-flex justify-content-between gap-3 py-1 border-bottom">
+            <span className="text-body-secondary small">Cliente</span>
+            <span className="small fw-semibold text-end">
+              {selectedClient ? fullClientLabel(selectedClient) : 'Sin seleccionar'}
+            </span>
+          </div>
+          <div className="d-flex justify-content-between gap-3 py-1 border-bottom">
+            <span className="text-body-secondary small">Piezas</span>
+            <span className="small fw-semibold text-end">
+              {requirements.reduce((n, r) => n + r.quantity, 0)}
+            </span>
+          </div>
+          <div className="d-flex justify-content-between gap-3 py-1 border-bottom">
+            <span className="text-body-secondary small">Tableros</span>
+            <span className="small fw-semibold text-end">{result?.totalBoardsUsed ?? '—'}</span>
+          </div>
+          <div className="d-flex justify-content-between gap-3 py-1 border-bottom">
+            <span className="text-body-secondary small">Nivel de precio</span>
+            <span className="small fw-semibold text-end">
+              {result?.pricing?.priceTierName ?? priceTierCode}
+            </span>
+          </div>
+          <div className="d-flex justify-content-between gap-3 py-2">
+            <span className="fw-semibold">Total</span>
+            <span className="fw-semibold text-end">
+              {result?.pricing ? fmtMoney(result.pricing.total) : '—'}
+            </span>
+          </div>
 
-            <div className="text-body-secondary small mb-3">
-              El total se recalcula en el servidor al crear la cotización, con el nivel de precio
-              elegido arriba.
-            </div>
+          <div className="text-body-secondary small mb-3">
+            El total se recalcula en el servidor al crear la cotización, con el nivel de precio
+            elegido arriba.
+          </div>
 
-            <CButton
-              color="primary"
-              className="w-100"
-              type="button"
-              disabled={blocked || isPending}
-              onClick={handleCreate}
-            >
-              {isPending ? (
-                <CSpinner size="sm" className="me-1" />
-              ) : (
-                <CIcon icon={cilCart} className="me-1" />
-              )}
-              Crear cotización
-            </CButton>
-          </CCardBody>
-        </CCard>
+          <CButton
+            color="primary"
+            className="w-100"
+            type="button"
+            disabled={blocked || isPending}
+            onClick={handleCreate}
+          >
+            {isPending ? (
+              <CSpinner size="sm" className="me-1" />
+            ) : (
+              <CIcon icon={cilCart} className="me-1" />
+            )}
+            Crear cotización
+          </CButton>
+        </div>
       </CCol>
     </CRow>
   )
