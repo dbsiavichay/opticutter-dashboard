@@ -145,7 +145,9 @@ const ReviewSheetModal = ({
                 highlightId={selected?.pieceId ?? null}
                 onPieceTap={(p) => setSelected((cur) => (cur?.pieceId === p.pieceId ? null : p))}
                 labelFor={(p) => pieceLabel(p.pieceId) || `${p.originalWidth}×${p.originalHeight}`}
-                maxHeight={640}
+                // Kept inside the modal's scrollport so the board is never cut off by the pager
+                // below. Reserve covers the modal chrome plus the caption under the diagram.
+                maxHeight="min(640px, calc(100dvh - 19rem))"
                 showDimensions
                 enableZoom
               />

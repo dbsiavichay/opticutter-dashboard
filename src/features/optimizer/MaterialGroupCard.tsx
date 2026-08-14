@@ -158,12 +158,25 @@ const MaterialGroupCard = ({
   // picked, that text is the only thing telling two pending groups apart, so it takes the dims slot.
   const pendingLabel = m.source === 'catalog' && !m.boardId ? m.label.trim() : ''
 
-  // When the board CHANGES, re-infer the tapacanto for every banded piece from its band type: a
-  // new board invalidates prior tapacanto choices (manual picks included). The change is detected
-  // here, but the board's coordinated list loads asynchronously, so we mark a pending re-inference
-  // and run it once the new list arrives. Crucially this does NOT fire on initial mount, so loading
-  // an existing quote never clobbers its saved tapacantos.
+  // Two rules, both waiting on the board's coordinated list, which loads asynchronously:
+  //
+  // 1. When the board CHANGES, re-infer the tapacanto for EVERY banded piece from its band type: a
+  //    new board invalidates prior tapacanto choices (manual picks included). The change is detected
+  //    here and applied once the new list arrives. Crucially it does NOT fire on initial mount, so
+  //    loading an existing quote never clobbers its saved tapacantos.
+  // 2. Otherwise, only fill the GAPS — pieces that know their sides and type but carry no product.
+  //    That is what an import or a paste produces (the file has the canto, not the catalog), and it
+  //    is what keeps "Crear cotización" unblocked without touching an assigned tapacanto.
+  //    Deliberate trade: picking "— Sin tapacanto —" on a banded row does not stick, it gets the
+  //    coordinated one back. That state is already an error the app refuses to quote
+  //    (needsBandingProduct paints the row red), so the rule only ever replaces an error with the
+  //    sane default — to really drop the banding, clear the Canto column instead.
   const coordinatedKey = boardEdgeBandings.map((p) => p.id).join(',')
+  // Counts the gaps rule 2 has to close. As a dependency it goes N→0 and then holds, so the effect
+  // settles instead of looping.
+  const missingProduct = rows.filter(
+    (r) => hasEdgeBanding(r.edgeBanding) && !r.edgeBanding.productId,
+  ).length
   const prevBoardId = useRef(boardId)
   const pendingReinfer = useRef(false)
   useEffect(() => {
@@ -171,16 +184,19 @@ const MaterialGroupCard = ({
       prevBoardId.current = boardId
       pendingReinfer.current = true
     }
-    if (!pendingReinfer.current || !boardId || boardEdgeBandings.length === 0) return
+    if (!boardId || boardEdgeBandings.length === 0) return
+    const reinferAll = pendingReinfer.current
+    if (!reinferAll && missingProduct === 0) return
     pendingReinfer.current = false
     editor.updateGroup(m.uid, (r) => {
       if (!hasEdgeBanding(r.edgeBanding)) return r
+      if (!reinferAll && r.edgeBanding.productId) return r
       const productId = inferBandingProductId(boardEdgeBandings, r.edgeBanding.bandType)
       if (!productId || productId === r.edgeBanding.productId) return r
       return { ...r, edgeBanding: { ...r.edgeBanding, productId } }
     })
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [m.uid, boardId, coordinatedKey])
+  }, [m.uid, boardId, coordinatedKey, missingProduct])
 
   // Pooled offcuts attached to this catalog board (same material, finite stock).
   const offcuts = m.offcuts ?? []

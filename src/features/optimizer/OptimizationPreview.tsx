@@ -24,6 +24,7 @@ import PricingBlock from 'src/shared/components/PricingBlock'
 import { stripHalfSuffix } from 'src/shared/utils/halfBoard'
 import type { OptimizeResponse, PackingStrategy } from './types'
 import CutLayoutDiagram from './CutLayoutDiagram'
+import OptimizingOverlay from './OptimizingOverlay'
 
 interface OptimizationPreviewProps {
   result?: OptimizeResponse
@@ -139,14 +140,14 @@ const OptimizationPreview = ({
               disabled={!canOptimize || isPending}
               onClick={onOptimize}
             >
+              {/* Spinner takes the icon's place and the label stays, so the button does not change
+                  width under the cursor that just pressed it. */}
               {isPending ? (
-                <CSpinner size="sm" />
+                <CSpinner size="sm" className="me-1" />
               ) : (
-                <>
-                  <CIcon icon={cilCalculator} className="me-1" />
-                  {optimizeLabel}
-                </>
+                <CIcon icon={cilCalculator} className="me-1" />
               )}
+              {optimizeLabel}
             </CButton>
           ) : (
             isPending && (
@@ -158,7 +159,10 @@ const OptimizationPreview = ({
           )}
         </div>
       </CCardHeader>
-      <CCardBody>
+      {/* Relative so the optimizing overlay can cover exactly this pane: the previous result stays
+          on screen underneath, dimmed, instead of blanking out while the new one is computed. */}
+      <CCardBody style={{ position: 'relative', minHeight: isPending ? '18rem' : undefined }}>
+        {isPending && <OptimizingOverlay />}
         {error && (
           <CAlert color="danger" className="py-2 small mb-3">
             {error.message || 'Error al optimizar. Intente nuevamente.'}

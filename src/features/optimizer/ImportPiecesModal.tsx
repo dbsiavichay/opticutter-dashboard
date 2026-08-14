@@ -24,7 +24,7 @@ import {
 
 import type { BoardProduct } from 'src/features/products/types'
 import { normalizeText } from 'src/shared/utils/text'
-import { materialLabel } from './optimizerForm'
+import { BANDTYPE_LABEL, materialLabel } from './optimizerForm'
 import type { MaterialForm, RequirementForm } from './optimizerForm'
 import { CSV_COLUMNS, looksLikeMissingMaterialColumn, parsePieces } from './piecesCsv'
 import {
@@ -100,6 +100,16 @@ const ImportPiecesModal = ({
 
   const targetByKey = useMemo(() => new Map(mappings.map((m) => [m.key, m.target])), [mappings])
 
+  // Rows the canto reader could not settle on its own: a family code names a tapacanto of another
+  // design, and a label with two banding runs cannot fit one product. Both keep their original text.
+  const cantoCaveats: string[] = []
+  const familyPieces = parsed.canto.familyTokens.reduce((n, f) => n + f.pieces, 0)
+  if (familyPieces > 0) {
+    const tokens = parsed.canto.familyTokens.map((f) => f.token).join(', ')
+    cantoCaveats.push(`${familyPieces} con código de familia (${tokens})`)
+  }
+  if (parsed.canto.mixed > 0) cantoCaveats.push(`${parsed.canto.mixed} con más de un canto`)
+
   const reset = () => {
     setText('')
     setReplace(false)
@@ -144,8 +154,11 @@ const ImportPiecesModal = ({
       </CModalHeader>
       <CModalBody>
         <p className="text-body-secondary small mb-2">
-          Pega un rango copiado de Excel/Google Sheets o sube un archivo CSV. Columnas esperadas:{' '}
-          <strong>{CSV_COLUMNS.join(' · ')}</strong>. El tapacanto se configura aparte por pieza.
+          Pega un rango copiado de Excel/Google Sheets o sube un archivo <strong>CSV o XML</strong>{' '}
+          del programa de corte. Columnas esperadas: <strong>{CSV_COLUMNS.join(' · ')}</strong>. La{' '}
+          <strong>Etiqueta</strong> se lee como canto cuando trae la notación del taller (
+          <code>1L CS</code>, <code>4L CD</code>, <code>NO</code>); el tapacanto se toma del tablero
+          del grupo.
         </p>
 
         <CFormTextarea
@@ -161,7 +174,7 @@ const ImportPiecesModal = ({
             <CFormLabel className="small mb-1 d-block">…o desde archivo</CFormLabel>
             <input
               type="file"
-              accept=".csv,.txt,text/csv"
+              accept=".csv,.txt,.xml,text/csv,text/xml,application/xml"
               className="form-control form-control-sm"
               onChange={handleFile}
             />
@@ -260,6 +273,26 @@ const ImportPiecesModal = ({
           </CAlert>
         )}
 
+        {parsed.canto.banded > 0 && (
+          // The Etiqueta is the ONLY place the commercial program keeps the banding, so say plainly
+          // what was read from it — and, since a family code names a tapacanto of another design
+          // that only the user can confirm, point at the rows that still need a look.
+          <CAlert
+            color={parsed.canto.needsReview > 0 ? 'warning' : 'info'}
+            className="py-2 small mb-2"
+          >
+            Se leyó el canto de la <strong>Etiqueta</strong> en {parsed.canto.banded} piezas; el
+            tapacanto sale del coordinado con el tablero de cada grupo.
+            {cantoCaveats.length > 0 && (
+              <>
+                {' '}
+                {cantoCaveats.join(' y ')} conservan su etiqueta original: revisa su{' '}
+                <strong>Tapacanto</strong>.
+              </>
+            )}
+          </CAlert>
+        )}
+
         {parsed.rows.length > 0 && (
           <>
             <div className="d-flex justify-content-between align-items-center mb-1">
@@ -278,6 +311,8 @@ const ImportPiecesModal = ({
                     <CTableHeaderCell>Largo</CTableHeaderCell>
                     <CTableHeaderCell>Ancho</CTableHeaderCell>
                     <CTableHeaderCell>Cant.</CTableHeaderCell>
+                    <CTableHeaderCell>Canto</CTableHeaderCell>
+                    <CTableHeaderCell>Tipo</CTableHeaderCell>
                     <CTableHeaderCell>Etiqueta</CTableHeaderCell>
                     <CTableHeaderCell>Rotar</CTableHeaderCell>
                   </CTableRow>
@@ -298,6 +333,16 @@ const ImportPiecesModal = ({
                         <CTableDataCell>{r.height || '—'}</CTableDataCell>
                         <CTableDataCell>{r.width || '—'}</CTableDataCell>
                         <CTableDataCell>{r.quantity}</CTableDataCell>
+                        <CTableDataCell
+                          className={r.canto?.needsReview ? 'text-warning-emphasis' : undefined}
+                          title={r.canto?.needsReview ? 'Revisa el tapacanto de esta pieza' : ''}
+                        >
+                          {r.canto && r.canto.notation !== '—' ? r.canto.notation : '—'}
+                          {r.canto?.needsReview ? ' ⚠' : ''}
+                        </CTableDataCell>
+                        <CTableDataCell>
+                          {r.canto?.bandType ? BANDTYPE_LABEL[r.canto.bandType] : '—'}
+                        </CTableDataCell>
                         <CTableDataCell>{r.label || '—'}</CTableDataCell>
                         <CTableDataCell>{r.canRotate ? 'sí' : 'no'}</CTableDataCell>
                       </CTableRow>

@@ -23,7 +23,9 @@ interface SheetSvgProps<P extends DrawnPiece> {
   // Tap/click selection. Unlike hover, this is the only thing that works on a touch screen, so any
   // view that needs per-piece detail on mobile must wire this rather than onPieceEnter.
   onPieceTap?: (p: P) => void
-  maxHeight?: number
+  // Applied straight as the svg's CSS max-height, so a viewport-relative expression is allowed —
+  // which is what the expanded modals need to stay inside their scrollport.
+  maxHeight?: number | string
   // Shows board dimensions (width at top, height on the left). Expanded view only.
   showDimensions?: boolean
   // Enables zoom + pan (pinch/wheel/drag + buttons). Expanded view only.

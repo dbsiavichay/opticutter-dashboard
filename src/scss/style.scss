@@ -166,6 +166,118 @@ input[type='number'] {
   }
 }
 
+// Optimizing overlay. The cut search runs for tens of seconds on a real job, so the wait covers the
+// results pane with a board filling up with pieces instead of leaving a stale result and a 12px
+// spinner on screen. Semi-transparent on purpose: the previous result stays legible underneath, so
+// it reads as "recalculating this" rather than "everything is gone".
+.optimizing-overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 3;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1rem;
+  background-color: rgba(var(--cui-body-bg-rgb), 0.85);
+  backdrop-filter: blur(2px);
+}
+
+.optimizing-card {
+  max-width: 22rem;
+  text-align: center;
+}
+
+.optimizing-board {
+  display: block;
+  width: 100%;
+  max-width: 14rem;
+  height: auto;
+  margin: 0 auto 0.85rem;
+}
+
+.optimizing-sheet {
+  fill: var(--cui-body-bg);
+  stroke: var(--cui-border-color);
+  stroke-width: 1;
+}
+
+// `fill-box` so each piece scales about its own centre; without it the origin is the whole viewBox
+// and the pieces slide in from the corner.
+.optimizing-piece {
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: optimizing-piece 3.6s ease-out infinite both;
+}
+
+// The saw pass, in the brand red of the wordmark's "BLE".
+.optimizing-saw {
+  fill: #e85050;
+  animation: optimizing-saw 3.6s linear infinite;
+}
+
+.optimizing-logo {
+  display: block;
+  margin: 0 auto 0.4rem;
+  color: var(--cui-body-color);
+}
+
+.optimizing-stage {
+  font-size: 0.875rem;
+  color: var(--cui-body-color);
+}
+
+.optimizing-elapsed {
+  font-size: 0.75rem;
+  color: var(--cui-secondary-color);
+  font-variant-numeric: tabular-nums; // the counter must not jiggle every second
+}
+
+// One cycle: each piece lands (staggered by its inline animation-delay), the sheet holds full, then
+// it clears and the next pass starts.
+@keyframes optimizing-piece {
+  0%,
+  4% {
+    opacity: 0;
+    transform: scale(0.72);
+  }
+  10%,
+  88% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  100% {
+    opacity: 0;
+    transform: scale(0.72);
+  }
+}
+
+@keyframes optimizing-saw {
+  0% {
+    opacity: 0;
+    transform: translateX(-4px);
+  }
+  8%,
+  92% {
+    opacity: 0.9;
+  }
+  100% {
+    opacity: 0;
+    transform: translateX(200px);
+  }
+}
+
+// The message and the counter carry the information; the motion is decoration, so it goes.
+@media (prefers-reduced-motion: reduce) {
+  .optimizing-piece {
+    animation: none;
+  }
+
+  .optimizing-saw {
+    animation: none;
+    opacity: 0;
+  }
+}
+
 @include color-mode(dark) {
   body {
     background-color: var(--cui-dark-bg-subtle);

@@ -99,7 +99,7 @@ src/
 | `users` | `/users` | Staff user management with role assignment |
 | `settings` | `/settings` | Company info, kerf/trim parameters, quote validity, price tiers |
 | `profile` | `/profile` `/profile/password` | Self-service profile and password change |
-| `optimizer` | `/optimizer` | Cut plan optimizer: piece input, packing strategy, SVG board layout, pattern cards, draft save/load |
+| `optimizer` | `/optimizer` | Cut plan optimizer: piece input, CSV/XML import (the file's `Etiqueta` is read as edge banding), packing strategy, SVG board layout, pattern cards, draft save/load |
 | `review` | `/review/:token` | Public quote review and approval portal (no auth required) |
 | `widgets` | `/widgets` | Template demo — candidate for removal |
 
@@ -152,6 +152,8 @@ Backend returns layouts grouped by pattern. The frontend renders:
 - `CutLayoutDiagram.tsx` — SVG board diagrams with `boardRotation` / `uprightText` utilities
 - `cutDrawing.ts` — pure drawing primitives shared with the orders workshop SVG view
 - `SheetDetailModal` — expanded pattern view with `PiecePreview` and `GroupedPiecesList`
+- `OptimizingOverlay.tsx` — cover for the results pane while `/optimize` runs (tens of seconds on a
+  real job): an animated board, the wordmark, a stage message and an elapsed counter
 
 ### Multi-Branch Model
 
