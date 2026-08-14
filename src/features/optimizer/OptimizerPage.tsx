@@ -1,14 +1,4 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { CButton, CSpinner } from '@coreui/react'
-import CIcon from '@coreui/icons-react'
-import {
-  cilCheckAlt,
-  cilFolderOpen,
-  cilFullscreen,
-  cilFullscreenExit,
-  cilPlus,
-  cilSave,
-} from '@coreui/icons'
 
 import useFullscreen from 'src/shared/hooks/useFullscreen'
 import AppToaster from 'src/shared/components/AppToaster'
@@ -30,9 +20,14 @@ import type { OptimizeResponse, OptimizerDraftPayload, PackingStrategy } from '.
 import { clearAutosave, loadAutosave, saveAutosave } from './optimizerStorage'
 import { downloadCsv, requirementsToCsv } from './piecesCsv'
 import { usePiecesEditor } from './usePiecesEditor'
+import { useCollapsedGroups } from './useCollapsedGroups'
+import { useEditorShortcuts } from './useEditorShortcuts'
 import { signatureOf, useOptimizerWizard } from './useOptimizerWizard'
 import type { StepId } from './useOptimizerWizard'
 import WizardSteps, { WizardFooter } from './WizardSteps'
+import OptimizerActionsMenu from './OptimizerActionsMenu'
+import PiecesSelectionBar from './PiecesSelectionBar'
+import PiecesSummary from './PiecesSummary'
 import PiecesStep from './steps/PiecesStep'
 import LayoutStep from './steps/LayoutStep'
 import CostsStep from './steps/CostsStep'
@@ -96,6 +91,7 @@ const OptimizerPage = () => {
   const optimize = useOptimize()
   const pieces = usePiecesEditor(materials, bootstrap?.requirements)
   const saveDraft = useSaveDraft()
+  const groups = useCollapsedGroups(materials)
 
   const addMaterial = () => setMaterials((ms) => [...ms, emptyCatalogMaterial()])
   const updateMaterial = <K extends keyof MaterialForm>(
@@ -181,6 +177,8 @@ const OptimizerPage = () => {
     hasResult,
     canQuote: hasResult && missingBanding.length === 0,
   })
+  const onPieces = wizard.step === 'pieces'
+  const onLayout = wizard.step === 'layout'
 
   // Is there work that would be lost on reset? (more than one material, any with data, or non-empty pieces)
   const hasWork =
@@ -254,7 +252,7 @@ const OptimizerPage = () => {
     setResultSignature(null)
     attemptedSignature.current = null
     clearAutosave()
-    wizard.goTo('despiece')
+    wizard.goTo('pieces')
   }
 
   const handleNew = () => {
@@ -307,7 +305,7 @@ const OptimizerPage = () => {
       setLastResult(undefined)
       setResultSignature(null)
       attemptedSignature.current = null
-      wizard.goTo('despiece')
+      wizard.goTo('pieces')
     } finally {
       setLoadingDraftId(null)
     }
@@ -380,20 +378,20 @@ const OptimizerPage = () => {
   }
 
   const handleNext = () => {
-    if (wizard.step === 'despiece' && !handleLeavePieces()) return
+    if (wizard.step === 'pieces' && !handleLeavePieces()) return
     wizard.next()
   }
 
   const handleSelectStep = (id: StepId) => {
     // Moving forward past Despiece goes through the same validation as "Siguiente".
-    if (wizard.step === 'despiece' && id !== 'despiece' && !handleLeavePieces()) return
+    if (wizard.step === 'pieces' && id !== 'pieces' && !handleLeavePieces()) return
     wizard.goTo(id)
   }
 
   // Entering the Optimización step computes what is missing: a first run, or a re-run because the
   // pieces changed. The Despiece step already validated, so there is nothing to report here.
   useEffect(() => {
-    if (wizard.step !== 'optimizacion') return
+    if (wizard.step !== 'layout') return
     if (optimize.isPending || !canOptimize) return
     if (hasResult && !isStale) return
     // Already attempted and it did not succeed: leave the error on screen rather than retrying the
@@ -426,6 +424,21 @@ const OptimizerPage = () => {
     runOptimize({ variant: next })
   }
 
+  // What the menu's "Optimizar / Volver a optimizar" and Ctrl+↵ both do: with a result on screen a
+  // plain re-run would return the identical layout (the backend caches by input hash), so it becomes
+  // "explore another alternative" instead.
+  const handleRun = hasResult ? handleAlternative : handleOptimize
+
+  // With the toolbars gone these shortcuts ARE the affordance; the actions menu only documents them.
+  // Each one is scoped to the step that owns it — the same reach the buttons had.
+  useEditorShortcuts({
+    onUndo: onPieces && pieces.canUndo ? pieces.undo : undefined,
+    onDeleteSelection: onPieces && pieces.selected.size > 0 ? pieces.removeSelected : undefined,
+    onToggleCollapseAll: onPieces ? groups.toggleAll : undefined,
+    onToggleFullscreen: canFullscreen ? toggle : undefined,
+    onOptimize: onLayout && canRunOptimize && !optimize.isPending ? handleRun : undefined,
+  })
+
   // Import: pieces plus the material groups the CSV declared. "Replace" makes the workspace mirror
   // the file, so groups that received no piece are dropped; when appending, only the untouched
   // starter card is — otherwise every import would leave an empty "Tablero sin elegir" group behind.
@@ -445,50 +458,52 @@ const OptimizerPage = () => {
   const handleExport = () =>
     downloadCsv('piezas.csv', requirementsToCsv(pieces.requirements, materials, boards))
 
+  // No page title and no toolbar: the breadcrumb in the app header names the page, and everything the
+  // four buttons used to do is a keyboard shortcut or an entry in the actions menu. What is left above
+  // the pieces is the step trail — one row instead of three.
   return (
     <div ref={containerRef} className="optimizer-workspace">
-      <div className="d-flex align-items-center justify-content-between mb-3 gap-2 flex-wrap">
-        <h5 className="mb-0">Optimizador de corte</h5>
-        {/* These act on the whole job, not on a step, so they stay above the trail. */}
-        <div className="d-flex gap-2 flex-wrap">
-          {canFullscreen && (
-            <CButton
-              color="secondary"
-              variant="outline"
-              title={isFullscreen ? 'Salir de pantalla completa' : 'Pantalla completa'}
-              onClick={toggle}
-            >
-              <CIcon icon={isFullscreen ? cilFullscreenExit : cilFullscreen} className="me-1" />
-              {isFullscreen ? 'Salir' : 'Pantalla completa'}
-            </CButton>
-          )}
-          <CButton color="secondary" variant="outline" onClick={handleNew}>
-            <CIcon icon={cilPlus} className="me-1" />
-            Nuevo
-          </CButton>
-          <CButton color="secondary" variant="outline" onClick={() => setShowDrafts(true)}>
-            <CIcon icon={cilFolderOpen} className="me-1" />
-            Borradores
-          </CButton>
-          <CButton
-            color="secondary"
-            variant="outline"
-            disabled={saveDraft.isPending}
-            onClick={handleSaveDraft}
-          >
-            {saveDraft.isPending ? (
-              <CSpinner size="sm" className="me-1" />
-            ) : (
-              <CIcon icon={savedFlash ? cilCheckAlt : cilSave} className="me-1" />
-            )}
-            {savedFlash ? 'Guardado' : 'Guardar borrador'}
-          </CButton>
-        </div>
-      </div>
+      <WizardSteps
+        index={wizard.index}
+        maxIndex={wizard.maxIndex}
+        onSelect={handleSelectStep}
+        actions={
+          <OptimizerActionsMenu
+            onImport={onPieces ? () => setShowImport(true) : undefined}
+            onExport={onPieces ? handleExport : undefined}
+            exportDisabled={!hasPieceData}
+            onClear={
+              onPieces
+                ? () => {
+                    pieces.clear()
+                    setMaterials([emptyCatalogMaterial()])
+                  }
+                : undefined
+            }
+            clearsMaterials
+            onOptimize={onLayout ? handleRun : undefined}
+            hasResult={hasResult}
+            optimizeDisabled={!canRunOptimize}
+            isOptimizing={optimize.isPending}
+            variant={variant}
+            strategy={onLayout ? strategy : undefined}
+            onStrategyChange={onLayout ? handleStrategyChange : undefined}
+            onToggleCollapseAll={onPieces ? groups.toggleAll : undefined}
+            allCollapsed={groups.allCollapsed}
+            collapseDisabled={materials.length === 0}
+            onToggleFullscreen={canFullscreen ? toggle : undefined}
+            isFullscreen={isFullscreen}
+            onNew={handleNew}
+            onOpenDrafts={() => setShowDrafts(true)}
+            onSaveDraft={handleSaveDraft}
+            isSavingDraft={saveDraft.isPending}
+            savedFlash={savedFlash}
+            container={modalContainer}
+          />
+        }
+      />
 
-      <WizardSteps index={wizard.index} maxIndex={wizard.maxIndex} onSelect={handleSelectStep} />
-
-      {wizard.step === 'despiece' && (
+      {wizard.step === 'pieces' && (
         <PiecesStep
           editor={pieces}
           materials={materials}
@@ -498,32 +513,26 @@ const OptimizerPage = () => {
           issues={issues}
           onDismissIssues={() => setIssues([])}
           missingBanding={missingBanding}
+          collapsed={groups.collapsed}
+          onToggleGroup={groups.toggle}
           onAddMaterial={addMaterial}
           onUpdateMaterial={updateMaterial}
           onRequestDeleteMaterial={requestDeleteMaterial}
           onDuplicateMaterial={duplicateMaterial}
-          onImportOpen={() => setShowImport(true)}
-          onExport={handleExport}
-          onClearMaterials={() => setMaterials([emptyCatalogMaterial()])}
         />
       )}
 
-      {wizard.step === 'optimizacion' && (
+      {wizard.step === 'layout' && (
         <LayoutStep
           result={result}
           isPending={optimize.isPending}
           error={optimize.error}
-          canOptimize={canRunOptimize}
-          onOptimize={handleOptimize}
-          strategy={strategy}
-          onStrategyChange={handleStrategyChange}
-          onAlternative={handleAlternative}
           variant={variant}
           isStale={isStale}
         />
       )}
 
-      {wizard.step === 'costos' && result && (
+      {wizard.step === 'costs' && result && (
         <CostsStep
           result={result}
           missingBanding={missingBanding}
@@ -533,7 +542,7 @@ const OptimizerPage = () => {
         />
       )}
 
-      {wizard.step === 'cotizacion' && (
+      {wizard.step === 'quote' && (
         <QuoteStep
           result={result}
           materials={built.materials}
@@ -550,6 +559,23 @@ const OptimizerPage = () => {
         onNext={wizard.isLast ? undefined : handleNext}
         nextDisabled={!wizard.canGoNext || optimize.isPending}
         nextHint={wizard.nextBlockedReason}
+        left={
+          onPieces ? (
+            <>
+              <PiecesSelectionBar
+                editor={pieces}
+                materials={materials}
+                boards={boards}
+                container={modalContainer}
+              />
+              {/* The totals step aside while rows are marked: the bar is one line and the actions
+                  are what the user is looking at right then. */}
+              {pieces.selected.size === 0 && (
+                <PiecesSummary requirements={pieces.requirements} materials={materials} />
+              )}
+            </>
+          ) : undefined
+        }
       />
 
       <DeleteMaterialModal

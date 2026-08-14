@@ -1,4 +1,4 @@
-import { CAlert, CCard, CCardBody, CCardHeader, CRow, CSpinner } from '@coreui/react'
+import { CAlert, CRow, CSpinner } from '@coreui/react'
 
 import { fmtMoney } from 'src/features/review/format'
 import PricingBlock from 'src/shared/components/PricingBlock'
@@ -33,75 +33,73 @@ const CostsStep = ({
   const boardsCost = result.totalBoardsCost ?? 0
   const bandingCost = result.totalEdgeBandingCost ?? 0
 
+  // No card and no "Costos" heading: the step trail says it. The KPI tiles and the tables carry
+  // their own borders, so wrapping them in one more box only added a frame.
   return (
-    <CCard className="mb-0">
-      <CCardHeader className="d-flex flex-wrap justify-content-between align-items-center gap-2">
-        <strong>Costos</strong>
-        <div className="d-flex align-items-center gap-2">
-          {isPending && (
-            <span className="text-body-secondary small d-flex align-items-center gap-1">
-              <CSpinner size="sm" />
-              Recalculando…
-            </span>
-          )}
-          <label className="text-body-secondary small mb-0" htmlFor="costs-price-tier">
-            Nivel de precio
-          </label>
-          {/* Narrow on purpose: it sits in a card header, not a form. */}
-          <div style={{ minWidth: '12rem' }}>
-            <PriceTierSelect
-              id="costs-price-tier"
-              value={priceTierCode}
-              onChange={onPriceTierChange}
-              disabled={isPending}
-            />
-          </div>
-        </div>
-      </CCardHeader>
-      <CCardBody>
-        {missingBanding.length > 0 && (
-          <CAlert color="warning" className="py-2 small">
-            {missingBanding.length === 1
-              ? `La pieza #${missingBanding.map((i) => i + 1).join('')} tiene canto definido pero no seleccionaste el tapacanto.`
-              : `Hay ${missingBanding.length} piezas con canto definido pero sin tapacanto (#${missingBanding
-                  .map((i) => i + 1)
-                  .join(', #')}).`}{' '}
-            Su tapacanto no está costeado y no podrás crear la cotización hasta seleccionarlo —
-            vuelve al paso Despiece.
-          </CAlert>
+    <>
+      <div className="d-flex flex-wrap justify-content-end align-items-center gap-2 mb-3">
+        {isPending && (
+          <span className="text-body-secondary small d-flex align-items-center gap-1">
+            <CSpinner size="sm" />
+            Recalculando…
+          </span>
         )}
-
-        <CRow className="g-2 mb-3">
-          <Kpi label="Tableros" value={fmtMoney(boardsCost)} />
-          <Kpi label="Tapacanto" value={fmtMoney(bandingCost)} />
-          <Kpi label="Costo estimado" value={fmtMoney(boardsCost + bandingCost)} />
-          <Kpi
-            label="Total"
-            value={
-              result.pricing ? fmtMoney(result.pricing.total) : fmtMoney(boardsCost + bandingCost)
-            }
+        <label className="text-body-secondary small mb-0" htmlFor="costs-price-tier">
+          Nivel de precio
+        </label>
+        {/* Narrow on purpose: it is one control on a toolbar line, not a form field. */}
+        <div style={{ minWidth: '12rem' }}>
+          <PriceTierSelect
+            id="costs-price-tier"
+            value={priceTierCode}
+            onChange={onPriceTierChange}
+            disabled={isPending}
           />
-        </CRow>
+        </div>
+      </div>
 
-        <div className="text-body-secondary small text-uppercase fw-semibold mb-2">Materiales</div>
-        <MaterialsSummaryTable rows={result.materialsSummary ?? []} />
+      {missingBanding.length > 0 && (
+        <CAlert color="warning" className="py-2 small">
+          {missingBanding.length === 1
+            ? `La pieza #${missingBanding.map((i) => i + 1).join('')} tiene canto definido pero no seleccionaste el tapacanto.`
+            : `Hay ${missingBanding.length} piezas con canto definido pero sin tapacanto (#${missingBanding
+                .map((i) => i + 1)
+                .join(', #')}).`}{' '}
+          Su tapacanto no está costeado y no podrás crear la cotización hasta seleccionarlo — vuelve
+          al paso Despiece.
+        </CAlert>
+      )}
 
-        {result.edgeBandingsSummary?.length > 0 && (
-          <>
-            <div className="text-body-secondary small text-uppercase fw-semibold mb-2">
-              Tapacantos
-            </div>
-            <EdgeBandingSummaryTable rows={result.edgeBandingsSummary} />
-          </>
-        )}
+      <CRow className="g-2 mb-3">
+        <Kpi label="Tableros" value={fmtMoney(boardsCost)} />
+        <Kpi label="Tapacanto" value={fmtMoney(bandingCost)} />
+        <Kpi label="Costo estimado" value={fmtMoney(boardsCost + bandingCost)} />
+        <Kpi
+          label="Total"
+          value={
+            result.pricing ? fmtMoney(result.pricing.total) : fmtMoney(boardsCost + bandingCost)
+          }
+        />
+      </CRow>
 
-        {result.pricing && (
-          <div className="d-flex justify-content-end">
-            <PricingBlock pricing={result.pricing} />
+      <div className="text-body-secondary small text-uppercase fw-semibold mb-2">Materiales</div>
+      <MaterialsSummaryTable rows={result.materialsSummary ?? []} />
+
+      {result.edgeBandingsSummary?.length > 0 && (
+        <>
+          <div className="text-body-secondary small text-uppercase fw-semibold mb-2">
+            Tapacantos
           </div>
-        )}
-      </CCardBody>
-    </CCard>
+          <EdgeBandingSummaryTable rows={result.edgeBandingsSummary} />
+        </>
+      )}
+
+      {result.pricing && (
+        <div className="d-flex justify-content-end">
+          <PricingBlock pricing={result.pricing} />
+        </div>
+      )}
+    </>
   )
 }
 

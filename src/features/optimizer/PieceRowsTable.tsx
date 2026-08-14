@@ -425,10 +425,12 @@ const PieceRowsTable = ({
       />
     ) : null
 
-  const renderSort = (field: SortField, label: string) => (
+  // `hint` carries what the label no longer says out loud — the unit on the measurement columns,
+  // which was dropped so the header and its fill-down button fit on one line.
+  const renderSort = (field: SortField, label: string, hint = 'Ordenar') => (
     <span
       role="button"
-      title="Ordenar"
+      title={hint}
       style={{ cursor: 'pointer', userSelect: 'none' }}
       onClick={() => handleSort(field)}
     >
@@ -453,11 +455,11 @@ const PieceRowsTable = ({
               #
             </CTableHeaderCell>
             <CTableHeaderCell style={thStyle}>
-              {renderSort('height', 'Largo (mm)')}
+              {renderSort('height', 'Largo', 'Ordenar por largo (mm)')}
               {renderFill('height', 'Igualar largo')}
             </CTableHeaderCell>
             <CTableHeaderCell style={thStyle}>
-              {renderSort('width', 'Ancho (mm)')}
+              {renderSort('width', 'Ancho', 'Ordenar por ancho (mm)')}
               {renderFill('width', 'Igualar ancho')}
             </CTableHeaderCell>
             <CTableHeaderCell style={thStyle}>

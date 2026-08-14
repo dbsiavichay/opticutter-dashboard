@@ -12,38 +12,48 @@ interface WizardStepsProps {
   // Furthest reachable step; anything past it is locked and explains why.
   maxIndex: number
   onSelect: (id: StepId) => void
+  // The page's actions menu. It rides on this row because the row exists anyway — the alternative
+  // was a toolbar of its own above it, which is exactly what this redesign removed. It also has to
+  // stay inside the page: the app header sits outside the fullscreen element and is never painted.
+  actions?: ReactNode
 }
 
-const WizardSteps = ({ index, maxIndex, onSelect }: WizardStepsProps) => {
+const WizardSteps = ({ index, maxIndex, onSelect, actions }: WizardStepsProps) => {
   const current = STEPS[index]
 
   return (
-    <>
+    <div className="d-flex align-items-center gap-2 mb-3">
       {/* From `md` up: the full trail. */}
-      <nav className="wizard-steps d-none d-md-grid mb-3" aria-label="Pasos del optimizador">
+      <nav
+        className="wizard-steps d-none d-md-grid flex-grow-1 min-w-0"
+        aria-label="Pasos del optimizador"
+      >
         {STEPS.map((s, i) => {
           const state = i < index ? 'done' : i === index ? 'current' : 'todo'
           const locked = i > maxIndex
+          // The cell carries the state and the connector; the button inside it carries the click.
+          // They used to be the same element, which made a quarter of the row a hit target for a
+          // step whose marker was hundreds of pixels away.
           return (
-            <button
-              key={s.id}
-              type="button"
-              className="wizard-step"
-              data-state={state}
-              disabled={locked}
-              aria-current={i === index ? 'step' : undefined}
-              title={locked ? s.blockedReason : undefined}
-              onClick={() => onSelect(s.id)}
-            >
-              <span className="wizard-step-marker">{state === 'done' ? '✓' : i + 1}</span>
-              <span className="wizard-step-label small">{s.label}</span>
-            </button>
+            <div key={s.id} className="wizard-step" data-state={state}>
+              <button
+                type="button"
+                className="wizard-step-hit"
+                disabled={locked}
+                aria-current={i === index ? 'step' : undefined}
+                title={locked ? s.blockedReason : undefined}
+                onClick={() => onSelect(s.id)}
+              >
+                <span className="wizard-step-marker">{state === 'done' ? '✓' : i + 1}</span>
+                <span className="wizard-step-label small">{s.label}</span>
+              </button>
+            </div>
           )
         })}
       </nav>
 
       {/* Below `md` the trail doesn't fit; the position plus a bar carries the same information. */}
-      <div className="d-md-none mb-3">
+      <div className="d-md-none flex-grow-1 min-w-0">
         <div className="d-flex justify-content-between align-items-baseline mb-1">
           <strong className="small">{current?.label}</strong>
           <span className="text-body-secondary small">
@@ -54,7 +64,9 @@ const WizardSteps = ({ index, maxIndex, onSelect }: WizardStepsProps) => {
           <CProgressBar value={((index + 1) / STEPS.length) * 100} />
         </CProgress>
       </div>
-    </>
+
+      {actions}
+    </div>
   )
 }
 
@@ -65,6 +77,9 @@ interface WizardFooterProps {
   nextDisabled?: boolean
   // Muted text next to a disabled "Siguiente", saying what is missing.
   nextHint?: string
+  // Left half of the bar: the running totals, swapped for the selection actions while rows are
+  // marked. Both used to cost a row of their own above the list.
+  left?: ReactNode
   // Extra actions for the step (e.g. the final "Crear cotización").
   children?: ReactNode
 }
@@ -78,6 +93,7 @@ export const WizardFooter = ({
   nextLabel = 'Siguiente',
   nextDisabled,
   nextHint,
+  left,
   children,
 }: WizardFooterProps) => (
   <div className="wizard-footer">
@@ -87,6 +103,7 @@ export const WizardFooter = ({
           ‹ Atrás
         </CButton>
       )}
+      {left}
       <div className="ms-auto d-flex align-items-center gap-2">
         {nextHint && nextDisabled && (
           <span className="text-body-secondary small d-none d-sm-inline">{nextHint}</span>

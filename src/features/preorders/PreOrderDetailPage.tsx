@@ -75,6 +75,11 @@ import ReferenceNote from 'src/shared/components/ReferenceNote'
 import { preordersApi } from './preordersApi'
 import { useIsGlobalBranchRole } from 'src/features/auth/useAuth'
 import { usePiecesEditor } from 'src/features/optimizer/usePiecesEditor'
+import { useCollapsedGroups } from 'src/features/optimizer/useCollapsedGroups'
+import { useEditorShortcuts } from 'src/features/optimizer/useEditorShortcuts'
+import OptimizerActionsMenu from 'src/features/optimizer/OptimizerActionsMenu'
+import PiecesSelectionBar from 'src/features/optimizer/PiecesSelectionBar'
+import PiecesSummary from 'src/features/optimizer/PiecesSummary'
 
 // Convert stored API format back to editable form state
 function formFromPreOrderData(
@@ -231,6 +236,14 @@ const PreOrderView = ({ preOrder }: { preOrder: PreOrder }) => {
   const [copied, setCopied] = useState(false)
 
   const editor = usePiecesEditor(materials, initialFormData?.requirements)
+  const groups = useCollapsedGroups(materials)
+  // The pieces editor's shortcuts used to ride along inside `MaterialGroups`; that component is now
+  // just the list, so each page that mounts it registers them itself. No fullscreen here.
+  useEditorShortcuts({
+    onUndo: editor.canUndo ? editor.undo : undefined,
+    onDeleteSelection: editor.selected.size > 0 ? editor.removeSelected : undefined,
+    onToggleCollapseAll: groups.toggleAll,
+  })
 
   // "Dirty" tracking: keep "Actualizar" disabled until the editable state differs from the loaded
   // baseline. The baseline is seeded once (from the same normalized path as `currentSignature`, so it
@@ -634,22 +647,50 @@ const PreOrderView = ({ preOrder }: { preOrder: PreOrder }) => {
         </CCard>
       )}
 
-      {/* Edit form: grouped materials + pieces (same experience as the optimizer) */}
+      {/* Edit form: grouped materials + pieces (same experience as the optimizer). The card and its
+          toolbar live here rather than inside `MaterialGroups`: the optimizer renders that component
+          bare, with the same actions in a menu next to its step trail. This page keeps the card
+          because it is one section among many, not the whole screen. */}
       {canEdit && (
-        <MaterialGroups
-          editor={editor}
-          materials={materials}
-          boards={boards}
-          edgeBandings={edgeBandings}
-          onAddMaterial={addMaterial}
-          onUpdateMaterial={updateMaterial}
-          onRequestDeleteMaterial={requestDeleteMaterial}
-          onDuplicateMaterial={duplicateMaterial}
-          onImportOpen={() => setShowImport(true)}
-          onExport={() =>
-            downloadCsv('piezas.csv', requirementsToCsv(editor.requirements, materials, boards))
-          }
-        />
+        <CCard className="mb-3">
+          <CCardHeader className="d-flex flex-wrap gap-2 justify-content-between align-items-center">
+            <strong>
+              Materiales y piezas <span className="text-danger">*</span>
+            </strong>
+            <div className="d-flex flex-wrap align-items-center gap-2">
+              <PiecesSelectionBar editor={editor} materials={materials} boards={boards} />
+              <OptimizerActionsMenu
+                onImport={() => setShowImport(true)}
+                onExport={() =>
+                  downloadCsv(
+                    'piezas.csv',
+                    requirementsToCsv(editor.requirements, materials, boards),
+                  )
+                }
+                exportDisabled={editor.requirements.length === 0}
+                onClear={editor.clear}
+                onToggleCollapseAll={groups.toggleAll}
+                allCollapsed={groups.allCollapsed}
+                collapseDisabled={materials.length === 0}
+              />
+            </div>
+          </CCardHeader>
+          <CCardBody>
+            <MaterialGroups
+              editor={editor}
+              materials={materials}
+              boards={boards}
+              edgeBandings={edgeBandings}
+              collapsed={groups.collapsed}
+              onToggleGroup={groups.toggle}
+              onAddMaterial={addMaterial}
+              onUpdateMaterial={updateMaterial}
+              onRequestDeleteMaterial={requestDeleteMaterial}
+              onDuplicateMaterial={duplicateMaterial}
+            />
+            <PiecesSummary requirements={editor.requirements} materials={materials} />
+          </CCardBody>
+        </CCard>
       )}
 
       {canEdit && missingBanding.length > 0 && (

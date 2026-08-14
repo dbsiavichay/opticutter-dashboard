@@ -1,145 +1,74 @@
-import {
-  CAlert,
-  CButton,
-  CButtonGroup,
-  CCard,
-  CCardBody,
-  CCardHeader,
-  CRow,
-  CSpinner,
-} from '@coreui/react'
-import CIcon from '@coreui/icons-react'
-import { cilCalculator, cilLoopCircular } from '@coreui/icons'
+import { CAlert, CRow } from '@coreui/react'
 
-import type { OptimizeResponse, PackingStrategy } from '../types'
-import { STRATEGY_OPTIONS, strategyHint } from '../OptimizationPreview'
+import type { OptimizeResponse } from '../types'
 import { Kpi, meters } from '../summaryTables'
 import OptimizingOverlay from '../OptimizingOverlay'
 import SheetViewer from '../SheetViewer'
 
 // Step 2. Geometry only: how the pieces landed on the boards. The money moved to the Costos step,
 // which is what freed the room for the sheets to be shown big instead of behind an "Ampliar" modal.
+//
+// Nothing but the result: no card, no heading, and no control row. The heuristic picker and
+// "Volver a optimizar" moved into the page's actions menu (`OptimizerActionsMenu`, `Ctrl+↵`), which
+// is where every other action already lives — so the sheet gets the full width and the full height.
 
 interface LayoutStepProps {
   result?: OptimizeResponse
   isPending: boolean
   error?: Error | null
-  canOptimize: boolean
-  // First run, when there is nothing on screen yet.
-  onOptimize: () => void
-  strategy: PackingStrategy
-  onStrategyChange: (s: PackingStrategy) => void
-  // Re-run with a bumped seed. Once a result exists this is what the primary button does — see the
-  // note on the button itself.
-  onAlternative: () => void
+  // Alternative-solution seed of the result on screen; only shown when it is not the canonical one.
   variant: number
   // The inputs changed since this result was computed; a fresh run is already on its way.
   isStale: boolean
 }
 
-const LayoutStep = ({
-  result,
-  isPending,
-  error,
-  canOptimize,
-  onOptimize,
-  strategy,
-  onStrategyChange,
-  onAlternative,
-  variant,
-  isStale,
-}: LayoutStepProps) => (
-  <CCard className="mb-0">
-    <CCardHeader className="d-flex flex-wrap justify-content-between align-items-center gap-2">
-      <strong>Optimización</strong>
-      <div className="d-flex flex-wrap align-items-center gap-2">
-        <CButtonGroup size="sm" role="group" aria-label="Heurística de corte">
-          {STRATEGY_OPTIONS.map((o) => {
-            const active = strategy === o.value
-            return (
-              <CButton
-                key={o.value}
-                type="button"
-                color="primary"
-                variant={active ? undefined : 'outline'}
-                active={active}
-                disabled={isPending}
-                title={strategyHint(o.value)}
-                onClick={() => onStrategyChange(o.value)}
-              >
-                {o.label}
-              </CButton>
-            )
-          })}
-        </CButtonGroup>
-        {/* One button, because a plain re-run would do nothing visible: entering this step already
-            optimized, and the backend caches by input hash, so pressing "Volver a optimizar" on the
-            same inputs would return the identical layout. Once a result exists the button bumps the
-            alternative seed instead — which is what the user actually wants from it. */}
-        <CButton
-          size="sm"
-          color="primary"
-          type="button"
-          disabled={!canOptimize || isPending}
-          onClick={result ? onAlternative : onOptimize}
-          title={
-            result
-              ? 'Genera una distribución alternativa con las mismas piezas'
-              : 'Calcula la distribución de las piezas'
-          }
-        >
-          {/* Spinner takes the icon's place and the label stays, so the button does not change
-              width under the cursor that just pressed it. */}
-          {isPending ? (
-            <CSpinner size="sm" className="me-1" />
-          ) : (
-            <CIcon icon={result ? cilLoopCircular : cilCalculator} className="me-1" />
-          )}
-          {result ? 'Volver a optimizar' : 'Optimizar'}
-          {variant > 0 && <span className="ms-1 badge text-bg-light text-dark">#{variant}</span>}
-        </CButton>
+const LayoutStep = ({ result, isPending, error, variant, isStale }: LayoutStepProps) => (
+  <>
+    {/* The overlay covers the viewport, not this pane: pinned here it was clipped by the pane and
+        scrolled out of view on a long result, so the wait could end up off screen. */}
+    {isPending && <OptimizingOverlay />}
+
+    {error && (
+      <CAlert color="danger" className="py-2 small mb-3">
+        {error.message || 'Error al optimizar. Intente nuevamente.'}
+      </CAlert>
+    )}
+
+    {!result && !error && !isPending && (
+      <div className="text-body-secondary small">
+        Todavía no hay un resultado. Usa “Optimizar” en el menú ⋮ (Ctrl+↵) para calcular la
+        distribución de las piezas en los tableros.
       </div>
-    </CCardHeader>
-    {/* Relative so the overlay covers exactly this pane: the previous result stays legible
-        underneath, dimmed, instead of blanking out while the new one is computed. */}
-    <CCardBody style={{ position: 'relative', minHeight: isPending ? '24rem' : undefined }}>
-      {isPending && <OptimizingOverlay />}
+    )}
 
-      {error && (
-        <CAlert color="danger" className="py-2 small mb-3">
-          {error.message || 'Error al optimizar. Intente nuevamente.'}
-        </CAlert>
-      )}
+    {result && (
+      <>
+        {isStale && !isPending && (
+          <CAlert color="warning" className="py-2 small">
+            Cambiaste el despiece desde este resultado. Vuelve a optimizar para verlo actualizado.
+          </CAlert>
+        )}
 
-      {!result && !error && !isPending && (
-        <div className="text-body-secondary small">
-          Presiona “Optimizar” para calcular la distribución de las piezas en los tableros.
-        </div>
-      )}
+        <CRow className="g-2 mb-3">
+          <Kpi label="Tableros usados" value={result.totalBoardsUsed} />
+          <Kpi label="Patrones" value={result.layoutGroups.length} />
+          <Kpi label="Corte lineal" value={meters(result.totalCutLinearM)} />
+          <Kpi label="Tapacanto lineal" value={meters(result.totalEdgeBandingLinearM)} />
+        </CRow>
 
-      {result && (
-        <>
-          {isStale && !isPending && (
-            <CAlert color="warning" className="py-2 small">
-              Cambiaste el despiece desde este resultado. Vuelve a optimizar para verlo actualizado.
-            </CAlert>
-          )}
+        {/* The seed used to ride as a badge on the "Volver a optimizar" button. With the button in
+            the menu, this is what says which alternative is on screen. */}
+        {variant > 0 && (
+          <div className="text-body-secondary small mb-2">Alternativa #{variant}</div>
+        )}
 
-          <CRow className="g-2 mb-3">
-            <Kpi label="Tableros usados" value={result.totalBoardsUsed} />
-            <Kpi label="Patrones" value={result.layoutGroups.length} />
-            <Kpi label="Corte lineal" value={meters(result.totalCutLinearM)} />
-            <Kpi label="Tapacanto lineal" value={meters(result.totalEdgeBandingLinearM)} />
-          </CRow>
-
-          <SheetViewer
-            layoutGroups={result.layoutGroups}
-            materialsSummary={result.materialsSummary}
-          />
-        </>
-      )}
-    </CCardBody>
-  </CCard>
+        <SheetViewer
+          layoutGroups={result.layoutGroups}
+          materialsSummary={result.materialsSummary}
+        />
+      </>
+    )}
+  </>
 )
 
 export default LayoutStep

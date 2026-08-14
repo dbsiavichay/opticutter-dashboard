@@ -8,10 +8,12 @@ import type { MaterialInput, PackingStrategy, RequirementInput } from './types'
 // whole workspace — pieces, undo history, the optimize result (a mutation, not a cached query) and
 // fullscreen. A search param leaves `pathname` untouched, so back/forward walk the steps while the
 // component stays mounted, and `fluid` + the breadcrumb keep matching `/optimizer`.
+//
+// The param and its values are English like the rest of the code; only `label` is user-facing.
 
-export const STEP_PARAM = 'paso'
+export const STEP_PARAM = 'step'
 
-export const STEP_IDS = ['despiece', 'optimizacion', 'costos', 'cotizacion'] as const
+export const STEP_IDS = ['pieces', 'layout', 'costs', 'quote'] as const
 export type StepId = (typeof STEP_IDS)[number]
 
 export interface StepDef {
@@ -22,15 +24,15 @@ export interface StepDef {
 }
 
 export const STEPS: readonly StepDef[] = [
-  { id: 'despiece', label: 'Despiece', blockedReason: '' },
+  { id: 'pieces', label: 'Despiece', blockedReason: '' },
   {
-    id: 'optimizacion',
+    id: 'layout',
     label: 'Optimización',
     blockedReason: 'Agrega al menos una pieza con medidas',
   },
-  { id: 'costos', label: 'Costos', blockedReason: 'Primero hay que optimizar' },
+  { id: 'costs', label: 'Costos', blockedReason: 'Primero hay que optimizar' },
   {
-    id: 'cotizacion',
+    id: 'quote',
     label: 'Cotización',
     blockedReason: 'Falta elegir el tapacanto de algunas piezas',
   },
@@ -69,10 +71,10 @@ export const useOptimizerWizard = ({ hasPieceData, hasResult, canQuote }: Wizard
   const raw = params.get(STEP_PARAM)
   const requested = raw == null ? 0 : STEP_IDS.indexOf(raw as StepId)
   const index = Math.min(Math.max(requested, 0), maxIndex)
-  const step = STEP_IDS[index] ?? 'despiece'
+  const step = STEP_IDS[index] ?? 'pieces'
 
   // Clamp the URL back to what the data allows: a refresh restores pieces from the autosave but
-  // never the result, so `?paso=costos` in a fresh tab has to fall back. `replace` so the bogus
+  // never the result, so `?step=costs` in a fresh tab has to fall back. `replace` so the bogus
   // entry doesn't end up in the history.
   useEffect(() => {
     if (raw != null && raw !== step) {
