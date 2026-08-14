@@ -71,53 +71,221 @@ input[type='number'] {
   }
 }
 
-// Optimizer workspace: pieces tables on the left, cut diagrams on the right, with a divider the user
-// drags to trade width between them. Stacked below `lg`, where two panes leave neither one usable.
-// `minmax(0, …)` on both panes is load-bearing: grid items default to `min-width: auto`, so without
-// it the 12-column pieces table refuses to shrink and blows the layout out instead of scrolling.
-.optimizer-split {
+// Wizard step trail. Each step is a button with three states (done / current / locked), joined by a
+// connector drawn as a pseudo-element so it tracks the buttons' own width instead of needing spacer
+// elements between them. Replaced below `md` by a position label plus a progress bar.
+.wizard-steps {
+  grid-auto-flow: column;
+  grid-auto-columns: 1fr;
+  gap: 0;
+}
+
+.wizard-step {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.25rem 0.5rem;
+  border: 0;
+  background: none;
+  color: var(--cui-secondary-color);
+
+  &:not(:disabled) {
+    cursor: pointer;
+  }
+
+  &:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
+
+  // Connector to the next step, stopping short of both markers.
+  &:not(:last-child)::after {
+    content: '';
+    position: absolute;
+    top: 1rem;
+    left: calc(50% + 1.5rem);
+    right: calc(-50% + 1.5rem);
+    height: 2px;
+    background-color: var(--cui-border-color);
+  }
+
+  &[data-state='done'] {
+    color: var(--cui-body-color);
+
+    &::after {
+      background-color: var(--cui-success);
+    }
+  }
+
+  &[data-state='current'] {
+    color: var(--cui-body-color);
+  }
+}
+
+.wizard-step-marker {
+  position: relative;
+  z-index: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 2rem;
+  height: 2rem;
+  border: 2px solid var(--cui-border-color);
+  border-radius: 50%;
+  background-color: var(--cui-body-bg);
+  font-size: 0.875rem;
+  font-weight: 600;
+
+  .wizard-step[data-state='current'] & {
+    border-color: var(--cui-primary);
+    color: var(--cui-primary);
+    box-shadow: 0 0 0 0.2rem rgba(var(--cui-primary-rgb), 0.15);
+  }
+
+  .wizard-step[data-state='done'] & {
+    border-color: var(--cui-success);
+    background-color: var(--cui-success);
+    color: #fff;
+  }
+}
+
+// Wizard footer, pinned to the bottom of the viewport so "Siguiente" is reachable without scrolling
+// past a long pieces list. The vertical padding is inside the sticky box on purpose: it keeps the
+// bar clear of the app footer once the page is scrolled to the end.
+.wizard-footer {
+  position: sticky;
+  bottom: 0;
+  z-index: 1020;
+  padding-block: 0.75rem;
+  margin-top: 0.25rem;
+  background-color: var(--cui-tertiary-bg);
+}
+
+// Sheet viewer: one board shown large with a rail of every pattern next to it. The rail is a
+// horizontal scrolling strip until there is room for a column beside the board — at narrower widths
+// a column would starve the sheet, which is the only thing on this step worth screen space.
+.sheet-viewer {
   display: grid;
   gap: 1rem;
   grid-template-columns: minmax(0, 1fr);
 
-  > .optimizer-split-divider {
-    display: none;
+  // Narrow on purpose: the rail is a "which pattern am I on" index, not a place to read a sheet.
+  // Every pixel it gives back goes to the board, which is the only thing worth space on this step.
+  @media (min-width: 1200px) {
+    grid-template-columns: 6.5rem minmax(0, 1fr);
+    align-items: start;
+  }
+}
+
+.sheet-thumbs {
+  display: flex;
+  gap: 0.4rem;
+  overflow-x: auto;
+  padding-bottom: 0.25rem;
+
+  @media (min-width: 1200px) {
+    flex-direction: column;
+    overflow-x: visible;
+    overflow-y: auto;
+    max-height: calc(100dvh - 16rem);
+    padding-bottom: 0;
+    scrollbar-gutter: stable;
+  }
+}
+
+.sheet-thumb {
+  flex: 0 0 6rem;
+  padding: 0.25rem;
+  border: var(--cui-border-width) var(--cui-border-style) var(--cui-border-color);
+  border-radius: var(--cui-border-radius);
+  background-color: var(--cui-body-bg);
+  cursor: pointer;
+  text-align: start;
+  transition:
+    border-color 0.15s,
+    box-shadow 0.15s;
+
+  &:hover {
+    border-color: var(--cui-primary);
   }
 
+  &[data-active] {
+    border-color: var(--cui-primary);
+    box-shadow: 0 0 0 0.15rem rgba(var(--cui-primary-rgb), 0.2);
+  }
+
+  @media (min-width: 1200px) {
+    flex: 0 0 auto;
+  }
+}
+
+.sheet-thumb-label {
+  font-size: 0.75rem;
+  font-weight: 600;
+  line-height: 1;
+}
+
+// Board · handle · detail. Stacked below `lg`, where a side panel would starve the board.
+.sheet-stage {
+  display: grid;
+  gap: 0.5rem;
+  grid-template-columns: minmax(0, 1fr);
+
   @media (min-width: 992px) {
-    grid-template-columns: minmax(0, var(--split-left, 58%)) auto minmax(0, 1fr);
+    grid-template-columns: minmax(0, 1fr) auto;
     align-items: start;
 
-    > .optimizer-split-divider {
-      display: block;
-      width: 0.5rem;
-      align-self: stretch;
-      border-radius: 0.25rem;
-      cursor: col-resize;
-      background-color: var(--cui-border-color);
-      opacity: 0.5;
-      touch-action: none;
-      transition: opacity 0.15s;
-
-      &:hover,
-      &:focus-visible,
-      &.is-dragging {
-        opacity: 1;
-        background-color: var(--cui-primary);
-      }
+    &[data-detail='open'] {
+      grid-template-columns: minmax(0, 1fr) auto minmax(0, 21rem);
     }
   }
 }
 
-// Right pane keeps its own scroll so the diagrams stay in view while a long pieces list scrolls,
-// mirroring `.review-rail` below. Only from `lg`, where the panes actually sit side by side.
-@media (min-width: 992px) {
-  .optimizer-rail {
-    position: sticky;
-    top: 1rem;
-    max-height: calc(100dvh - 2rem);
-    overflow-y: auto;
-    scrollbar-gutter: stable;
+// Collapse handle: a slim full-height bar reading as a split divider, not a labelled button — the
+// panel it opens is right beside it, so a word would only take room from the board.
+.sheet-detail-handle {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  min-height: 1.5rem;
+  padding: 0;
+  border: var(--cui-border-width) var(--cui-border-style) var(--cui-border-color);
+  border-radius: 0.25rem;
+  background-color: var(--cui-tertiary-bg);
+  color: var(--cui-secondary-color);
+  font-size: 0.9rem;
+  line-height: 1;
+  cursor: pointer;
+  transition:
+    background-color 0.15s,
+    color 0.15s,
+    border-color 0.15s;
+
+  &:hover,
+  &:focus-visible {
+    border-color: var(--cui-primary);
+    background-color: var(--cui-primary);
+    color: #fff;
+  }
+
+  // Stacked layout: the panel opens BELOW, not to the side, so the chevrons have to point that way.
+  // One rotation serves both states — `«` becomes down (opens) and `»` becomes up (closes).
+  > span[aria-hidden] {
+    display: inline-block;
+    transform: rotate(-90deg);
+  }
+
+  @media (min-width: 992px) {
+    align-self: stretch;
+    width: 1.1rem;
+    min-height: 0;
+
+    > span[aria-hidden] {
+      transform: none;
+    }
   }
 }
 
@@ -128,6 +296,12 @@ input[type='number'] {
   overflow: auto;
   padding: 1rem;
   background-color: var(--cui-body-bg);
+
+  // The sticky footer paints the page background behind itself; in fullscreen that background
+  // changes, so it has to follow or it shows as a band in the wrong shade.
+  .wizard-footer {
+    background-color: var(--cui-body-bg);
+  }
 }
 
 // Material group card. The accent bar down the left edge tracks which group a row belongs to while

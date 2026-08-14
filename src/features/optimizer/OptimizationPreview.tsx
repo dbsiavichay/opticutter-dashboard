@@ -1,30 +1,26 @@
 import {
   CAlert,
-  CBadge,
   CButton,
   CButtonGroup,
   CCard,
   CCardBody,
   CCardHeader,
-  CCol,
   CRow,
   CSpinner,
-  CTable,
-  CTableBody,
-  CTableDataCell,
-  CTableHead,
-  CTableHeaderCell,
-  CTableRow,
 } from '@coreui/react'
 import CIcon from '@coreui/icons-react'
 import { cilCalculator, cilLoopCircular } from '@coreui/icons'
 
 import { fmtMoney } from 'src/features/review/format'
 import PricingBlock from 'src/shared/components/PricingBlock'
-import { stripHalfSuffix } from 'src/shared/utils/halfBoard'
 import type { OptimizeResponse, PackingStrategy } from './types'
 import CutLayoutDiagram from './CutLayoutDiagram'
 import OptimizingOverlay from './OptimizingOverlay'
+import { EdgeBandingSummaryTable, Kpi, MaterialsSummaryTable, meters } from './summaryTables'
+
+// Single-card result view: KPIs, cost tables and the pattern grid stacked together. Used by the
+// pre-order detail page, which shows the result alongside its editor. The optimizer wizard splits
+// the same data across its Optimización and Costos steps instead.
 
 interface OptimizationPreviewProps {
   result?: OptimizeResponse
@@ -48,27 +44,17 @@ interface OptimizationPreviewProps {
   modalContainer?: () => Element | null
 }
 
-const STRATEGY_OPTIONS: { value: PackingStrategy; label: string }[] = [
-  { value: 'longOffcuts', label: 'Retazos largos' },
+// "Máxima eficiencia" first because it is the default: the picker reads left-to-right from the
+// normal case to the special one. Pre-orders keep their own copy in OptimizeActionBar.
+export const STRATEGY_OPTIONS: { value: PackingStrategy; label: string }[] = [
   { value: 'default', label: 'Máxima eficiencia' },
+  { value: 'longOffcuts', label: 'Retazos largos' },
 ]
 
-const meters = (n?: number | null) => (n != null ? `${n.toFixed(2)} m` : '—')
-
-interface KpiProps {
-  label: string
-  value: string | number
-}
-
-// Compact KPI tile with a subtle border, so the four headline metrics read as a scannable group.
-const Kpi = ({ label, value }: KpiProps) => (
-  <CCol xs={6} md={3}>
-    <div className="border rounded-3 p-2 h-100">
-      <div className="text-body-secondary small text-uppercase">{label}</div>
-      <div className="fs-5 fw-semibold">{value}</div>
-    </div>
-  </CCol>
-)
+export const strategyHint = (s: PackingStrategy) =>
+  s === 'longOffcuts'
+    ? 'Agrupa el sobrante en una tira larga reutilizable'
+    : 'Minimiza el desperdicio total'
 
 const OptimizationPreview = ({
   result,
@@ -104,11 +90,7 @@ const OptimizationPreview = ({
                     variant={active ? undefined : 'outline'}
                     active={active}
                     disabled={isPending}
-                    title={
-                      o.value === 'longOffcuts'
-                        ? 'Agrupa el sobrante en una tira larga reutilizable'
-                        : 'Minimiza el desperdicio total'
-                    }
+                    title={strategyHint(o.value)}
                     onClick={() => onStrategyChange?.(o.value)}
                   >
                     {o.label}
@@ -192,81 +174,8 @@ const OptimizationPreview = ({
               </div>
             )}
 
-            {result.materialsSummary?.length > 0 && (
-              <CTable small responsive className="mb-3">
-                <CTableHead>
-                  <CTableRow>
-                    <CTableHeaderCell className="bg-body-tertiary">Material</CTableHeaderCell>
-                    <CTableHeaderCell className="bg-body-tertiary">Medida</CTableHeaderCell>
-                    <CTableHeaderCell className="bg-body-tertiary text-end">
-                      Tableros
-                    </CTableHeaderCell>
-                    <CTableHeaderCell className="bg-body-tertiary text-end">
-                      Efic. avg
-                    </CTableHeaderCell>
-                    <CTableHeaderCell className="bg-body-tertiary text-end">Costo</CTableHeaderCell>
-                  </CTableRow>
-                </CTableHead>
-                <CTableBody>
-                  {result.materialsSummary.map((m) => (
-                    <CTableRow key={m.materialKey}>
-                      <CTableDataCell>
-                        {stripHalfSuffix(m.productName) ?? m.productCode ?? m.materialKey}{' '}
-                        {m.halfBoard && <CBadge color="info">½ medio</CBadge>}
-                      </CTableDataCell>
-                      <CTableDataCell className="text-nowrap">
-                        {m.width}×{m.height}×{m.thickness} mm
-                      </CTableDataCell>
-                      <CTableDataCell className="text-end">{m.count}</CTableDataCell>
-                      <CTableDataCell className="text-end">
-                        {m.avgEfficiency != null ? `${m.avgEfficiency.toFixed(1)}%` : '—'}
-                      </CTableDataCell>
-                      <CTableDataCell className="text-end">{fmtMoney(m.totalCost)}</CTableDataCell>
-                    </CTableRow>
-                  ))}
-                </CTableBody>
-              </CTable>
-            )}
-
-            {result.edgeBandingsSummary?.length > 0 && (
-              <CTable small responsive className="mb-3">
-                <CTableHead>
-                  <CTableRow>
-                    <CTableHeaderCell className="bg-body-tertiary">Tapacanto</CTableHeaderCell>
-                    <CTableHeaderCell className="bg-body-tertiary text-end">
-                      m netos
-                    </CTableHeaderCell>
-                    <CTableHeaderCell className="bg-body-tertiary text-end">
-                      m facturados
-                    </CTableHeaderCell>
-                    <CTableHeaderCell className="bg-body-tertiary text-end">
-                      Precio/m
-                    </CTableHeaderCell>
-                    <CTableHeaderCell className="bg-body-tertiary text-end">Costo</CTableHeaderCell>
-                  </CTableRow>
-                </CTableHead>
-                <CTableBody>
-                  {result.edgeBandingsSummary.map((e) => (
-                    <CTableRow key={e.productId ?? 'sin-producto'}>
-                      <CTableDataCell>
-                        {e.productName ?? e.productCode ?? 'Sin asignar'}
-                        {e.color ? <span className="text-body-secondary"> · {e.color}</span> : null}
-                      </CTableDataCell>
-                      <CTableDataCell className="text-end">
-                        {e.netLinearM.toFixed(2)}
-                      </CTableDataCell>
-                      <CTableDataCell className="text-end">{e.billedLinearM}</CTableDataCell>
-                      <CTableDataCell className="text-end">
-                        {e.pricePerM ? fmtMoney(e.pricePerM) : '—'}
-                      </CTableDataCell>
-                      <CTableDataCell className="text-end">
-                        {e.totalCost ? fmtMoney(e.totalCost) : '—'}
-                      </CTableDataCell>
-                    </CTableRow>
-                  ))}
-                </CTableBody>
-              </CTable>
-            )}
+            <MaterialsSummaryTable rows={result.materialsSummary ?? []} />
+            <EdgeBandingSummaryTable rows={result.edgeBandingsSummary ?? []} />
 
             <CutLayoutDiagram
               layoutGroups={result.layoutGroups}

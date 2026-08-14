@@ -1,8 +1,7 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
-import { CAlert, CButton, CSpinner } from '@coreui/react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { CButton, CSpinner } from '@coreui/react'
 import CIcon from '@coreui/icons-react'
 import {
-  cilCart,
   cilCheckAlt,
   cilFolderOpen,
   cilFullscreen,
@@ -27,20 +26,21 @@ import {
   requirementIssues,
 } from './optimizerForm'
 import type { MaterialForm, RequirementForm, RequirementIssue } from './optimizerForm'
-import type { OptimizerDraftPayload, PackingStrategy } from './types'
+import type { OptimizeResponse, OptimizerDraftPayload, PackingStrategy } from './types'
 import { clearAutosave, loadAutosave, saveAutosave } from './optimizerStorage'
 import { downloadCsv, requirementsToCsv } from './piecesCsv'
 import { usePiecesEditor } from './usePiecesEditor'
-import MaterialGroups from './MaterialGroups'
-import OptimizationPreview from './OptimizationPreview'
-import SplitPane from './SplitPane'
+import { signatureOf, useOptimizerWizard } from './useOptimizerWizard'
+import type { StepId } from './useOptimizerWizard'
+import WizardSteps, { WizardFooter } from './WizardSteps'
+import PiecesStep from './steps/PiecesStep'
+import LayoutStep from './steps/LayoutStep'
+import CostsStep from './steps/CostsStep'
+import QuoteStep from './steps/QuoteStep'
 import DeleteMaterialModal from './DeleteMaterialModal'
 import ImportPiecesModal from './ImportPiecesModal'
-import CreateQuoteModal from './CreateQuoteModal'
 import DraftsModal from './DraftsModal'
 import SaveDraftModal from './SaveDraftModal'
-
-const SPLIT_KEY = 'cutter:optimizer:split:v1'
 
 // One-line summary of the blocked rows, for the toast. The per-row reasons stay in the alert.
 const issuesSummary = (issues: RequirementIssue[]): string => {
@@ -50,6 +50,10 @@ const issuesSummary = (issues: RequirementIssue[]): string => {
     : `No se optimizó: ${issues.length} piezas incompletas (filas ${rows}).`
 }
 
+// Shell of the cut wizard: it owns every piece of workspace state and hands it to whichever step is
+// active. The steps themselves are presentational. Nothing lives in a store because the step lives
+// in a search param, which never changes `location.pathname` — so this component is never remounted
+// and plain `useState` survives the whole flow.
 const OptimizerPage = () => {
   // Safety net: read the previous session's autosave ONCE (lazy initializer) and use it
   // to hydrate the initial state, instead of a mount effect with setState.
@@ -58,7 +62,6 @@ const OptimizerPage = () => {
   const [materials, setMaterials] = useState<MaterialForm[]>(
     () => bootstrap?.materials ?? [emptyCatalogMaterial()],
   )
-  const [showQuote, setShowQuote] = useState(false)
   const [showImport, setShowImport] = useState(false)
   const [deleteTarget, setDeleteTarget] = useState<MaterialForm | null>(null)
 
@@ -68,14 +71,13 @@ const OptimizerPage = () => {
   const [showDrafts, setShowDrafts] = useState(false)
   const [showSaveDraft, setShowSaveDraft] = useState(false)
   const [priceTierCode, setPriceTierCode] = useState('consumidor')
-  const [strategy, setStrategy] = useState<PackingStrategy>('longOffcuts')
+  const [strategy, setStrategy] = useState<PackingStrategy>('default')
   // Alternative-solution seed: bumped by "Otra alternativa" to explore different layouts.
   const [variant, setVariant] = useState(0)
-  const [restored, setRestored] = useState(!!bootstrap)
   const [loadingDraftId, setLoadingDraftId] = useState<number | null>(null)
   const [savedFlash, setSavedFlash] = useState(false)
   const flashTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
-  // Half-filled rows found on the last Optimizar attempt; blocks the run until they are fixed.
+  // Half-filled rows found on the last attempt to leave the Despiece step; blocks the advance.
   const [issues, setIssues] = useState<RequirementIssue[]>([])
 
   const {
@@ -134,17 +136,51 @@ const OptimizerPage = () => {
     setDeleteTarget(null)
   }
 
-  const built = buildPayload(materials, pieces.requirements)
+  // Memoized because it also feeds the staleness signature, and it used to be rebuilt on every
+  // render — including every keystroke in the pieces grid.
+  const built = useMemo(
+    () => buildPayload(materials, pieces.requirements),
+    [materials, pieces.requirements],
+  )
   const canOptimize = built.validCount > 0
   // Pieces with banding sides but no tapacanto: fine to optimize (geometry), but block quoting.
   const missingBanding = piecesMissingBandingProduct(pieces.requirements)
-  const canCreateQuote = canOptimize && missingBanding.length === 0
 
   const hasPieceData = pieces.requirements.some((r) => !isRequirementEmpty(r))
-  // "Optimizar" stays clickable as soon as any row has data, even when none is valid yet: gating it
+  // Optimizing stays available as soon as any row has data, even when none is valid yet: gating it
   // on `canOptimize` would leave a sheet of half-filled rows with a dead button and no explanation
   // of what is missing. The click reports the issues instead.
   const canRunOptimize = hasPieceData
+
+  // `optimize.data` is wiped the moment a new run starts (query-core sets `data: undefined` on
+  // 'pending'), so the last good result is kept here. Without it every recompute would momentarily
+  // look like "no result": the wizard would drop its reachable step and bounce the user out of
+  // Costos mid-recalculation, and the board would blank under the overlay instead of dimming.
+  const [lastResult, setLastResult] = useState<OptimizeResponse | undefined>(undefined)
+  const result = optimize.data ?? lastResult
+  const hasResult = !!result
+
+  // Signature of the current inputs, against the one that produced the result on screen. Both are
+  // built from the payload actually SENT (post-prune), never from this render: pruning empty rows
+  // changes the signature, and seeding it from here would make the auto-run loop.
+  const signature = useMemo(
+    () => signatureOf(built.materials, built.requirements, strategy, variant, priceTierCode),
+    [built, strategy, variant, priceTierCode],
+  )
+  // Set on SUCCESS: it claims "the result on screen was computed from these inputs", which a failed
+  // run has not earned.
+  const [resultSignature, setResultSignature] = useState<string | null>(null)
+  const isStale = hasResult && resultSignature !== signature
+  // Set on SETTLE, and read only by the auto-run effect: a run that failed must not be retried
+  // forever just because it left the result stale. Separate from the above because "we tried this"
+  // and "this is what we are showing" stop being the same thing as soon as a run can fail.
+  const attemptedSignature = useRef<string | null>(null)
+
+  const wizard = useOptimizerWizard({
+    hasPieceData,
+    hasResult,
+    canQuote: hasResult && missingBanding.length === 0,
+  })
 
   // Is there work that would be lost on reset? (more than one material, any with data, or non-empty pieces)
   const hasWork =
@@ -181,6 +217,19 @@ const OptimizerPage = () => {
     [],
   )
 
+  // The restored-session notice is a toast, not a banner: it is read once and never acted on, so a
+  // permanent strip above the editor was paying page height for it forever. Discarding the restored
+  // work is what "Nuevo" already does, so the notice needs no action of its own.
+  useEffect(() => {
+    if (!bootstrap) return
+    addToast(
+      bootstrap.draftName
+        ? `Restauramos tu trabajo de la sesión anterior. Borrador: ${bootstrap.draftName}.`
+        : 'Restauramos tu trabajo de la sesión anterior.',
+      'info',
+    )
+  }, [bootstrap, addToast])
+
   const flashSaved = () => {
     setSavedFlash(true)
     if (flashTimer.current) clearTimeout(flashTimer.current)
@@ -200,7 +249,12 @@ const OptimizerPage = () => {
     setDraftName('')
     setVariant(0)
     setIssues([])
+    optimize.reset()
+    setLastResult(undefined)
+    setResultSignature(null)
+    attemptedSignature.current = null
     clearAutosave()
+    wizard.goTo('despiece')
   }
 
   const handleNew = () => {
@@ -210,12 +264,6 @@ const OptimizerPage = () => {
     )
       return
     resetWorkspace()
-    setRestored(false)
-  }
-
-  const handleDiscardRestore = () => {
-    resetWorkspace()
-    setRestored(false)
   }
 
   // "Save draft": PUT if a draftId exists; otherwise prompt for a name and create (POST).
@@ -253,64 +301,129 @@ const OptimizerPage = () => {
       pieces.addMany(d.payload.requirements, true)
       setDraftId(d.id)
       setDraftName(d.name)
-      setRestored(false)
       setShowDrafts(false)
+      // A loaded draft describes a different job: the result on screen is not its.
+      optimize.reset()
+      setLastResult(undefined)
+      setResultSignature(null)
+      attemptedSignature.current = null
+      wizard.goTo('despiece')
     } finally {
       setLoadingDraftId(null)
     }
   }
 
-  const handleStrategyChange = (newStrategy: PackingStrategy) => {
-    setStrategy(newStrategy)
-    if (optimize.data && canOptimize) {
-      optimize.mutate({
-        materials: built.materials,
-        requirements: built.requirements,
-        priceTierCode,
-        strategy: newStrategy,
-        variant,
-      })
-    }
-  }
+  // Runs the search. Every override exists for the same reason: the control that triggers the run
+  // also calls its own setState, which has not landed yet on this tick — so the new value has to
+  // travel with the call rather than be read back from state.
+  const runOptimize = useCallback(
+    (
+      overrides: {
+        variant?: number
+        strategy?: PackingStrategy
+        priceTierCode?: string
+      } = {},
+    ) => {
+      const nextVariant = overrides.variant ?? variant
+      const nextStrategy = overrides.strategy ?? strategy
+      const nextTier = overrides.priceTierCode ?? priceTierCode
 
-  // Optimizing first cleans up after the editor and then refuses ambiguous input: blank rows (one is
-  // left behind by every "Agregar pieza" and every Enter on the last row) are dropped silently, while
-  // rows the user started but left half-filled block the run — sending them would quietly cut a
-  // different job than the one on screen. `pruneEmpty` returns the new list so the payload can be
-  // built in this same tick.
-  const runOptimize = (nextVariant: number) => {
+      const payload = buildPayload(materials, pieces.requirements)
+      if (payload.validCount === 0) {
+        addToast('No hay piezas válidas para optimizar. Revisa materiales y medidas.', 'warning')
+        return
+      }
+      const sent = signatureOf(
+        payload.materials,
+        payload.requirements,
+        nextStrategy,
+        nextVariant,
+        nextTier,
+      )
+      optimize.mutate(
+        {
+          materials: payload.materials,
+          requirements: payload.requirements,
+          priceTierCode: nextTier,
+          strategy: nextStrategy,
+          variant: nextVariant,
+        },
+        {
+          onSuccess: (data) => {
+            setLastResult(data)
+            setResultSignature(sent)
+          },
+          onSettled: () => {
+            attemptedSignature.current = sent
+          },
+        },
+      )
+    },
+    [materials, pieces.requirements, variant, strategy, priceTierCode, optimize, addToast],
+  )
+
+  // Leaving the Despiece step cleans up after the editor and then refuses ambiguous input: blank
+  // rows (one is left behind by every "Agregar pieza" and every Enter on the last row) are dropped
+  // silently, while rows the user started but left half-filled block the advance — carrying them
+  // forward would quietly cut a different job than the one on screen.
+  const handleLeavePieces = (): boolean => {
     const rows = pieces.pruneEmpty()
     const found = requirementIssues(rows, materials)
     setIssues(found)
-    // A refusal must announce itself: the alert alone sits in the pieces pane, which may be scrolled
-    // away from the button that was just pressed.
+    // A refusal must announce itself: the alert sits at the top of a list that may be scrolled away
+    // from the button that was just pressed.
     if (found.length > 0) {
       addToast(issuesSummary(found), 'danger')
-      return
+      return false
     }
-    const payload = buildPayload(materials, rows)
-    if (payload.validCount === 0) {
-      addToast('No hay piezas válidas para optimizar. Revisa materiales y medidas.', 'warning')
-      return
-    }
-    optimize.mutate({
-      materials: payload.materials,
-      requirements: payload.requirements,
-      priceTierCode,
-      strategy,
-      variant: nextVariant,
-    })
+    return true
   }
 
-  const handleOptimize = () => runOptimize(variant)
+  const handleNext = () => {
+    if (wizard.step === 'despiece' && !handleLeavePieces()) return
+    wizard.next()
+  }
 
-  // "Otra alternativa": bump the seed and recompute — each seed yields a
-  // deterministic, cached layout, genuinely different when alternatives exist.
+  const handleSelectStep = (id: StepId) => {
+    // Moving forward past Despiece goes through the same validation as "Siguiente".
+    if (wizard.step === 'despiece' && id !== 'despiece' && !handleLeavePieces()) return
+    wizard.goTo(id)
+  }
+
+  // Entering the Optimización step computes what is missing: a first run, or a re-run because the
+  // pieces changed. The Despiece step already validated, so there is nothing to report here.
+  useEffect(() => {
+    if (wizard.step !== 'optimizacion') return
+    if (optimize.isPending || !canOptimize) return
+    if (hasResult && !isStale) return
+    // Already attempted and it did not succeed: leave the error on screen rather than retrying the
+    // same payload on every render.
+    if (attemptedSignature.current === signature) return
+    runOptimize()
+  }, [wizard.step, optimize.isPending, canOptimize, hasResult, isStale, signature, runOptimize])
+
+  const handleOptimize = () => runOptimize()
+
+  const handleStrategyChange = (newStrategy: PackingStrategy) => {
+    setStrategy(newStrategy)
+    if (canOptimize) runOptimize({ strategy: newStrategy })
+  }
+
+  // Changing the price tier recomputes on the spot rather than waiting for a trip back to the
+  // Optimización step: only the money in the response changes and `/optimize` is cached by input
+  // hash, so the cut search is not redone — the cost tables just catch up with the tier on screen.
+  const handlePriceTierChange = (code: string) => {
+    setPriceTierCode(code)
+    if (canOptimize) runOptimize({ priceTierCode: code })
+  }
+
+  // Bump the seed and recompute — each seed yields a deterministic, cached layout, genuinely
+  // different when alternatives exist. This is what "Volver a optimizar" does once a result exists.
   const handleAlternative = () => {
     if (!canOptimize) return
     const next = variant + 1
     setVariant(next)
-    runOptimize(next)
+    runOptimize({ variant: next })
   }
 
   // Import: pieces plus the material groups the CSV declared. "Replace" makes the workspace mirror
@@ -336,6 +449,7 @@ const OptimizerPage = () => {
     <div ref={containerRef} className="optimizer-workspace">
       <div className="d-flex align-items-center justify-content-between mb-3 gap-2 flex-wrap">
         <h5 className="mb-0">Optimizador de corte</h5>
+        {/* These act on the whole job, not on a step, so they stay above the trail. */}
         <div className="d-flex gap-2 flex-wrap">
           {canFullscreen && (
             <CButton
@@ -369,103 +483,73 @@ const OptimizerPage = () => {
             )}
             {savedFlash ? 'Guardado' : 'Guardar borrador'}
           </CButton>
-          <CButton color="primary" disabled={!canCreateQuote} onClick={() => setShowQuote(true)}>
-            <CIcon icon={cilCart} className="me-1" />
-            Crear cotización
-          </CButton>
         </div>
       </div>
 
-      {restored && (
-        <CAlert
-          color="info"
-          className="d-flex align-items-center justify-content-between py-2"
-          dismissible
-          onClose={() => setRestored(false)}
-        >
-          <span className="small">
-            Restauramos tu trabajo de la sesión anterior.
-            {draftName && <strong> Borrador: {draftName}.</strong>}
-          </span>
-          <CButton color="info" variant="ghost" size="sm" onClick={handleDiscardRestore}>
-            Descartar
-          </CButton>
-        </CAlert>
+      <WizardSteps index={wizard.index} maxIndex={wizard.maxIndex} onSelect={handleSelectStep} />
+
+      {wizard.step === 'despiece' && (
+        <PiecesStep
+          editor={pieces}
+          materials={materials}
+          boards={boards}
+          edgeBandings={edgeBandings}
+          container={modalContainer}
+          issues={issues}
+          onDismissIssues={() => setIssues([])}
+          missingBanding={missingBanding}
+          onAddMaterial={addMaterial}
+          onUpdateMaterial={updateMaterial}
+          onRequestDeleteMaterial={requestDeleteMaterial}
+          onDuplicateMaterial={duplicateMaterial}
+          onImportOpen={() => setShowImport(true)}
+          onExport={handleExport}
+          onClearMaterials={() => setMaterials([emptyCatalogMaterial()])}
+        />
       )}
 
-      {/* Pieces on the left, results on the right: editing a measurement and seeing what it does to
-          the layout is the core loop, and stacking them meant never seeing both. */}
-      <SplitPane
-        storageKey={SPLIT_KEY}
-        left={
-          <>
-            {/* Above the pieces, not below them: a list long enough to need this warning is long
-                enough to bury it. The toast raised on the same click carries the summary. */}
-            {issues.length > 0 && (
-              <CAlert
-                color="danger"
-                className="py-2 small"
-                dismissible
-                onClose={() => setIssues([])}
-              >
-                <div className="fw-semibold mb-1">
-                  {issues.length === 1
-                    ? 'Hay una pieza incompleta:'
-                    : `Hay ${issues.length} piezas incompletas:`}
-                </div>
-                <ul className="mb-0 ps-3">
-                  {issues.map((it) => (
-                    <li key={it.index}>
-                      Fila #{it.index + 1}: {it.reasons.join(', ')}.
-                    </li>
-                  ))}
-                </ul>
-              </CAlert>
-            )}
+      {wizard.step === 'optimizacion' && (
+        <LayoutStep
+          result={result}
+          isPending={optimize.isPending}
+          error={optimize.error}
+          canOptimize={canRunOptimize}
+          onOptimize={handleOptimize}
+          strategy={strategy}
+          onStrategyChange={handleStrategyChange}
+          onAlternative={handleAlternative}
+          variant={variant}
+          isStale={isStale}
+        />
+      )}
 
-            <MaterialGroups
-              editor={pieces}
-              materials={materials}
-              boards={boards}
-              edgeBandings={edgeBandings}
-              container={modalContainer}
-              onAddMaterial={addMaterial}
-              onUpdateMaterial={updateMaterial}
-              onRequestDeleteMaterial={requestDeleteMaterial}
-              onDuplicateMaterial={duplicateMaterial}
-              onImportOpen={() => setShowImport(true)}
-              onExport={handleExport}
-              onClearMaterials={() => setMaterials([emptyCatalogMaterial()])}
-            />
+      {wizard.step === 'costos' && result && (
+        <CostsStep
+          result={result}
+          missingBanding={missingBanding}
+          priceTierCode={priceTierCode}
+          onPriceTierChange={handlePriceTierChange}
+          isPending={optimize.isPending}
+        />
+      )}
 
-            {missingBanding.length > 0 && (
-              <CAlert color="warning" className="py-2 small">
-                {missingBanding.length === 1
-                  ? `La pieza #${missingBanding.map((i) => i + 1).join('')} tiene canto definido pero no seleccionaste el tapacanto.`
-                  : `Hay ${missingBanding.length} piezas con canto definido pero sin tapacanto (#${missingBanding
-                      .map((i) => i + 1)
-                      .join(', #')}).`}{' '}
-                Selecciona el tapacanto para poder crear la cotización.
-              </CAlert>
-            )}
-          </>
-        }
-        right={
-          <div className="optimizer-rail">
-            <OptimizationPreview
-              result={optimize.data}
-              isPending={optimize.isPending}
-              error={optimize.error}
-              canOptimize={canRunOptimize}
-              onOptimize={handleOptimize}
-              strategy={strategy}
-              onStrategyChange={handleStrategyChange}
-              onAlternative={handleAlternative}
-              variant={variant}
-              modalContainer={modalContainer}
-            />
-          </div>
-        }
+      {wizard.step === 'cotizacion' && (
+        <QuoteStep
+          result={result}
+          materials={built.materials}
+          requirements={built.requirements}
+          priceTierCode={priceTierCode}
+          strategy={strategy}
+          variant={variant}
+          onCreated={clearAutosave}
+        />
+      )}
+
+      <WizardFooter
+        onBack={wizard.index > 0 ? wizard.back : undefined}
+        onNext={wizard.isLast ? undefined : handleNext}
+        nextDisabled={!wizard.canGoNext || optimize.isPending}
+        nextHint={wizard.nextBlockedReason}
       />
 
       <DeleteMaterialModal
@@ -490,19 +574,6 @@ const OptimizerPage = () => {
         onImport={handleImport}
         container={modalContainer}
         onClose={() => setShowImport(false)}
-      />
-
-      <CreateQuoteModal
-        visible={showQuote}
-        onClose={() => setShowQuote(false)}
-        materials={built.materials}
-        requirements={built.requirements}
-        priceTierCode={priceTierCode}
-        onPriceTierChange={setPriceTierCode}
-        strategy={strategy}
-        variant={variant}
-        onCreated={clearAutosave}
-        container={modalContainer}
       />
 
       <DraftsModal
