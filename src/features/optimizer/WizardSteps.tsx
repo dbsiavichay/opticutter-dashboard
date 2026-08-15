@@ -73,6 +73,8 @@ const WizardSteps = ({ index, maxIndex, onSelect, actions }: WizardStepsProps) =
 
 interface WizardFooterProps {
   onBack?: () => void
+  // Defaults to "Atrás" (a step back). The pre-order page leaves the record entirely, so it says so.
+  backLabel?: string
   onNext?: () => void
   nextLabel?: string
   nextDisabled?: boolean
@@ -87,9 +89,11 @@ interface WizardFooterProps {
 
 // Pinned to the bottom of the viewport: the pieces list runs to dozens of rows, and a footer in
 // normal flow means scrolling the whole table to reach "Siguiente" — where it also ended up flush
-// against the app's own footer. Same treatment as OptimizeActionBar, which pre-orders still use.
+// against the app's own footer. The pre-order detail page mounts the same bar (it had a near-copy,
+// OptimizeActionBar, that sat at the sticky z-tier and painted over its own dropdowns).
 export const WizardFooter = ({
   onBack,
+  backLabel = 'Atrás',
   onNext,
   nextLabel = 'Siguiente',
   nextDisabled,
@@ -107,7 +111,7 @@ export const WizardFooter = ({
           title={`${KEY.alt}+←`}
           onClick={onBack}
         >
-          ‹ Atrás
+          ‹ {backLabel}
         </CButton>
       )}
       {left}

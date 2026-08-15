@@ -62,6 +62,9 @@ interface PieceRowsTableProps {
   // Fullscreen portal target for the tapacanto dropdown menu and the picker modal, both of which
   // portal out of this table; omitted where there is no fullscreen host.
   container?: ModalContainer
+  // Height at which the rows start scrolling inside their own box. Defaults to a value that suits
+  // a list sharing a page; a full-screen call site passes a taller one.
+  maxHeight?: string
 }
 
 // Fields that accept a pasted column of values to create rows.
@@ -125,6 +128,7 @@ const PieceRowsTable = ({
   boardEdgeBandings,
   boardThickness,
   container,
+  maxHeight = '55vh',
 }: PieceRowsTableProps) => {
   const {
     selected,
@@ -440,7 +444,7 @@ const PieceRowsTable = ({
   )
 
   return (
-    <div style={{ maxHeight: '55vh', overflow: 'auto' }} ref={containerRef} onPaste={handlePaste}>
+    <div style={{ maxHeight, overflow: 'auto' }} ref={containerRef} onPaste={handlePaste}>
       <CTable small bordered className="mb-0 pieces-table">
         <CTableHead>
           <CTableRow>

@@ -29,6 +29,7 @@ import { usePreOrders } from './usePreOrders'
 import { useState } from 'react'
 import { PAGE_SIZE } from 'src/shared/constants'
 import { clientName, fmtDate } from 'src/shared/utils/format'
+import { isExpiringSoon } from './status'
 
 const STATUSES: { value: PreOrderStatus | ''; label: string }[] = [
   { value: '', label: 'Todos los estados' },
@@ -40,14 +41,6 @@ const STATUSES: { value: PreOrderStatus | ''; label: string }[] = [
   { value: 'expired', label: 'Vencida' },
   { value: 'cancelled', label: 'Cancelada' },
 ]
-
-const ACTIVE_STATES: PreOrderStatus[] = ['draft', 'sent', 'changes_requested']
-
-const isExpiringSoon = (expiresAt: string | null | undefined, status: PreOrderStatus) => {
-  if (!expiresAt || !ACTIVE_STATES.includes(status)) return false
-  const diff = new Date(expiresAt).getTime() - Date.now()
-  return diff > 0 && diff <= 3 * 24 * 60 * 60 * 1000
-}
 
 const PreOrdersPage = () => {
   const navigate = useNavigate()

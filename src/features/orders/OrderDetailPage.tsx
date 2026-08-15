@@ -34,7 +34,7 @@ import { cilArrowLeft, cilExternalLink } from '@coreui/icons'
 import { useCurrentUser, useHasRole } from 'src/features/auth/useAuth'
 import { usePrintConsolidated } from 'src/features/print/usePrint'
 import { useActiveBranches } from 'src/features/branches/useBranches'
-import StatusHistoryCard from 'src/shared/components/StatusHistoryCard'
+import StatusHistoryTable from 'src/shared/components/StatusHistoryTable'
 import PricingBlock from 'src/shared/components/PricingBlock'
 import ReferenceNote from 'src/shared/components/ReferenceNote'
 import { stripHalfSuffix } from 'src/shared/utils/halfBoard'
@@ -689,11 +689,21 @@ const OrderDetailPage = () => {
         </CCard>
       )}
 
-      {/* History — actor label + actor type badge; see StatusHistoryCard. */}
-      <StatusHistoryCard
-        entries={order.history ?? []}
-        renderStatus={(s) => <OrderStatusBadge status={s as OrderStatus} />}
-      />
+      {/* History — actor label + actor type badge; see StatusHistoryTable. The table renders bare,
+          so the card is this page's: it is one section among many here. */}
+      {order.history && order.history.length > 0 && (
+        <CCard className="mb-3">
+          <CCardHeader>
+            <strong>Historial</strong>
+          </CCardHeader>
+          <CCardBody>
+            <StatusHistoryTable
+              entries={order.history}
+              renderStatus={(s) => <OrderStatusBadge status={s as OrderStatus} />}
+            />
+          </CCardBody>
+        </CCard>
+      )}
 
       {/* Documents & invoice — orders are created in confirmed state and always have documents. */}
       <CCard className="mb-3">

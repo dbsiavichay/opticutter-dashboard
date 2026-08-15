@@ -533,7 +533,7 @@ const OptimizerPage = () => {
 
       {/* One surface for whichever step is active. The trail above it and the footer below stay on
           the page background — that contrast is what separates them from the work. */}
-      <div className="wizard-surface">
+      <div className="surface">
         {wizard.step === 'pieces' && (
           <PiecesStep
             editor={pieces}

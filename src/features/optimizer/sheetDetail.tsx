@@ -12,7 +12,6 @@ import {
 } from 'src/shared/utils/cutDrawing'
 import type { SideLine } from 'src/shared/utils/cutDrawing'
 import type { EdgeSide, Layout, PlacedPiece } from './types'
-import type { LegendEntry } from './pieceColors'
 
 // Per-sheet detail panels, shared by the wizard's inline sheet viewer and the pre-order's expanded
 // sheet modal. Both show the same three things next to a board: what the piece under the cursor is,
@@ -304,63 +303,5 @@ export const SheetStats = ({ layout }: { layout: Layout }) => {
       <Stat label="Tapacanto" value={`${s.edgeBandingLinearM.toFixed(2)} m`} />
       <Stat label="Desperdicio" value={`${(s.wasteArea / 1e6).toFixed(2)} m²`} />
     </CRow>
-  )
-}
-
-// --- Legend ---
-
-interface PieceLegendProps {
-  legend: LegendEntry[]
-  hasEdgeBanding: boolean
-  hoveredSig: string | null
-  onHover: (sig: string | null) => void
-}
-
-// Swatch per measurement plus the edge-banding key. Hovering an entry dims the others and drives
-// `dimSig` on the sheets, so a measurement can be located across the whole plan.
-export const PieceLegend = ({ legend, hasEdgeBanding, hoveredSig, onHover }: PieceLegendProps) => {
-  if (legend.length === 0 && !hasEdgeBanding) return null
-  return (
-    <div
-      className="d-flex flex-wrap gap-2 justify-content-end align-items-center"
-      style={{ maxHeight: 96, overflowY: 'auto' }}
-    >
-      {legend.map((l) => (
-        <span
-          key={l.sig}
-          role="button"
-          className="d-inline-flex align-items-center gap-1 small"
-          style={{ opacity: hoveredSig && hoveredSig !== l.sig ? 0.4 : 1, cursor: 'default' }}
-          onMouseEnter={() => onHover(l.sig)}
-          onMouseLeave={() => onHover(null)}
-        >
-          <span
-            style={{
-              width: 12,
-              height: 12,
-              borderRadius: 2,
-              background: l.color,
-              display: 'inline-block',
-            }}
-          />
-          {l.sig} mm
-          <span className="text-body-secondary">×{l.count}</span>
-        </span>
-      ))}
-      {hasEdgeBanding && (
-        <span className="d-inline-flex align-items-center gap-1 small text-body-secondary">
-          <span
-            style={{
-              width: 16,
-              height: 4,
-              borderRadius: 2,
-              background: EDGE_COLOR,
-              display: 'inline-block',
-            }}
-          />
-          Tapacanto
-        </span>
-      )}
-    </div>
   )
 }

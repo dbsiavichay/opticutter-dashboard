@@ -58,6 +58,8 @@ interface MaterialGroupCardProps {
   // Fullscreen portal target for the portaled overlays in this card: the board / tapacanto dropdown
   // menus and the modals opened from inside the pieces table.
   container?: ModalContainer
+  // Scroll cap for this group's rows; see MaterialGroups.tableMaxHeight.
+  tableMaxHeight?: string
   onToggle: () => void
   onUpdate: <K extends keyof MaterialForm>(uid: string, field: K, value: MaterialForm[K]) => void
   onRequestDelete: (m: MaterialForm) => void
@@ -132,6 +134,7 @@ const MaterialGroupCard = ({
   boards,
   edgeBandings,
   container,
+  tableMaxHeight,
   onToggle,
   onUpdate,
   onRequestDelete,
@@ -512,6 +515,7 @@ const MaterialGroupCard = ({
             boardEdgeBandings={boardEdgeBandings}
             boardThickness={board?.attributes.thickness}
             container={container}
+            maxHeight={tableMaxHeight}
           />
           <div className="d-flex align-items-center gap-2 mt-2 flex-wrap">
             {/* Icon-only: the input beside it already says how to add a piece, and Enter on the last
