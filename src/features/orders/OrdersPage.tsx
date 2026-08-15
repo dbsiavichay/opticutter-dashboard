@@ -26,20 +26,17 @@ import { cilPlus } from '@coreui/icons'
 import { useActiveBranches } from 'src/features/branches/useBranches'
 import { useNavigate } from 'react-router-dom'
 import { useOrders } from './useOrders'
+import { ORDER_STATUS_VALUES, statusLabel } from './status'
 import useOrdersFilterStore from './ordersFilterStore'
 import { useState } from 'react'
 import { PAGE_SIZE } from 'src/shared/constants'
 import { clientName, fmtDate, fmtMoney } from 'src/shared/utils/format'
 
+// Derived from the badge's config rather than written out again: these were the same seven strings
+// in two files, which is two places to forget when a status is added.
 const STATUSES: { value: OrderStatus | ''; label: string }[] = [
   { value: '', label: 'Todos los estados' },
-  { value: 'confirmed', label: 'Confirmada' },
-  { value: 'queued', label: 'En cola' },
-  { value: 'cutting', label: 'En corte' },
-  { value: 'cut', label: 'Cortada' },
-  { value: 'completed', label: 'Completada' },
-  { value: 'despachado', label: 'Despachada' },
-  { value: 'cancelled', label: 'Cancelada' },
+  ...ORDER_STATUS_VALUES.map((value) => ({ value, label: statusLabel(value) })),
 ]
 
 const OrdersPage = () => {
