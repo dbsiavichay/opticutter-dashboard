@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import {
   CBadge,
   CButton,
@@ -10,120 +10,22 @@ import {
   CModalTitle,
   CRow,
 } from '@coreui/react'
+import CIcon from '@coreui/icons-react'
+import { cilFullscreen } from '@coreui/icons'
 
 import SheetSvg from 'src/shared/components/SheetSvg'
 import { stripHalfSuffix } from 'src/shared/utils/halfBoard'
-import { clamp, pieceSig } from 'src/shared/utils/cutDrawing'
 import type { LayoutGroup, MaterialSummary, PlacedPiece } from './types'
 import { usePieceColors } from './pieceColors'
-import { GroupedPiecesList, PieceDetailCard, PieceLegend, SheetStats } from './sheetDetail'
+import { GroupedPiecesList, PieceDetailCard, SheetStats } from './sheetDetail'
 
-// Pattern grid + expanded-sheet modal. The optimizer wizard shows its sheets inline through
-// `SheetViewer` instead; this stays for the pre-order detail page, which keeps the compact card
-// grid because its page already has an editor and an action bar competing for height.
-
-// --- Pattern card in the grid ---
-
-interface PatternCardProps {
-  group: LayoutGroup
-  colorFor: (sig: string) => string
-  hoveredSig: string | null
-  setHoveredSig: (sig: string | null) => void
-  materialName: string
-  onOpen: () => void
-}
-
-const PatternCard = ({
-  group,
-  colorFor,
-  hoveredSig,
-  setHoveredSig,
-  materialName,
-  onOpen,
-}: PatternCardProps) => {
-  const [hover, setHover] = useState(false)
-  const { material, statistics } = group.layout
-  const efficiencyOk = statistics.efficiency >= 80
-
-  return (
-    <div
-      className="border rounded p-2 h-100"
-      style={{
-        transition: 'border-color .15s, box-shadow .15s',
-        borderColor: hover ? 'var(--cui-primary)' : undefined,
-        boxShadow: hover ? '0 0 0 .15rem rgba(var(--cui-primary-rgb), .15)' : undefined,
-      }}
-      onMouseEnter={() => setHover(true)}
-      onMouseLeave={() => setHover(false)}
-    >
-      <div className="d-flex justify-content-between align-items-start mb-2 gap-2">
-        <div className="small">
-          <div className="fw-semibold">
-            Patrón {group.patternId}
-            {group.count > 1 && (
-              <CBadge color="secondary" className="ms-1">
-                ×{group.count}
-              </CBadge>
-            )}
-          </div>
-          <div className="text-body-secondary d-flex align-items-center gap-1">
-            {stripHalfSuffix(materialName)}
-            {group.layout.material.halfBoard && <CBadge color="info">½ medio</CBadge>}
-          </div>
-        </div>
-        <div className="d-flex align-items-center gap-2">
-          <CBadge color={efficiencyOk ? 'success' : 'warning'}>
-            {statistics.efficiency.toFixed(1)}%
-          </CBadge>
-          <CButton size="sm" color="secondary" variant="ghost" onClick={onOpen}>
-            Ampliar
-          </CButton>
-        </div>
-      </div>
-
-      <div role="button" title="Ampliar hoja" style={{ cursor: 'zoom-in' }} onClick={onOpen}>
-        <SheetSvg
-          layout={group.layout}
-          colorFor={colorFor}
-          dimSig={hoveredSig}
-          onPieceEnter={(p) => setHoveredSig(pieceSig(p))}
-          onPieceLeave={() => setHoveredSig(null)}
-        />
-      </div>
-
-      {/* Efficiency bar */}
-      <div
-        className="mt-2"
-        style={{
-          height: 4,
-          borderRadius: 2,
-          background: 'var(--cui-tertiary-bg)',
-          overflow: 'hidden',
-        }}
-        title={`Eficiencia ${statistics.efficiency.toFixed(1)}%`}
-      >
-        <div
-          style={{
-            width: `${clamp(statistics.efficiency, 0, 100)}%`,
-            height: '100%',
-            background: efficiencyOk ? 'var(--cui-success)' : 'var(--cui-warning)',
-          }}
-        />
-      </div>
-
-      <div className="d-flex flex-wrap gap-3 mt-2 small text-body-secondary">
-        <span>
-          {material.width}×{material.height} mm
-        </span>
-        <span>{statistics.piecesCount} piezas</span>
-        <span>Corte {statistics.cutLinearM.toFixed(2)} m</span>
-        {statistics.edgeBandingLinearM > 0 && (
-          <span>Tapacanto {statistics.edgeBandingLinearM.toFixed(2)} m</span>
-        )}
-      </div>
-    </div>
-  )
-}
+// One summary line + a fullscreen sheet viewer behind it. The optimizer wizard shows its sheets
+// inline through `SheetViewer`; this is the pre-order detail page's diagram.
+//
+// It used to be a grid of pattern cards, each with a thumbnail, an efficiency bar and a stats strip.
+// On a real quote that is two or three rows of cards — the single tallest thing on a page whose job
+// is to be read at a glance, and every card was a link to the same modal. So the grid collapsed to
+// the numbers it was summarising, and the modal it opened became the diagram itself.
 
 // --- Sheet detail modal ---
 
@@ -187,9 +89,10 @@ const SheetDetailModal = ({
     <CModal
       visible={index != null}
       onClose={onClose}
-      size="xl"
+      // Fullscreen, not a centered `xl`: this is now the only way to see the plan, and the page it
+      // opens over is `fluid`. A 1140px dialog would have shown the sheet smaller than the grid did.
+      fullscreen
       scrollable
-      alignment="center"
       container={container}
     >
       <CModalHeader>
@@ -208,7 +111,8 @@ const SheetDetailModal = ({
             <CCol
               xs={12}
               lg={7}
-              className="align-self-start"
+              xxl={8}
+              className="align-self-start sheet-overlay-stage"
               style={{ position: 'sticky', top: 0, zIndex: 1 }}
             >
               <SheetSvg
@@ -226,13 +130,14 @@ const SheetDetailModal = ({
                 onPieceLeave={() => setHoverPiece(null)}
                 // The column is sticky, so anything taller than the modal's scrollport can never be
                 // scrolled into view: its bottom edge stays clipped right where the pager sits.
-                // Reserve is the modal chrome around the body — margins, header, footer, padding.
-                maxHeight="min(640px, calc(100dvh - 17rem))"
+                // Reserve is the modal chrome around the body — header, footer, padding. No upper
+                // cap now that the dialog is fullscreen: the sheet is what the screen is for.
+                maxHeight="calc(100dvh - 12rem)"
                 showDimensions
                 enableZoom
               />
             </CCol>
-            <CCol xs={12} lg={5}>
+            <CCol xs={12} lg={5} xxl={4}>
               <SheetStats layout={layout} />
               <PieceDetailCard piece={hoverPiece} colorFor={colorFor} />
               <GroupedPiecesList
@@ -290,11 +195,10 @@ const CutLayoutDiagram = ({
   materialsSummary,
   modalContainer,
 }: CutLayoutDiagramProps) => {
-  const [hoveredSig, setHoveredSig] = useState<string | null>(null)
   // The open sheet is held as an INDEX, not the group object, so the modal can page to the next one.
   const [detailIndex, setDetailIndex] = useState<number | null>(null)
 
-  const { colorFor, legend, hasEdgeBanding } = usePieceColors(layoutGroups)
+  const { colorFor } = usePieceColors(layoutGroups)
 
   const materialName = (materialKey: string) => {
     const m = materialsSummary.find((x) => x.materialKey === materialKey)
@@ -302,34 +206,56 @@ const CutLayoutDiagram = ({
     return m.productName ?? m.productCode ?? `${m.width}×${m.height}×${m.thickness} mm`
   }
 
+  // Weighted by `count`: a pattern repeated over four sheets weighs four times one used once, which
+  // is what "aprovechamiento del plan" means. A plain mean would let a single offcut sheet drag the
+  // whole figure down.
+  const totals = useMemo(() => {
+    let sheets = 0
+    let pieces = 0
+    let effSum = 0
+    for (const g of layoutGroups) {
+      sheets += g.count
+      pieces += g.layout.statistics.piecesCount * g.count
+      effSum += g.layout.statistics.efficiency * g.count
+    }
+    return { sheets, pieces, efficiency: sheets > 0 ? effSum / sheets : 0 }
+  }, [layoutGroups])
+
   if (!layoutGroups.length) return null
+
+  const plural = (n: number, one: string, many: string) => (n === 1 ? one : many)
 
   return (
     <div>
-      <div className="d-flex justify-content-between align-items-center mb-2 gap-2">
-        <strong className="small text-body-secondary text-uppercase">Diagrama de cortes</strong>
-        <PieceLegend
-          legend={legend}
-          hasEdgeBanding={hasEdgeBanding}
-          hoveredSig={hoveredSig}
-          onHover={setHoveredSig}
-        />
+      {/* No colour key either. It listed every distinct measurement in the plan — a dozen swatches
+          on a busy quote — to explain a colour that identifies nothing on its own: the sheets label
+          each piece with its own measurement already. Hovering a piece inside the viewer still dims
+          the rest, which is what the key was actually used for. */}
+      <div className="d-flex flex-wrap align-items-center gap-2 border rounded-3 p-2 mb-3">
+        <span className="small text-body-secondary text-uppercase fw-semibold">
+          Diagrama de cortes
+        </span>
+        <span className="small">
+          <strong>{layoutGroups.length}</strong> {plural(layoutGroups.length, 'patrón', 'patrones')}{' '}
+          · <strong>{totals.sheets}</strong> {plural(totals.sheets, 'tablero', 'tableros')} ·{' '}
+          <strong>{totals.pieces}</strong> {plural(totals.pieces, 'pieza', 'piezas')}
+        </span>
+        {/* The one number worth a colour: below 80% the plan is worth a second look. It was the
+            badge on every pattern card; one figure for the whole plan says the same thing. */}
+        <CBadge color={totals.efficiency >= 80 ? 'success' : 'warning'}>
+          {totals.efficiency.toFixed(1)}% aprovechamiento
+        </CBadge>
+        <CButton
+          size="sm"
+          color="primary"
+          variant="outline"
+          className="ms-auto"
+          onClick={() => setDetailIndex(0)}
+        >
+          <CIcon icon={cilFullscreen} className="me-1" />
+          Ver diagrama
+        </CButton>
       </div>
-
-      <CRow className="g-3">
-        {layoutGroups.map((group, i) => (
-          <CCol xs={12} md={6} xl={4} key={group.patternId}>
-            <PatternCard
-              group={group}
-              colorFor={colorFor}
-              hoveredSig={hoveredSig}
-              setHoveredSig={setHoveredSig}
-              materialName={materialName(group.materialKey)}
-              onOpen={() => setDetailIndex(i)}
-            />
-          </CCol>
-        ))}
-      </CRow>
 
       <SheetDetailModal
         groups={layoutGroups}

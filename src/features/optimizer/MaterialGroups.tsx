@@ -24,6 +24,10 @@ interface MaterialGroupsProps {
   edgeBandings: EdgeBandingProduct[]
   // Fullscreen portal target for a group's portaled overlays (dropdown menus, modals).
   container?: ModalContainer
+  // Scroll cap for each group's rows. The default suits a list sharing a page with everything else;
+  // a call site that gives the list the whole screen passes a taller one, or the table keeps
+  // scrolling inside its own 55vh box while half the screen below it sits empty.
+  tableMaxHeight?: string
   // Folded groups, owned by the page (see useCollapsedGroups) because the menu toggles them all.
   collapsed: Set<string>
   onToggleGroup: (uid: string) => void
@@ -43,6 +47,7 @@ const MaterialGroups = ({
   boards,
   edgeBandings,
   container,
+  tableMaxHeight,
   collapsed,
   onToggleGroup,
   onAddMaterial,
@@ -88,6 +93,7 @@ const MaterialGroups = ({
             boards={boards}
             edgeBandings={edgeBandings}
             container={container}
+            tableMaxHeight={tableMaxHeight}
             onToggle={() => onToggleGroup(m.uid)}
             onUpdate={onUpdateMaterial}
             onRequestDelete={onRequestDeleteMaterial}

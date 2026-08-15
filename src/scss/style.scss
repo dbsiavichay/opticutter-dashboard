@@ -200,11 +200,13 @@ input[type='number'] {
   }
 }
 
-// The plane the active step is drawn on. Dropping the per-step CCard was right — its header only
-// repeated the step's name from the trail — but it also left every control sitting straight on the
-// page's tertiary-bg, where an outline-secondary button is grey on grey. This gives the content back
-// a surface without giving it back a card: no header, no shadow, nothing to read as a section.
-.wizard-surface {
+// The plane a screen's working content is drawn on. Dropping the per-step CCard was right — its
+// header only repeated the step's name from the trail — but it also left every control sitting
+// straight on the page's tertiary-bg, where an outline-secondary button is grey on grey. This gives
+// the content back a surface without giving it back a card: no header, no shadow, nothing to read as
+// a section. Named `.surface`, not `.wizard-surface`: the pre-order detail page uses the same plane
+// for a document that has no steps at all.
+.surface {
   padding: 1rem;
   border: var(--cui-border-width) var(--cui-border-style) var(--cui-border-color);
   border-radius: var(--cui-border-radius-lg);
@@ -348,6 +350,43 @@ input[type='number'] {
 
     > span[aria-hidden] {
       transform: none;
+    }
+  }
+}
+
+// The status badge as the handle for the history modal. A bare button so the badge keeps its own
+// shape — wrapping it in a `btn-link` would have given it link colour and an underline.
+.status-trigger {
+  padding: 0;
+  border: 0;
+  background: none;
+  line-height: 1;
+  cursor: pointer;
+  border-radius: var(--cui-border-radius);
+
+  &:hover {
+    opacity: 0.85;
+  }
+}
+
+// The board inside the pre-order's fullscreen sheet overlay. A 2440×1220 sheet is 2:1, so in a
+// 7/12 column it is limited by WIDTH, not height — on a 16:10 screen that left the bottom half of
+// the dialog empty. Centring it in the space the dialog actually has costs nothing and stops the
+// overlay from looking broken.
+//
+// Only from `lg`: below that the columns stack, and a full-viewport minimum height here would mean
+// scrolling a whole screen of padding before reaching the sheet's stats.
+@media (min-width: 992px) {
+  .sheet-overlay-stage {
+    display: flex;
+    align-items: center;
+    min-height: calc(100dvh - 12rem);
+
+    // The board wrapper is a plain block with no width of its own; as a flex item it would
+    // shrink-to-fit and collapse the SVG inside it.
+    > * {
+      flex: 1 1 auto;
+      min-width: 0;
     }
   }
 }

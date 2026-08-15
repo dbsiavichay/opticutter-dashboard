@@ -16,5 +16,8 @@ export const preordersRoutes: AppRoute[] = [
     name: 'Detalle de cotización',
     element: PreOrderDetailPage,
     roles: ['administrador', 'vendedor'],
+    // Same editor as /optimizer, so it needs the same width: the pieces table has twelve columns
+    // and the centered container squeezed every one of them.
+    fluid: true,
   },
 ]

@@ -16,9 +16,11 @@ import {
   cilChevronDoubleUp,
   cilCloudDownload,
   cilCloudUpload,
+  cilExternalLink,
   cilFolderOpen,
   cilFullscreen,
   cilFullscreenExit,
+  cilLink,
   cilLoopCircular,
   cilOptions,
   cilPlus,
@@ -28,15 +30,30 @@ import {
 
 import { KEY } from 'src/shared/utils/platform'
 import type { ModalContainer, PackingStrategy } from './types'
-import { STRATEGY_OPTIONS, strategyHint } from './OptimizationPreview'
+
+// "Máxima eficiencia" first because it is the default: the list reads from the normal case to the
+// special one. This menu is the only place the heuristic is chosen — it used to be a CButtonGroup
+// declared twice, in OptimizeActionBar and in OptimizationPreview, with the options in opposite
+// orders.
+const STRATEGY_OPTIONS: { value: PackingStrategy; label: string }[] = [
+  { value: 'default', label: 'Máxima eficiencia' },
+  { value: 'longOffcuts', label: 'Retazos largos' },
+]
+
+const strategyHint = (s: PackingStrategy) =>
+  s === 'longOffcuts'
+    ? 'Agrupa el sobrante en una tira larga reutilizable'
+    : 'Minimiza el desperdicio total'
 
 // Every action that used to sit in a toolbar, in one menu. Two toolbars were removed for this: the
 // page title's (fullscreen / drafts) and the pieces card header's (import / export / clear). What is
 // left on screen is only what gets used constantly — "Agregar material" at the end of the list and
 // the quick-entry input inside each group.
 //
-// Sections render only when their handlers are given, so pre-orders can reuse this without the
-// "Trabajo" section (drafts belong to the optimizer's scratch workspace, not to a saved quote).
+// Sections render only when their handlers are given, so the two pages that mount this share one
+// menu without sharing an action: the optimizer gets "Trabajo" (drafts belong to its scratch
+// workspace) and never "Documento"; the pre-order detail page gets "Documento" (proforma, review
+// link, delete — a saved quote is a document) and never "Trabajo".
 
 interface OptimizerActionsMenuProps {
   // --- Piezas ---
@@ -68,9 +85,19 @@ interface OptimizerActionsMenuProps {
   onSaveDraft?: () => void
   isSavingDraft?: boolean
   savedFlash?: boolean
+  // --- Documento (only a saved quote has these; the optimizer's workspace is not a document yet) ---
+  onProforma?: () => void
+  onReviewLink?: () => void
+  // "Generar enlace" the first time, "Regenerar enlace" once one exists.
+  reviewLinkLabel?: string
+  isLinkPending?: boolean
+  onViewOrder?: () => void
+  onDelete?: () => void
   // Fullscreen portal target: document.body sits outside the fullscreen element, so a menu portaled
   // there mounts but is never painted.
   container?: ModalContainer
+  // Placement class for the dropdown root, for call sites that need to push it within their own row.
+  className?: string
 }
 
 // Muted shortcut hint pushed to the right of an item's label.
@@ -105,12 +132,20 @@ const OptimizerActionsMenu = ({
   onSaveDraft,
   isSavingDraft,
   savedFlash,
+  onProforma,
+  onReviewLink,
+  reviewLinkLabel = 'Generar enlace',
+  isLinkPending,
+  onViewOrder,
+  onDelete,
   container,
+  className,
 }: OptimizerActionsMenuProps) => {
   const hasPieces = !!(onImport || onExport || onClear)
   const hasRun = !!(onOptimize || onStrategyChange)
   const hasView = !!(onToggleCollapseAll || onToggleFullscreen)
   const hasJob = !!(onNew || onOpenDrafts || onSaveDraft)
+  const hasDoc = !!(onProforma || onReviewLink || onViewOrder || onDelete)
 
   const handleClear = () => {
     const message = clearsMaterials
@@ -121,7 +156,7 @@ const OptimizerActionsMenu = ({
   }
 
   return (
-    <CDropdown alignment="end" portal container={container}>
+    <CDropdown alignment="end" portal container={container} className={className}>
       <CDropdownToggle color="secondary" variant="outline" caret={false} title="Acciones">
         <CIcon icon={cilOptions} />
       </CDropdownToggle>
@@ -196,9 +231,13 @@ const OptimizerActionsMenu = ({
             )}
             {onStrategyChange && (
               <>
-                <CDropdownHeader className="text-body-secondary small fw-normal fst-italic">
-                  Heurística
-                </CDropdownHeader>
+                {/* Sub-header only when there is a run item above it to be distinguished from;
+                    pre-orders pass the picker alone, and two stacked headings said nothing. */}
+                {onOptimize && (
+                  <CDropdownHeader className="text-body-secondary small fw-normal fst-italic">
+                    Heurística
+                  </CDropdownHeader>
+                )}
                 {STRATEGY_OPTIONS.map((o) => (
                   <CDropdownItem
                     key={o.value}
@@ -253,7 +292,7 @@ const OptimizerActionsMenu = ({
           </>
         )}
 
-        {hasView && hasJob && <CDropdownDivider />}
+        {(hasPieces || hasRun || hasView) && hasJob && <CDropdownDivider />}
 
         {hasJob && (
           <>
@@ -297,6 +336,67 @@ const OptimizerActionsMenu = ({
                 )}
                 {savedFlash ? 'Guardado' : 'Guardar borrador'}
                 <Hint>{`${KEY.mod}+S`}</Hint>
+              </CDropdownItem>
+            )}
+          </>
+        )}
+
+        {(hasPieces || hasRun || hasView || hasJob) && hasDoc && <CDropdownDivider />}
+
+        {/* Actions on the quote as a document rather than on its contents. These were four buttons
+            on the pre-order's header card; none of them is used often enough to hold a permanent
+            row, and "Eliminar" in particular should not be one click away from the save button. */}
+        {hasDoc && (
+          <>
+            <CDropdownHeader className="text-body-secondary small">Documento</CDropdownHeader>
+            {onProforma && (
+              <CDropdownItem
+                as="button"
+                type="button"
+                className="d-flex align-items-center"
+                onClick={onProforma}
+              >
+                <CIcon icon={cilCloudDownload} className="me-2" />
+                Proforma PDF
+              </CDropdownItem>
+            )}
+            {onReviewLink && (
+              <CDropdownItem
+                as="button"
+                type="button"
+                className="d-flex align-items-center"
+                disabled={isLinkPending}
+                onClick={onReviewLink}
+                title="Enlace público para que el cliente revise y apruebe la cotización"
+              >
+                {isLinkPending ? (
+                  <CSpinner size="sm" className="me-2" />
+                ) : (
+                  <CIcon icon={cilLink} className="me-2" />
+                )}
+                {reviewLinkLabel}
+              </CDropdownItem>
+            )}
+            {onViewOrder && (
+              <CDropdownItem
+                as="button"
+                type="button"
+                className="d-flex align-items-center"
+                onClick={onViewOrder}
+              >
+                <CIcon icon={cilExternalLink} className="me-2" />
+                Ver orden
+              </CDropdownItem>
+            )}
+            {onDelete && (
+              <CDropdownItem
+                as="button"
+                type="button"
+                className="d-flex align-items-center text-danger"
+                onClick={onDelete}
+              >
+                <CIcon icon={cilTrash} className="me-2" />
+                Eliminar…
               </CDropdownItem>
             )}
           </>
