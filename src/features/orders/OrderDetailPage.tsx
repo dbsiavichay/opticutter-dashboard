@@ -1,13 +1,8 @@
 import { useState } from 'react'
-import { Navigate, useNavigate, useParams } from 'react-router-dom'
+import { Navigate, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import {
   CAlert,
-  CBadge,
   CButton,
-  CCard,
-  CCardBody,
-  CCardHeader,
-  CCol,
   CFormInput,
   CFormLabel,
   CFormSelect,
@@ -19,106 +14,46 @@ import {
   CModalTitle,
   CProgress,
   CProgressBar,
-  CRow,
   CSpinner,
-  CTable,
-  CTableBody,
-  CTableDataCell,
-  CTableHead,
-  CTableHeaderCell,
-  CTableRow,
 } from '@coreui/react'
-import CIcon from '@coreui/icons-react'
-import { cilArrowLeft, cilExternalLink } from '@coreui/icons'
 
 import { useCurrentUser, useHasRole } from 'src/features/auth/useAuth'
 import { usePrintConsolidated } from 'src/features/print/usePrint'
 import { useActiveBranches } from 'src/features/branches/useBranches'
+import { WizardFooter } from 'src/features/optimizer/WizardSteps'
 import StatusHistoryTable from 'src/shared/components/StatusHistoryTable'
 import PricingBlock from 'src/shared/components/PricingBlock'
 import ReferenceNote from 'src/shared/components/ReferenceNote'
-import { stripHalfSuffix } from 'src/shared/utils/halfBoard'
 import { clientName, fmtDateTime, fmtMoney } from 'src/shared/utils/format'
 import type { PricingData } from 'src/features/optimizer/types'
 import OrderStatusBadge from './OrderStatusBadge'
-import BandingStatusBadge from './BandingStatusBadge'
+import OrderStatusStrip from './OrderStatusStrip'
+import OrderActionsMenu from './OrderActionsMenu'
+import OrderLinesTable from './OrderLinesTable'
+import OrderPiecesTable from './OrderPiecesTable'
+import OrderAttachmentsModal, { humanSize } from './OrderAttachmentsModal'
+import { attachmentsLocked, hasWorkshopPlan, transitionsFor } from './status'
+import type { StatusTransition } from './status'
 import {
   useAssociateInvoice,
   useAttachments,
   useChangeOrderBranch,
   useCuttingPlan,
-  useDeleteAttachment,
   useOrder,
   useUpdateOrderStatus,
-  useUploadAttachment,
 } from './useOrders'
 import { ordersApi } from './ordersApi'
 import type { OrderStatus } from './types'
 
-interface StatusTransition {
-  to: OrderStatus
-  label: string
-  color: string
-  roles: string[]
-}
-
-const TERMINAL_STATES: OrderStatus[] = ['despachado', 'cancelled']
-
-// States where the cutting plan is relevant: queued (interactive in the workshop) and beyond
-// (read-only, auditing what was cut).
-const WORKSHOP_STATES: OrderStatus[] = ['queued', 'cutting', 'cut', 'completed']
-
-// States where attachments are frozen (matches the backend 422 gate). Note this includes
-// `completed`, unlike TERMINAL_STATES which only covers despachado/cancelled.
-const ATTACHMENTS_LOCKED: OrderStatus[] = ['completed', 'despachado', 'cancelled']
-const ATTACH_MAX_MB = 10
-const ATTACH_TYPES = ['application/pdf', 'image/png', 'image/jpeg']
-const humanSize = (b: number) =>
-  b < 1024
-    ? `${b} B`
-    : b < 1_048_576
-      ? `${(b / 1024).toFixed(0)} KB`
-      : `${(b / 1_048_576).toFixed(1)} MB`
-
-const STATUS_TRANSITIONS: Partial<Record<OrderStatus, StatusTransition[]>> = {
-  confirmed: [
-    {
-      to: 'queued',
-      label: 'Poner en cola',
-      color: 'primary',
-      roles: ['administrador', 'vendedor'],
-    },
-    { to: 'cancelled', label: 'Cancelar', color: 'danger', roles: ['administrador', 'vendedor'] },
-  ],
-  queued: [
-    { to: 'cutting', label: 'Tomar orden', color: 'primary', roles: ['administrador', 'operador'] },
-  ],
-  cutting: [
-    {
-      to: 'cut',
-      label: 'Marcar como cortada',
-      color: 'primary',
-      roles: ['administrador', 'operador'],
-    },
-    { to: 'queued', label: 'Regresar a cola', color: 'secondary', roles: ['administrador'] },
-  ],
-  cut: [
-    {
-      to: 'completed',
-      label: 'Marcar como completada',
-      color: 'success',
-      roles: ['administrador', 'vendedor', 'operador', 'canteador'],
-    },
-  ],
-  completed: [
-    {
-      to: 'despachado',
-      label: 'Despachar',
-      color: 'success',
-      roles: ['administrador', 'vendedor'],
-    },
-  ],
-}
+// The order as one document on one surface, in the language the quote detail got in #83: an
+// identity block that is not a card, a one-line status strip, a single `.surface`, and a pinned
+// footer that carries the one action the page is for.
+//
+// What was here before: twelve `CCard`s. Seven of them announced their own name over content that
+// already draws its own borders ("Historial" above a table, "Anexos" above a table), four were
+// tinted status blocks that are one subject split four ways, and one — "Acciones" — put the status
+// transitions, "Cambiar sucursal" and two warning lines in a frame at the top of a page you had to
+// scroll past the whole cut list to leave.
 
 interface TransitionModalState {
   visible: boolean
@@ -138,17 +73,37 @@ const OrderDetailPage = () => {
 
   const currentUser = useCurrentUser()
   const { data: order, isLoading } = useOrder(id)
-  const cuttingPlan = useCuttingPlan(id, !!order && WORKSHOP_STATES.includes(order.status))
+  const cuttingPlan = useCuttingPlan(id, !!order && hasWorkshopPlan(order.status))
   const updateStatus = useUpdateOrderStatus()
   const associateInvoice = useAssociateInvoice()
   const changeBranch = useChangeOrderBranch()
   const printConsolidated = usePrintConsolidated()
   const { data: activeBranches = [] } = useActiveBranches()
+  // Only for the summary row's count; the dialog owns the upload and delete mutations. React Query
+  // serves both from the same `['orders', id, 'attachments']` entry.
   const attachments = useAttachments(id)
-  const uploadAtt = useUploadAttachment(id ?? '')
-  const deleteAtt = useDeleteAttachment(id ?? '')
 
-  const [attachError, setAttachError] = useState<string | null>(null)
+  // The cut-list panel lives in a search param, not in component state: `AppContent` keys its
+  // ErrorBoundary on `location.pathname`, so a sub-route would remount this page. A search param
+  // leaves `pathname` alone, which also makes the browser's Back button close the panel.
+  const [searchParams, setSearchParams] = useSearchParams()
+  const openPieces = () =>
+    setSearchParams((p) => {
+      p.set('panel', 'piezas')
+      return p
+    })
+  // `replace` so "Listo" does not stack a second history entry on top of the one that opened it.
+  const closePieces = () =>
+    setSearchParams(
+      (p) => {
+        p.delete('panel')
+        return p
+      },
+      { replace: true },
+    )
+
+  const [showHistory, setShowHistory] = useState(false)
+  const [showAttachments, setShowAttachments] = useState(false)
   const [transitionModal, setTransitionModal] = useState<TransitionModalState>({
     visible: false,
     transition: null,
@@ -269,23 +224,6 @@ const OrderDetailPage = () => {
     )
   }
 
-  // Client-side pre-check is UX only; the API is the authority and returns 422 on bad type/size.
-  const onPickFile = (file?: File | null) => {
-    if (!file) return
-    if (!ATTACH_TYPES.includes(file.type)) return setAttachError('Solo PDF, PNG o JPEG.')
-    if (file.size > ATTACH_MAX_MB * 1024 * 1024)
-      return setAttachError(`Máximo ${ATTACH_MAX_MB} MB.`)
-    setAttachError(null)
-    uploadAtt.reset()
-    uploadAtt.mutate(file)
-  }
-
-  const onDeleteAttachment = (attachmentId: number, filename: string) => {
-    if (!window.confirm(`¿Eliminar el anexo "${filename}"?`)) return
-    deleteAtt.reset()
-    deleteAtt.mutate(attachmentId)
-  }
-
   if (isOperator) {
     return <Navigate to={`/orders/${id}/workshop`} replace />
   }
@@ -302,16 +240,17 @@ const OrderDetailPage = () => {
     return <CAlert color="danger">Orden no encontrada.</CAlert>
   }
 
-  const transitions = (STATUS_TRANSITIONS[order.status] ?? []).filter((t) =>
-    t.roles.includes(currentUser?.role ?? ''),
-  )
+  const orderId = order.id
+  const transitions = transitionsFor(order.status, currentUser?.role)
+  // The forward move comes first in every row of the graph, so it is the footer's primary; the rest
+  // ("Cancelar", "Regresar a cola") ride beside it as outline buttons.
+  const [primary, ...secondary] = transitions
   const canChangeBranch = canManage && (order.status === 'confirmed' || order.status === 'queued')
   const branchOptions = activeBranches.filter((b) => b.id !== order.branch.id)
-  const isTerminal = TERMINAL_STATES.includes(order.status)
-  const attachmentsLocked = ATTACHMENTS_LOCKED.includes(order.status)
+  const locked = attachmentsLocked(order.status)
 
   const plan = cuttingPlan.data
-  const showProduction = WORKSHOP_STATES.includes(order.status)
+  const showProduction = hasWorkshopPlan(order.status)
   const piecesPending = plan ? plan.progress.totalPieces - plan.progress.cutPieces : 0
   // The API is the authoritative guard (returns 422 if pieces are missing); disabling the button is UX only.
   const cutGated = order.status === 'cutting' && !!plan && piecesPending > 0
@@ -322,553 +261,336 @@ const OrderDetailPage = () => {
   const planDone =
     !!plan && plan.progress.totalPieces > 0 && plan.progress.cutPieces >= plan.progress.totalPieces
 
-  // Banding block: visible when the order has edge banding. The cut → completed transition is blocked
-  // while banding is still pending/in-progress (API returns 422; disabling is UX only).
+  // Banding blocks the cut → completed transition while it is still pending/in-progress (API
+  // returns 422; disabling is UX only).
   const bandingPending = order.bandingStatus === 'pending' || order.bandingStatus === 'in_progress'
+
+  // What stops the primary action, in the words the two loose `text-warning` lines used to carry.
+  // `WizardFooter` shows the hint only while the button is disabled, which is exactly when they
+  // were rendered.
+  const blockedHint =
+    primary?.to === 'cut' && cutGated
+      ? `Faltan ${piecesPending} pieza(s) por cortar. Márcalas en el taller.`
+      : primary?.to === 'completed' && bandingPending
+        ? 'Falta terminar el canteado para poder completar la orden.'
+        : undefined
+
+  const pieces = order.pieces ?? []
+  const pieceUnits = pieces.reduce((sum, p) => sum + (p.quantity ?? 0), 0)
+  const piecesOpen = pieces.length > 0 && searchParams.get('panel') === 'piezas'
+
+  const files = attachments.data ?? []
+  const filesBytes = files.reduce((sum, a) => sum + a.sizeBytes, 0)
+
+  const cash = order.paymentCashAmount ?? 0
+  const credit = order.paymentCreditAmount ?? 0
+  const hasPayment = cash > 0 || credit > 0
+  const hasHistory = !!order.history && order.history.length > 0
 
   return (
     <>
-      <div className="d-flex align-items-center gap-2 mb-3">
-        <CButton
-          variant="ghost"
-          color="secondary"
-          size="sm"
-          onClick={() => void navigate('/orders')}
-        >
-          <CIcon icon={cilArrowLeft} className="me-1" />
-          Volver
-        </CButton>
+      {/* Identity. The breadcrumb already says "Órdenes", so this says which one. */}
+      <div className="d-flex align-items-start gap-2 mb-3">
+        <div className="min-w-0">
+          <div className="d-flex align-items-center gap-2">
+            <h5 className="mb-0">{order.code ?? 'Sin código'}</h5>
+            {/* The badge is the handle for the history: the history is the list of how the order
+                reached the status the badge is showing. */}
+            {hasHistory ? (
+              <button
+                type="button"
+                className="status-trigger"
+                title="Ver historial de estados"
+                onClick={() => setShowHistory(true)}
+              >
+                <OrderStatusBadge status={order.status} />
+              </button>
+            ) : (
+              <OrderStatusBadge status={order.status} />
+            )}
+          </div>
+          <div className="text-body-secondary small">
+            {clientName(order.client)}
+            {order.client?.identifier && <span> @{order.client.identifier}</span>}
+            {canManage && (
+              <span>
+                {' · '}
+                {order.branch.name}
+                {order.branch.code && ` (${order.branch.code})`}
+              </span>
+            )}
+            {order.externalInvoiceId && <span>{` · Factura ${order.externalInvoiceId}`}</span>}
+          </div>
+          <div className="text-body-secondary small">
+            Creada {fmtDateTime(order.createdAt)}
+            {order.confirmedAt && ` · Confirmada ${fmtDateTime(order.confirmedAt)}`}
+            {order.dispatchedAt && ` · Despachada ${fmtDateTime(order.dispatchedAt)}`}
+          </div>
+          {/* Reference inherited from the quote; read-only here (no endpoint edits it) and printed
+              on every PDF. */}
+          {order.notes?.trim() ? (
+            <ReferenceNote notes={order.notes} variant="header" />
+          ) : (
+            <span className="text-body-secondary small fst-italic">Sin referencia</span>
+          )}
+        </div>
+        <div className="ms-auto">
+          <OrderActionsMenu
+            onOrderPdf={() => void ordersApi.downloadOrderDocument(orderId)}
+            onProductionSheet={() => void ordersApi.downloadProductionSheet(orderId)}
+            onConsolidatedPdf={() => void ordersApi.downloadConsolidated(orderId)}
+            onDispatchSheet={
+              order.status === 'despachado'
+                ? () => void ordersApi.downloadDispatchSheet(orderId)
+                : undefined
+            }
+            onInvoice={
+              canManage && !order.externalInvoiceId ? () => setInvoiceModal(true) : undefined
+            }
+            onChangeBranch={canChangeBranch ? openBranchModal : undefined}
+          />
+        </div>
       </div>
 
-      {/* Header */}
-      <CCard className="mb-3">
-        <CCardBody>
-          <CRow className="g-3">
-            <CCol xs={12} md={6}>
-              <div className="d-flex align-items-center gap-2 mb-1">
-                <h5 className="mb-0">{order.code ?? 'Sin código'}</h5>
-                <OrderStatusBadge status={order.status} />
-              </div>
-              <div className="text-body-secondary small">
-                Cliente: <strong>{clientName(order.client)}</strong> (@{order.client?.identifier})
-              </div>
-              {canManage && (
-                <div className="text-body-secondary small">
-                  Sucursal: <strong>{order.branch.name}</strong>
-                  {order.branch.code && <span> ({order.branch.code})</span>}
-                </div>
-              )}
-              {/* Reference inherited from the quote (read-only here); also printed on every PDF. */}
-              <ReferenceNote notes={order.notes} variant="header" />
-            </CCol>
-            <CCol xs={12} md={6}>
-              <div className="small">
-                <div>
-                  <span className="text-body-secondary">Creado:</span>{' '}
-                  {fmtDateTime(order.createdAt)}
-                </div>
-                {order.confirmedAt && (
-                  <div>
-                    <span className="text-body-secondary">Confirmado:</span>{' '}
-                    {fmtDateTime(order.confirmedAt)}
-                  </div>
-                )}
-              </div>
-            </CCol>
-            <CCol xs={12}>
-              {order.subtotal != null && order.priceTierCode ? (
-                <PricingBlock
-                  pricing={
-                    {
-                      priceTierCode: order.priceTierCode,
-                      priceTierName: order.priceTierName ?? order.priceTierCode,
-                      discountRate: order.discountRate ?? 0,
-                      discountBase: order.subtotal,
-                      subtotal: order.subtotal,
-                      discountAmount: order.discountAmount ?? 0,
-                      total: order.total,
-                    } satisfies PricingData
-                  }
-                />
-              ) : (
-                <div className="fs-5 fw-semibold">Total: {fmtMoney(order.total)}</div>
-              )}
-              {order.externalInvoiceId && (
-                <div className="text-body-secondary small">
-                  Factura: <strong>{order.externalInvoiceId}</strong>
-                </div>
-              )}
-            </CCol>
-          </CRow>
-        </CCardBody>
-      </CCard>
+      {/* Where the order stands on both tracks — one line instead of four tinted cards. */}
+      <OrderStatusStrip
+        status={order.status}
+        assignedToLabel={order.assignedToLabel}
+        assignedAt={order.assignedAt}
+        dispatchedByLabel={order.dispatchedByLabel}
+        banding={{
+          status: order.bandingStatus,
+          startedByLabel: order.bandingStartedByLabel,
+          startedAt: order.bandingStartedAt,
+          finishedByLabel: order.bandingFinishedByLabel,
+          finishedAt: order.bandingFinishedAt,
+        }}
+      />
 
-      {/* Operator assignment (active cutting or post-cut audit) */}
-      {(order.status === 'cutting' || order.status === 'cut') && order.assignedToLabel && (
-        <CCard className="mb-3 border-warning">
-          <CCardBody className="bg-warning bg-opacity-10 py-2">
-            <div className="fw-semibold text-warning-emphasis mb-1">En corte</div>
-            <div className="small">
-              <span className="text-body-secondary">Operador:</span>{' '}
-              <strong>{order.assignedToLabel}</strong>
-            </div>
-            {order.assignedAt && (
-              <div className="small">
-                <span className="text-body-secondary">Desde:</span> {fmtDateTime(order.assignedAt)}
-              </div>
-            )}
-          </CCardBody>
-        </CCard>
-      )}
-
-      {/* Banding — parallel track to cutting. Hidden if the order has no edge banding. */}
-      {order.bandingStatus && order.bandingStatus !== 'not_applicable' && (
-        <CCard className="mb-3 border-info">
-          <CCardBody className="bg-info bg-opacity-10 py-2">
-            <div className="d-flex align-items-center gap-2 mb-1">
-              <span className="fw-semibold text-info-emphasis">Canteado</span>
-              <BandingStatusBadge status={order.bandingStatus} />
-            </div>
-            {order.bandingStartedByLabel && (
-              <div className="small">
-                <span className="text-body-secondary">Inició:</span>{' '}
-                <strong>{order.bandingStartedByLabel}</strong>
-                {order.bandingStartedAt && <span> · {fmtDateTime(order.bandingStartedAt)}</span>}
-              </div>
-            )}
-            {order.bandingFinishedByLabel && (
-              <div className="small">
-                <span className="text-body-secondary">Terminó:</span>{' '}
-                <strong>{order.bandingFinishedByLabel}</strong>
-                {order.bandingFinishedAt && <span> · {fmtDateTime(order.bandingFinishedAt)}</span>}
-              </div>
-            )}
-          </CCardBody>
-        </CCard>
-      )}
-
-      {/* Dispatch — fields frozen when transitioning to despachado */}
-      {order.status === 'despachado' && (
-        <CCard className="mb-3 border-success">
-          <CCardBody className="bg-success bg-opacity-10 py-2">
-            <div className="fw-semibold text-success-emphasis mb-1">Despachada</div>
-            {order.dispatchedByLabel && (
-              <div className="small">
-                <span className="text-body-secondary">Despachado por:</span>{' '}
-                <strong>{order.dispatchedByLabel}</strong>
-              </div>
-            )}
-            {order.dispatchedAt && (
-              <div className="small">
-                <span className="text-body-secondary">Fecha:</span>{' '}
-                {fmtDateTime(order.dispatchedAt)}
-              </div>
-            )}
-          </CCardBody>
-        </CCard>
-      )}
-
-      {/* Payment method — frozen at the confirmed → queued transition */}
-      {(order.paymentCashAmount != null || order.paymentCreditAmount != null) && (
-        <CCard className="mb-3 border-primary">
-          <CCardBody className="bg-primary bg-opacity-10 py-2">
-            <div className="fw-semibold text-primary-emphasis mb-1">Forma de pago</div>
-            {order.paymentCashAmount != null && order.paymentCashAmount > 0 && (
-              <div className="small">
-                <span className="text-body-secondary">Efectivo:</span>{' '}
-                <strong>{fmtMoney(order.paymentCashAmount)}</strong>
-              </div>
-            )}
-            {order.paymentCreditAmount != null && order.paymentCreditAmount > 0 && (
-              <div className="small">
-                <span className="text-body-secondary">A crédito:</span>{' '}
-                <strong>{fmtMoney(order.paymentCreditAmount)}</strong>
-              </div>
-            )}
-            <div className="small">
-              <span className="text-body-secondary">Total:</span>{' '}
-              <strong>
-                {fmtMoney((order.paymentCashAmount ?? 0) + (order.paymentCreditAmount ?? 0))}
-              </strong>
-            </div>
-          </CCardBody>
-        </CCard>
-      )}
-
-      {/* Status actions */}
-      {!isTerminal && (transitions.length > 0 || canChangeBranch) && (
-        <CCard className="mb-3">
-          <CCardHeader>
-            <strong>Acciones</strong>
-          </CCardHeader>
-          <CCardBody>
-            <div className="d-flex gap-2 flex-wrap">
-              {transitions.map((t) => {
-                const cutBlocked = t.to === 'cut' && cutGated
-                const bandingBlocked = t.to === 'completed' && bandingPending
-                const blocked = cutBlocked || bandingBlocked
-                const title = cutBlocked
-                  ? `Faltan ${piecesPending} pieza(s) por cortar`
-                  : bandingBlocked
-                    ? 'Falta terminar el canteado'
-                    : undefined
-                return (
-                  <CButton
-                    key={t.to}
-                    color={t.color}
-                    size="sm"
-                    disabled={blocked}
-                    title={title}
-                    onClick={() =>
-                      order.status === 'confirmed' && t.to === 'queued'
-                        ? openPayment()
-                        : openTransition(t)
-                    }
-                  >
-                    {t.label}
-                  </CButton>
-                )
-              })}
-            </div>
-            {canChangeBranch && (
-              <div className="mt-2">
-                <CButton color="secondary" variant="outline" size="sm" onClick={openBranchModal}>
-                  Cambiar sucursal
-                </CButton>
-              </div>
-            )}
-            {cutGated && (
-              <div className="text-warning small mt-2">
-                Faltan {piecesPending} pieza(s) por cortar. Márcalas en el taller para habilitar el
-                corte.
-              </div>
-            )}
-            {bandingPending && transitions.some((t) => t.to === 'completed') && (
-              <div className="text-warning small mt-2">
-                Falta terminar el canteado para poder completar la orden.
-              </div>
-            )}
-            {updateStatus.error && (
-              <div className="text-danger small mt-2">
-                {updateStatus.error.message || 'Error al cambiar estado.'}
-              </div>
-            )}
-          </CCardBody>
-        </CCard>
-      )}
-
-      {/* Producción / Taller */}
-      {showProduction && (
-        <CCard className="mb-3">
-          <CCardHeader>
-            <strong>Producción</strong>
-          </CCardHeader>
-          <CCardBody>
+      {/* One surface for the whole document. Each section carries a plain muted label or a summary
+          row instead of a card header. */}
+      <div className="surface">
+        {showProduction && (
+          <div className="d-flex flex-wrap align-items-center gap-2 border rounded-3 p-2 mb-3">
+            <span className="small text-body-secondary text-uppercase fw-semibold">Producción</span>
             {cuttingPlan.isLoading ? (
               <CSpinner size="sm" />
             ) : plan ? (
               <>
-                <div className="d-flex justify-content-between align-items-center mb-2">
-                  <span className="fw-semibold">
-                    {plan.progress.cutPieces} de {plan.progress.totalPieces} piezas cortadas
-                  </span>
-                  <span className="text-body-secondary small">{plan.boards.length} tablero(s)</span>
+                <span className="small">
+                  <strong>{plan.progress.cutPieces}</strong> de{' '}
+                  <strong>{plan.progress.totalPieces}</strong> piezas cortadas ·{' '}
+                  <strong>{plan.boards.length}</strong>{' '}
+                  {plan.boards.length === 1 ? 'tablero' : 'tableros'}
+                </span>
+                {/* Capped by a wrapper, not by `style` on the CProgress: CoreUI merges that prop
+                    into the child bar, where it overwrites the `width` the bar derives from
+                    `value` — the bar renders empty at any percentage. Capped at all because a
+                    finished order left to grow is a green bar the width of the page, which
+                    outshouts the counts it is only there to illustrate. */}
+                <div className="flex-grow-1" style={{ maxWidth: 200 }}>
+                  <CProgress height={6}>
+                    <CProgressBar value={planPct} color={planDone ? 'success' : 'primary'} />
+                  </CProgress>
                 </div>
-                <CProgress className="mb-3" height={12}>
-                  <CProgressBar value={planPct} color={planDone ? 'success' : 'primary'} />
-                </CProgress>
-                <CButton color="primary" onClick={() => void navigate(`/orders/${id}/workshop`)}>
+                <CButton
+                  size="sm"
+                  color="primary"
+                  variant="outline"
+                  className="ms-auto"
+                  onClick={() => void navigate(`/orders/${orderId}/workshop`)}
+                >
                   {order.status === 'queued' || order.status === 'cutting'
                     ? 'Abrir taller'
                     : 'Ver corte'}
                 </CButton>
               </>
             ) : (
-              <div className="text-body-secondary small">
+              <span className="small text-body-secondary">
                 {cuttingPlan.error?.message || 'No se pudo cargar el plan de corte.'}
-              </div>
-            )}
-          </CCardBody>
-        </CCard>
-      )}
-
-      {/* Lines */}
-      {order.lines?.length > 0 && (
-        <CCard className="mb-3">
-          <CCardHeader>
-            <strong>Líneas de cobro</strong>
-          </CCardHeader>
-          <CCardBody>
-            <CTable small responsive hover>
-              <CTableHead>
-                <CTableRow>
-                  <CTableHeaderCell className="bg-body-tertiary">Producto</CTableHeaderCell>
-                  <CTableHeaderCell className="bg-body-tertiary">Código</CTableHeaderCell>
-                  <CTableHeaderCell className="bg-body-tertiary text-end">Cant.</CTableHeaderCell>
-                  <CTableHeaderCell className="bg-body-tertiary text-end">
-                    Precio unit.
-                  </CTableHeaderCell>
-                  <CTableHeaderCell className="bg-body-tertiary text-end">
-                    Total línea
-                  </CTableHeaderCell>
-                  <CTableHeaderCell className="bg-body-tertiary text-end">
-                    Eficiencia avg
-                  </CTableHeaderCell>
-                  <CTableHeaderCell className="bg-body-tertiary text-end">Área m²</CTableHeaderCell>
-                </CTableRow>
-              </CTableHead>
-              <CTableBody>
-                {order.lines.map((l) => (
-                  <CTableRow key={l.id}>
-                    <CTableDataCell>
-                      {stripHalfSuffix(l.productName) ?? '—'}{' '}
-                      {l.halfBoard && <CBadge color="info">½ medio</CBadge>}
-                    </CTableDataCell>
-                    <CTableDataCell>{l.productCode ?? '—'}</CTableDataCell>
-                    <CTableDataCell className="text-end">{l.quantity}</CTableDataCell>
-                    <CTableDataCell className="text-end">
-                      {fmtMoney(l.unitPriceSnapshot)}
-                    </CTableDataCell>
-                    <CTableDataCell className="text-end">{fmtMoney(l.lineTotal)}</CTableDataCell>
-                    <CTableDataCell className="text-end">
-                      {l.avgEfficiency != null ? `${l.avgEfficiency.toFixed(1)}%` : '—'}
-                    </CTableDataCell>
-                    <CTableDataCell className="text-end">
-                      {l.totalAreaM2 != null ? `${l.totalAreaM2.toFixed(3)} m²` : '—'}
-                    </CTableDataCell>
-                  </CTableRow>
-                ))}
-              </CTableBody>
-            </CTable>
-          </CCardBody>
-        </CCard>
-      )}
-
-      {/* Pieces */}
-      {order.pieces && order.pieces.length > 0 && (
-        <CCard className="mb-3">
-          <CCardHeader>
-            <strong>Lista de corte</strong>
-          </CCardHeader>
-          <CCardBody>
-            <CTable small responsive hover>
-              <CTableHead>
-                <CTableRow>
-                  <CTableHeaderCell className="bg-body-tertiary">Etiqueta</CTableHeaderCell>
-                  <CTableHeaderCell className="bg-body-tertiary text-end">
-                    Largo (mm)
-                  </CTableHeaderCell>
-                  <CTableHeaderCell className="bg-body-tertiary text-end">
-                    Ancho (mm)
-                  </CTableHeaderCell>
-                  <CTableHeaderCell className="bg-body-tertiary text-end">Cant.</CTableHeaderCell>
-                  <CTableHeaderCell className="bg-body-tertiary text-end">
-                    Prioridad
-                  </CTableHeaderCell>
-                  <CTableHeaderCell className="bg-body-tertiary text-center">
-                    Puede rotar
-                  </CTableHeaderCell>
-                </CTableRow>
-              </CTableHead>
-              <CTableBody>
-                {order.pieces.map((p) => (
-                  <CTableRow key={p.id}>
-                    <CTableDataCell>{p.label ?? '—'}</CTableDataCell>
-                    <CTableDataCell className="text-end">{p.height}</CTableDataCell>
-                    <CTableDataCell className="text-end">{p.width}</CTableDataCell>
-                    <CTableDataCell className="text-end">{p.quantity}</CTableDataCell>
-                    <CTableDataCell className="text-end">{p.priority}</CTableDataCell>
-                    <CTableDataCell className="text-center">
-                      {p.canRotate ? 'Sí' : 'No'}
-                    </CTableDataCell>
-                  </CTableRow>
-                ))}
-              </CTableBody>
-            </CTable>
-          </CCardBody>
-        </CCard>
-      )}
-
-      {/* History — actor label + actor type badge; see StatusHistoryTable. The table renders bare,
-          so the card is this page's: it is one section among many here. */}
-      {order.history && order.history.length > 0 && (
-        <CCard className="mb-3">
-          <CCardHeader>
-            <strong>Historial</strong>
-          </CCardHeader>
-          <CCardBody>
-            <StatusHistoryTable
-              entries={order.history}
-              renderStatus={(s) => <OrderStatusBadge status={s as OrderStatus} />}
-            />
-          </CCardBody>
-        </CCard>
-      )}
-
-      {/* Documents & invoice — orders are created in confirmed state and always have documents. */}
-      <CCard className="mb-3">
-        <CCardHeader>
-          <strong>Documentos y factura</strong>
-        </CCardHeader>
-        <CCardBody>
-          <div className="d-flex gap-2 flex-wrap">
-            <CButton
-              color="secondary"
-              variant="outline"
-              size="sm"
-              onClick={() => {
-                if (id) void ordersApi.downloadOrderDocument(id)
-              }}
-            >
-              <CIcon icon={cilExternalLink} className="me-1" />
-              Orden de pedido PDF
-            </CButton>
-            <CButton
-              color="secondary"
-              variant="outline"
-              size="sm"
-              onClick={() => {
-                if (id) void ordersApi.downloadProductionSheet(id)
-              }}
-            >
-              <CIcon icon={cilExternalLink} className="me-1" />
-              Hoja de producción PDF
-            </CButton>
-            <CButton
-              color="secondary"
-              variant="outline"
-              size="sm"
-              onClick={() => {
-                if (id) void ordersApi.downloadConsolidated(id)
-              }}
-            >
-              <CIcon icon={cilExternalLink} className="me-1" />
-              PDF consolidado
-            </CButton>
-            {order.status === 'despachado' && (
-              <CButton
-                color="secondary"
-                variant="outline"
-                size="sm"
-                onClick={() => {
-                  if (id) void ordersApi.downloadDispatchSheet(id)
-                }}
-              >
-                <CIcon icon={cilExternalLink} className="me-1" />
-                Hoja de despacho PDF
-              </CButton>
-            )}
-            {canManage && (
-              <CButton
-                color="primary"
-                variant="outline"
-                size="sm"
-                disabled={!!order.externalInvoiceId}
-                onClick={() => setInvoiceModal(true)}
-              >
-                {order.externalInvoiceId ? 'Factura asociada' : 'Asociar factura'}
-              </CButton>
+              </span>
             )}
           </div>
-        </CCardBody>
-      </CCard>
+        )}
 
-      {/* Attachments (anexos) — upload/delete gated to admin/vendedor and non-terminal orders. */}
-      <CCard className="mb-3">
-        <CCardHeader>
-          <strong>Anexos</strong>
-        </CCardHeader>
-        <CCardBody>
-          {canManage && !attachmentsLocked && (
-            <div className="mb-3">
-              <CFormInput
-                type="file"
-                accept="application/pdf,image/png,image/jpeg"
-                disabled={uploadAtt.isPending}
-                onChange={(e) => {
-                  onPickFile(e.target.files?.[0])
-                  e.target.value = ''
-                }}
-              />
-              <div className="text-body-secondary small mt-1">
-                PDF, PNG o JPEG · máx {ATTACH_MAX_MB} MB.
-                {uploadAtt.isPending && <CSpinner size="sm" className="ms-2" />}
+        {/* The cut list as one line and a full-screen panel behind it. Rendering it inline meant a
+            two-hundred-piece order put two hundred rows between the header and the totals. */}
+        {pieces.length > 0 && (
+          <div className="d-flex flex-wrap align-items-center gap-2 border rounded-3 p-2 mb-3">
+            <span className="small text-body-secondary text-uppercase fw-semibold">
+              Lista de corte
+            </span>
+            <span className="small">
+              <strong>{pieces.length}</strong> {pieces.length === 1 ? 'pieza' : 'piezas'} ·{' '}
+              <strong>{pieceUnits}</strong> {pieceUnits === 1 ? 'unidad' : 'unidades'}
+            </span>
+            <CButton
+              size="sm"
+              color="primary"
+              variant="outline"
+              className="ms-auto"
+              onClick={openPieces}
+            >
+              Ver lista
+            </CButton>
+          </div>
+        )}
+
+        {order.lines?.length > 0 && (
+          <>
+            <div className="text-body-secondary small text-uppercase fw-semibold mb-2">
+              Líneas de cobro
+            </div>
+            <OrderLinesTable lines={order.lines} />
+          </>
+        )}
+
+        <div className="d-flex flex-wrap align-items-center gap-2 border rounded-3 p-2 mt-3">
+          <span className="small text-body-secondary text-uppercase fw-semibold">Anexos</span>
+          <span className="small">
+            {files.length === 0 ? (
+              <span className="text-body-secondary fst-italic">Sin anexos</span>
+            ) : (
+              <>
+                <strong>{files.length}</strong> {files.length === 1 ? 'archivo' : 'archivos'} ·{' '}
+                <strong>{humanSize(filesBytes)}</strong>
+              </>
+            )}
+          </span>
+          <CButton
+            size="sm"
+            color="primary"
+            variant="outline"
+            className="ms-auto"
+            onClick={() => setShowAttachments(true)}
+          >
+            {canManage && !locked ? 'Gestionar' : 'Ver'}
+          </CButton>
+        </div>
+
+        <hr className="my-4" />
+
+        {/* The totals, with how they were paid beside them — the same pairing the wizard uses for
+            the price tier. Payment is not a status, it is the money: reading "Total $840" and
+            "Efectivo $840" in two blocks a screen apart was the old layout's doing. */}
+        <div className="d-flex flex-wrap align-items-start gap-3">
+          {hasPayment && (
+            <div className="small">
+              <div className="text-body-secondary text-uppercase fw-semibold mb-1">
+                Forma de pago
               </div>
-              {(attachError || uploadAtt.error) && (
-                <div className="text-danger small mt-1">
-                  {attachError ?? uploadAtt.error?.message}
+              {cash > 0 && (
+                <div>
+                  <span className="text-body-secondary me-2">Efectivo:</span>
+                  <strong>{fmtMoney(cash)}</strong>
+                </div>
+              )}
+              {credit > 0 && (
+                <div>
+                  <span className="text-body-secondary me-2">A crédito:</span>
+                  <strong>{fmtMoney(credit)}</strong>
                 </div>
               )}
             </div>
           )}
-          {attachmentsLocked && (
-            <div className="text-body-secondary small mb-2">
-              La orden está cerrada: no se pueden agregar ni quitar anexos.
-            </div>
-          )}
-          {attachments.isLoading ? (
-            <CSpinner size="sm" />
-          ) : attachments.data && attachments.data.length > 0 ? (
-            <CTable small responsive hover className="mb-0 align-middle">
-              <CTableHead>
-                <CTableRow>
-                  <CTableHeaderCell>Archivo</CTableHeaderCell>
-                  <CTableHeaderCell>Tamaño</CTableHeaderCell>
-                  <CTableHeaderCell>Fecha</CTableHeaderCell>
-                  <CTableHeaderCell className="text-end">Acciones</CTableHeaderCell>
-                </CTableRow>
-              </CTableHead>
-              <CTableBody>
-                {attachments.data.map((att) => (
-                  <CTableRow key={att.id}>
-                    <CTableDataCell>
-                      <CBadge
-                        color={att.contentType === 'application/pdf' ? 'danger' : 'info'}
-                        className="me-2"
-                      >
-                        {att.contentType.split('/')[1]?.toUpperCase() ?? 'ARCHIVO'}
-                      </CBadge>
-                      {att.filename}
-                    </CTableDataCell>
-                    <CTableDataCell>{humanSize(att.sizeBytes)}</CTableDataCell>
-                    <CTableDataCell>{fmtDateTime(att.createdAt)}</CTableDataCell>
-                    <CTableDataCell className="text-end">
-                      <CButton
-                        color="secondary"
-                        variant="outline"
-                        size="sm"
-                        className="me-2"
-                        onClick={() => {
-                          if (id) void ordersApi.downloadAttachment(id, att.id)
-                        }}
-                      >
-                        <CIcon icon={cilExternalLink} className="me-1" />
-                        Ver
-                      </CButton>
-                      {canManage && !attachmentsLocked && (
-                        <CButton
-                          color="danger"
-                          variant="outline"
-                          size="sm"
-                          disabled={deleteAtt.isPending}
-                          onClick={() => onDeleteAttachment(att.id, att.filename)}
-                        >
-                          Borrar
-                        </CButton>
-                      )}
-                    </CTableDataCell>
-                  </CTableRow>
-                ))}
-              </CTableBody>
-            </CTable>
-          ) : (
-            <div className="text-body-secondary small">Sin anexos.</div>
-          )}
-          {deleteAtt.error && (
-            <div className="text-danger small mt-2">{deleteAtt.error.message}</div>
-          )}
-        </CCardBody>
-      </CCard>
+          {/* `ms-auto` on the block itself: with payment absent it is the only child of the row and
+              would otherwise sit on the left. */}
+          <div className="ms-auto">
+            {order.subtotal != null && order.priceTierCode ? (
+              <PricingBlock
+                pricing={
+                  {
+                    priceTierCode: order.priceTierCode,
+                    priceTierName: order.priceTierName ?? order.priceTierCode,
+                    discountRate: order.discountRate ?? 0,
+                    discountBase: order.subtotal,
+                    subtotal: order.subtotal,
+                    discountAmount: order.discountAmount ?? 0,
+                    total: order.total,
+                  } satisfies PricingData
+                }
+              />
+            ) : (
+              <div className="fs-5 fw-semibold">Total: {fmtMoney(order.total)}</div>
+            )}
+          </div>
+        </div>
+      </div>
+
+      {/* Pinned footer: leaving, and the status transitions that were a card at the top of the
+          page. It stays on a terminal order so "Volver a órdenes" is always in the same place. */}
+      <WizardFooter
+        onBack={() => void navigate('/orders')}
+        backLabel="Volver a órdenes"
+        onNext={
+          primary
+            ? () =>
+                order.status === 'confirmed' && primary.to === 'queued'
+                  ? openPayment()
+                  : openTransition(primary)
+            : undefined
+        }
+        nextLabel={primary?.label}
+        nextDisabled={
+          (primary?.to === 'cut' && cutGated) || (primary?.to === 'completed' && bandingPending)
+        }
+        nextHint={blockedHint}
+      >
+        {secondary.map((t) => (
+          <CButton
+            key={t.to}
+            color={t.color}
+            variant="outline"
+            type="button"
+            onClick={() => openTransition(t)}
+          >
+            {t.label}
+          </CButton>
+        ))}
+      </WizardFooter>
+
+      {/* The cut list, full screen. Read-only, so it needs no portal container: nothing inside it
+          opens a dropdown that would land under the dialog. */}
+      <CModal visible={piecesOpen} onClose={closePieces} fullscreen scrollable>
+        <CModalHeader>
+          <CModalTitle>Lista de corte · {order.code}</CModalTitle>
+        </CModalHeader>
+        <CModalBody>
+          {/* Capped and centred. Six columns stretched across a full-screen dialog put "Etiqueta"
+              and "Puede rotar" a whole screen apart, so reading one row means tracking it across
+              1400px of whitespace. */}
+          <div className="mx-auto" style={{ maxWidth: 880 }}>
+            <OrderPiecesTable pieces={pieces} maxHeight="calc(100dvh - 12rem)" />
+          </div>
+        </CModalBody>
+        <CModalFooter>
+          <CButton color="primary" onClick={closePieces}>
+            Listo
+          </CButton>
+        </CModalFooter>
+      </CModal>
+
+      {/* History, behind the status badge — something you go and check, not something you read on
+          the way to the totals. */}
+      <CModal visible={showHistory} onClose={() => setShowHistory(false)} size="lg" scrollable>
+        <CModalHeader>
+          <CModalTitle>Historial · {order.code}</CModalTitle>
+        </CModalHeader>
+        <CModalBody>
+          <StatusHistoryTable
+            entries={order.history ?? []}
+            renderStatus={(s) => <OrderStatusBadge status={s as OrderStatus} />}
+          />
+        </CModalBody>
+      </CModal>
+
+      <OrderAttachmentsModal
+        orderId={orderId}
+        visible={showAttachments}
+        onClose={() => setShowAttachments(false)}
+        locked={locked}
+        canManage={canManage}
+      />
 
       {/* Payment modal — confirmed → queued */}
       <CModal visible={paymentModal} onClose={closePayment}>
@@ -877,12 +599,10 @@ const OrderDetailPage = () => {
         </CModalHeader>
         <CModalBody>
           {(() => {
-            const cash = parseFloat(cashInput) || 0
-            const credit = parseFloat(creditInput) || 0
-            const sum = cash + credit
+            const entered = (parseFloat(cashInput) || 0) + (parseFloat(creditInput) || 0)
             const orderTotal = order.total
-            const empty = sum <= 0
-            const mismatch = !empty && Math.abs(sum - orderTotal) > 0.01
+            const empty = entered <= 0
+            const mismatch = !empty && Math.abs(entered - orderTotal) > 0.01
             return (
               <>
                 <div className="d-flex gap-2 mb-3">
@@ -918,7 +638,7 @@ const OrderDetailPage = () => {
                   />
                 </div>
                 <div className="fw-semibold small mb-3">
-                  Total ingresado: {fmtMoney(sum)} / Total de la orden: {fmtMoney(orderTotal)}
+                  Total ingresado: {fmtMoney(entered)} / Total de la orden: {fmtMoney(orderTotal)}
                 </div>
                 {empty && (
                   <div className="text-warning small mb-2">
@@ -958,10 +678,10 @@ const OrderDetailPage = () => {
             color="primary"
             onClick={confirmPayment}
             disabled={(() => {
-              const cash = parseFloat(cashInput) || 0
-              const credit = parseFloat(creditInput) || 0
-              const sum = cash + credit
-              return updateStatus.isPending || sum <= 0 || Math.abs(sum - order.total) > 0.01
+              const entered = (parseFloat(cashInput) || 0) + (parseFloat(creditInput) || 0)
+              return (
+                updateStatus.isPending || entered <= 0 || Math.abs(entered - order.total) > 0.01
+              )
             })()}
           >
             {updateStatus.isPending ? <CSpinner size="sm" /> : 'Confirmar'}
