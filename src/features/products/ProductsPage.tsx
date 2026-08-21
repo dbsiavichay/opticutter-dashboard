@@ -15,7 +15,6 @@ import {
   CCol,
   CFormSelect,
   CRow,
-  CSpinner,
   CTable,
   CTableBody,
   CTableDataCell,
@@ -26,15 +25,13 @@ import {
   CModalHeader,
   CModalTitle,
 } from '@coreui/react'
-import { cilCloudDownload, cilCloudUpload, cilPencil, cilPlus, cilTrash } from '@coreui/icons'
+import { cilPencil, cilPlus, cilSync, cilTrash } from '@coreui/icons'
 import { useCreateProduct, useDeleteProduct, useProducts, useUpdateProduct } from './useProducts'
 import { useState } from 'react'
 
 import CIcon from '@coreui/icons-react'
-import ImportProductsModal from './ImportProductsModal'
 import ProductForm from './ProductForm'
-import { exportProductsCsv } from './productsCsv'
-import { productsApi } from './productsApi'
+import SyncCatalogModal from './SyncCatalogModal'
 import { useHasRole } from 'src/features/auth/useAuth'
 import { useQueryClient } from '@tanstack/react-query'
 import { PAGE_SIZE } from 'src/shared/constants'
@@ -68,8 +65,7 @@ const ProductsPage = () => {
     visible: false,
     product: null,
   })
-  const [importModal, setImportModal] = useState(false)
-  const [isExporting, setIsExporting] = useState(false)
+  const [syncModal, setSyncModal] = useState(false)
 
   const queryParams: ProductListParams = { search, offset, limit: PAGE_SIZE }
   if (typeFilter) queryParams.type = typeFilter
@@ -109,24 +105,6 @@ const ProductsPage = () => {
   const handleDelete = () => {
     if (!deleteModal.product) return
     deleteMutation.mutate(deleteModal.product.id, { onSuccess: closeDelete })
-  }
-
-  const handleExport = async () => {
-    setIsExporting(true)
-    try {
-      const PAGE = 100
-      const all: Product[] = []
-      let offset = 0
-      while (true) {
-        const data = await productsApi.list({ ...queryParams, offset, limit: PAGE })
-        all.push(...data.items)
-        if (all.length >= data.pagination.total) break
-        offset += PAGE
-      }
-      exportProductsCsv(all)
-    } finally {
-      setIsExporting(false)
-    }
   }
 
   const isSubmitting = createMutation.isPending || updateMutation.isPending
@@ -276,24 +254,10 @@ const ProductsPage = () => {
                 color="secondary"
                 variant="outline"
                 size="sm"
-                onClick={() => void handleExport()}
-                disabled={isExporting}
+                onClick={() => setSyncModal(true)}
               >
-                {isExporting ? (
-                  <CSpinner size="sm" className="me-1" />
-                ) : (
-                  <CIcon icon={cilCloudDownload} className="me-1" />
-                )}
-                Exportar CSV
-              </CButton>
-              <CButton
-                color="secondary"
-                variant="outline"
-                size="sm"
-                onClick={() => setImportModal(true)}
-              >
-                <CIcon icon={cilCloudUpload} className="me-1" />
-                Importar CSV
+                <CIcon icon={cilSync} className="me-1" />
+                Sincronizar catálogo
               </CButton>
               <CButton color="primary" size="sm" onClick={openCreate}>
                 <CIcon icon={cilPlus} className="me-1" />
@@ -389,10 +353,10 @@ const ProductsPage = () => {
         acción no se puede deshacer.
       </DeleteConfirmModal>
 
-      <ImportProductsModal
-        visible={importModal}
-        onClose={() => setImportModal(false)}
-        onImported={() => void queryClient.invalidateQueries({ queryKey: ['products'] })}
+      <SyncCatalogModal
+        visible={syncModal}
+        onClose={() => setSyncModal(false)}
+        onSynced={() => void queryClient.invalidateQueries({ queryKey: ['products'] })}
       />
     </>
   )

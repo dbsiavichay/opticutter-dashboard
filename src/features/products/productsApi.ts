@@ -1,6 +1,12 @@
 import { httpClient } from 'src/shared/api/httpClient'
 import { createCrudApi } from 'src/shared/api/crudApi'
-import type { EdgeBandingProduct, Product, ProductListParams, ProductPayload } from './types'
+import type {
+  EdgeBandingProduct,
+  Product,
+  ProductListParams,
+  ProductPayload,
+  ProductSyncResult,
+} from './types'
 
 const BASE = '/api/v1/products'
 
@@ -32,5 +38,13 @@ export const productsApi = {
     return httpClient.get<EdgeBandingProduct[]>(
       `${BASE}/${boardId}/edge-bandings${query ? `?${query}` : ''}`,
     )
+  },
+  // Bulk upsert from the external inventory system's CSV export — distinct
+  // from the generic paste/file import above (different column shape, real
+  // server-side parsing, all-or-nothing validation with row-level errors).
+  syncCatalog: (file: File) => {
+    const form = new FormData()
+    form.append('file', file)
+    return httpClient.upload<ProductSyncResult>(`${BASE}/sync`, form)
   },
 }
