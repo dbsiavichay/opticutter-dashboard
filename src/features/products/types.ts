@@ -5,6 +5,7 @@ export interface BoardAttributes {
   width?: number
   thickness?: number
   grainDirection?: string
+  subtype?: string
   family?: string
 }
 
@@ -14,12 +15,15 @@ export interface EdgeBandingAttributes {
   length?: number
   bandType?: string
   color?: string
+  subtype?: string
   family?: string
+  alias?: string
 }
 
 interface ProductBase {
   id: string
   code: string
+  externalCode?: string | null
   name: string
   description?: string | null
   price: number
@@ -57,4 +61,12 @@ export interface ProductPayload {
   price: number
   isActive?: boolean
   attributes: BoardAttributes | EdgeBandingAttributes
+}
+
+export interface ProductSyncResult {
+  created: number
+  updated: number
+  deactivated: number
+  deleted: number
+  skippedMedio: number
 }

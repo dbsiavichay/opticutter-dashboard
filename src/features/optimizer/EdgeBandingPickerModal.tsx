@@ -41,7 +41,7 @@ interface EdgeBandingPickerModalProps {
 }
 
 const attrText = (p: EdgeBandingProduct): string =>
-  `${p.name} ${p.code} ${p.attributes.color ?? ''} ${p.attributes.family ?? ''}`
+  `${p.name} ${p.code} ${p.attributes.color ?? ''} ${p.attributes.family ?? ''} ${p.attributes.alias ?? ''}`
 
 const num = (n?: number): string => (n == null ? '—' : String(n))
 

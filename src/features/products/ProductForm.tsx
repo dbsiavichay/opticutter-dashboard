@@ -17,6 +17,7 @@ import {
 
 import { ApiError } from 'src/shared/api/types'
 import FieldError from 'src/shared/components/FieldError'
+import { BOARD_SUBTYPES, EDGE_BANDING_SUBTYPES } from './productSubtypes'
 import type { Product, ProductPayload, ProductType } from './types'
 
 const TYPES: { value: ProductType; label: string }[] = [
@@ -32,7 +33,9 @@ interface AttrsForm {
   bandType?: string
   color?: string
   length?: number | string
+  subtype?: string
   family?: string
+  alias?: string
 }
 
 interface ProductFormState {
@@ -48,6 +51,7 @@ const EMPTY_BOARD_ATTRS: AttrsForm = {
   width: '',
   thickness: '',
   grainDirection: '',
+  subtype: '',
   family: '',
 }
 const EMPTY_EDGE_ATTRS: AttrsForm = {
@@ -56,7 +60,9 @@ const EMPTY_EDGE_ATTRS: AttrsForm = {
   bandType: '',
   color: '',
   length: '',
+  subtype: '',
   family: '',
+  alias: '',
 }
 
 const initAttrs = (product: Product | null): AttrsForm => {
@@ -68,6 +74,7 @@ const initAttrs = (product: Product | null): AttrsForm => {
       width: a.width ?? '',
       thickness: a.thickness ?? '',
       grainDirection: a.grainDirection ?? '',
+      subtype: a.subtype ?? '',
       family: a.family ?? '',
     }
   }
@@ -78,7 +85,9 @@ const initAttrs = (product: Product | null): AttrsForm => {
     bandType: a.bandType ?? '',
     color: a.color ?? '',
     length: a.length ?? '',
+    subtype: a.subtype ?? '',
     family: a.family ?? '',
+    alias: a.alias ?? '',
   }
 }
 
@@ -145,6 +154,7 @@ const ProductForm = ({ product, onSubmit, onCancel, isSubmitting, error }: Produ
             width: Number(attrs.width),
             thickness: Number(attrs.thickness),
             grainDirection: attrs.grainDirection || null,
+            subtype: attrs.subtype || undefined,
             family: attrs.family?.trim() || undefined,
           }
         : {
@@ -153,7 +163,9 @@ const ProductForm = ({ product, onSubmit, onCancel, isSubmitting, error }: Produ
             bandType: attrs.bandType || null,
             color: attrs.color || null,
             length: attrs.length ? Number(attrs.length) : null,
+            subtype: attrs.subtype || undefined,
             family: attrs.family?.trim() || undefined,
+            alias: attrs.alias?.trim() || undefined,
           }
 
     onSubmit({
@@ -288,11 +300,15 @@ const ProductForm = ({ product, onSubmit, onCancel, isSubmitting, error }: Produ
                 <CFormLabel>
                   Grosor (mm) <span className="text-danger">*</span>
                 </CFormLabel>
-                <CFormSelect value={attrs.thickness} onChange={setAttr('thickness')} required>
-                  <option value="">Seleccionar…</option>
-                  <option value="15">15 mm</option>
-                  <option value="36">36 mm</option>
-                </CFormSelect>
+                <CFormInput
+                  type="number"
+                  value={attrs.thickness}
+                  onChange={setAttr('thickness')}
+                  required
+                  min={1}
+                  step={1}
+                  placeholder="15"
+                />
                 <FieldError name="thickness" errors={fieldErrors} />
               </CCol>
               <CCol xs={6}>
@@ -306,6 +322,18 @@ const ProductForm = ({ product, onSubmit, onCancel, isSubmitting, error }: Produ
                 <FieldError name="grainDirection" errors={fieldErrors} />
               </CCol>
               <CCol xs={6}>
+                <CFormLabel>Subtipo</CFormLabel>
+                <CFormSelect value={attrs.subtype} onChange={setAttr('subtype')}>
+                  <option value="">Sin especificar</option>
+                  {BOARD_SUBTYPES.map((s) => (
+                    <option key={s} value={s}>
+                      {s}
+                    </option>
+                  ))}
+                </CFormSelect>
+                <FieldError name="subtype" errors={fieldErrors} />
+              </CCol>
+              <CCol xs={12}>
                 <CFormLabel>Familia</CFormLabel>
                 <CFormInput
                   value={attrs.family}
@@ -331,23 +359,30 @@ const ProductForm = ({ product, onSubmit, onCancel, isSubmitting, error }: Produ
                 <CFormLabel>
                   Grosor (mm) <span className="text-danger">*</span>
                 </CFormLabel>
-                <CFormSelect value={attrs.thickness} onChange={setAttr('thickness')} required>
-                  <option value="">Seleccionar…</option>
-                  <option value="0.45">0.45 mm</option>
-                  <option value="1.0">1.0 mm</option>
-                  <option value="1.5">1.5 mm</option>
-                </CFormSelect>
+                <CFormInput
+                  type="number"
+                  value={attrs.thickness}
+                  onChange={setAttr('thickness')}
+                  required
+                  min={0.01}
+                  step={0.01}
+                  placeholder="0.45"
+                />
                 <FieldError name="thickness" errors={fieldErrors} />
               </CCol>
               <CCol xs={4}>
                 <CFormLabel>
                   Ancho (mm) <span className="text-danger">*</span>
                 </CFormLabel>
-                <CFormSelect value={attrs.width} onChange={setAttr('width')} required>
-                  <option value="">Seleccionar…</option>
-                  <option value="19">19 mm</option>
-                  <option value="40">40 mm</option>
-                </CFormSelect>
+                <CFormInput
+                  type="number"
+                  value={attrs.width}
+                  onChange={setAttr('width')}
+                  required
+                  min={1}
+                  step={1}
+                  placeholder="19"
+                />
                 <FieldError name="width" errors={fieldErrors} />
               </CCol>
               <CCol xs={4}>
@@ -381,7 +416,19 @@ const ProductForm = ({ product, onSubmit, onCancel, isSubmitting, error }: Produ
                 />
                 <FieldError name="length" errors={fieldErrors} />
               </CCol>
-              <CCol xs={12}>
+              <CCol xs={6}>
+                <CFormLabel>Subtipo</CFormLabel>
+                <CFormSelect value={attrs.subtype} onChange={setAttr('subtype')}>
+                  <option value="">Sin especificar</option>
+                  {EDGE_BANDING_SUBTYPES.map((s) => (
+                    <option key={s} value={s}>
+                      {s}
+                    </option>
+                  ))}
+                </CFormSelect>
+                <FieldError name="subtype" errors={fieldErrors} />
+              </CCol>
+              <CCol xs={6}>
                 <CFormLabel>Familia</CFormLabel>
                 <CFormInput
                   value={attrs.family}
@@ -390,9 +437,22 @@ const ProductForm = ({ product, onSubmit, onCancel, isSubmitting, error }: Produ
                   placeholder="Ej: CASHMERE"
                 />
                 <small className="text-body-secondary">
-                  Debe coincidir con la familia del tablero para coordinarlos.
+                  Para coordinar con el tablero (no se imprime en documentos).
                 </small>
                 <FieldError name="family" errors={fieldErrors} />
+              </CCol>
+              <CCol xs={6}>
+                <CFormLabel>Alias</CFormLabel>
+                <CFormInput
+                  value={attrs.alias}
+                  onChange={setAttr('alias')}
+                  maxLength={20}
+                  placeholder="Ej: CSH"
+                />
+                <small className="text-body-secondary">
+                  Código corto impreso en la notación de despiece/documentos.
+                </small>
+                <FieldError name="alias" errors={fieldErrors} />
               </CCol>
             </>
           )}
