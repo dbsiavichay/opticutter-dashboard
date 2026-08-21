@@ -44,7 +44,10 @@ export interface EdgeBandingProduct extends ProductBase {
 export type Product = BoardProduct | EdgeBandingProduct
 
 export interface ProductListParams {
-  type?: ProductType
+  // One or more types/subtypes; with multiple, `toQuery` sends repeated params
+  // (?type=a&type=b), same convention as orders' `status`.
+  type?: ProductType[]
+  subtype?: string[]
   search?: string
   offset?: number
   limit?: number
