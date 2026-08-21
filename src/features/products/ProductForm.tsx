@@ -17,7 +17,7 @@ import {
 
 import { ApiError } from 'src/shared/api/types'
 import FieldError from 'src/shared/components/FieldError'
-import { BOARD_SUBTYPES, EDGE_BANDING_SUBTYPES } from './productSubtypes'
+import { BOARD_SUBTYPES, EDGE_BANDING_SUBTYPES, subtypeLabel } from './productSubtypes'
 import type { Product, ProductPayload, ProductType } from './types'
 
 const TYPES: { value: ProductType; label: string }[] = [
@@ -327,7 +327,7 @@ const ProductForm = ({ product, onSubmit, onCancel, isSubmitting, error }: Produ
                   <option value="">Sin especificar</option>
                   {BOARD_SUBTYPES.map((s) => (
                     <option key={s} value={s}>
-                      {s}
+                      {subtypeLabel(s)}
                     </option>
                   ))}
                 </CFormSelect>
@@ -422,7 +422,7 @@ const ProductForm = ({ product, onSubmit, onCancel, isSubmitting, error }: Produ
                   <option value="">Sin especificar</option>
                   {EDGE_BANDING_SUBTYPES.map((s) => (
                     <option key={s} value={s}>
-                      {s}
+                      {subtypeLabel(s)}
                     </option>
                   ))}
                 </CFormSelect>
