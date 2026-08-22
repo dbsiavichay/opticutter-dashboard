@@ -1,3 +1,5 @@
+import type { ListSort } from 'src/shared/components/FilterSortSection'
+
 // Printing switches: whether the branch's shop has a thermal label printer and/or a sheet
 // printer. They gate the automatic dispatches to the local print agent — the backend skips
 // the enqueue regardless, this just avoids firing a request that would do nothing.
@@ -47,6 +49,10 @@ export interface BranchUpdatePayload {
 
 export interface BranchListParams {
   search?: string
+  // Omit to list active and inactive alike — a branch is retired by unsetting this, never deleted,
+  // so hiding the inactive ones by default would make them unreachable.
+  isActive?: boolean
+  sort?: ListSort
   offset?: number
   limit?: number
 }

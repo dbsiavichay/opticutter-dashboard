@@ -2,9 +2,6 @@ import { useMemo, useState } from 'react'
 import {
   CBadge,
   CButton,
-  CCard,
-  CCardBody,
-  CCardHeader,
   CModal,
   CModalHeader,
   CModalTitle,
@@ -16,20 +13,30 @@ import {
   CTableRow,
 } from '@coreui/react'
 import CIcon from '@coreui/icons-react'
-import { cilPencil, cilPlus, cilTrash } from '@coreui/icons'
+import { cilPlus, cilTrash } from '@coreui/icons'
 
 import UserForm from './UserForm'
 import { useUsers, useCreateUser, useDeleteUser, useUpdateUser } from './useUsers'
 import { useBranches } from 'src/features/branches/useBranches'
-import type { User } from 'src/features/auth/types'
+import UsersFilters, {
+  activeCount,
+  useUsersFilterChips,
+  type UsersFilterValues,
+} from './UsersFilters'
+import type { Role, User } from 'src/features/auth/types'
 import type { UserPayload, UserUpdatePayload } from './types'
 import { ROLE_BADGE_CONFIG } from 'src/features/auth/roleLabels'
-import { PAGE_SIZE } from 'src/shared/constants'
 import SearchInput from 'src/shared/components/SearchInput'
+import FilterChips from 'src/shared/components/FilterChips'
 import Pagination from 'src/shared/components/Pagination'
 import QueryState from 'src/shared/components/QueryState'
 import DeleteConfirmModal from 'src/shared/components/DeleteConfirmModal'
 import StatusBadge from 'src/shared/components/StatusBadge'
+import type { ListSort } from 'src/shared/components/FilterSortSection'
+import { useListParams } from 'src/shared/hooks/useListParams'
+
+// Filter fields that live in the URL. `q` is the search box; the rest are the panel's.
+const FILTER_KEYS = ['q', 'role', 'branchId', 'isActive']
 
 interface ModalState {
   visible: boolean
@@ -37,25 +44,41 @@ interface ModalState {
 }
 
 const UsersPage = () => {
-  const [search, setSearch] = useState('')
-  const [offset, setOffset] = useState(0)
-  const [limit, setLimit] = useState(PAGE_SIZE)
+  const { getParam, getParams, setParam, clearParams, offset, setOffset, limit, setLimit } =
+    useListParams()
 
-  // Growing the page size invalidates the current page number, so both move together.
-  const handleLimitChange = (next: number) => {
-    setLimit(next)
-    setOffset(0)
+  const search = getParam('q')
+  const values: UsersFilterValues = {
+    role: getParams('role') as Role[],
+    branchId: getParam('branchId'),
+    isActive: getParam('isActive'),
+    sort: (getParam('sort') || 'name') as ListSort,
   }
+
+  const handleChange = <K extends keyof UsersFilterValues>(key: K, value: UsersFilterValues[K]) => {
+    setParam(key, value)
+  }
+  const handleClear = () => clearParams(FILTER_KEYS)
+
+  const chips = useUsersFilterChips(values, handleChange)
+  const isFiltered = activeCount(values) > 0 || search !== ''
+
   const [formModal, setFormModal] = useState<ModalState>({ visible: false, user: null })
   const [deleteModal, setDeleteModal] = useState<ModalState>({ visible: false, user: null })
 
+  // Built inline, not memoised: React Query hashes the query key structurally, so a fresh object
+  // with the same contents is the same key and does not refetch.
   const {
     data: usersData,
     isLoading,
     isError,
     refetch,
   } = useUsers({
-    search,
+    search: search || undefined,
+    role: values.role.length ? values.role : undefined,
+    branchId: values.branchId ? Number(values.branchId) : undefined,
+    isActive: values.isActive ? values.isActive === 'true' : undefined,
+    sort: values.sort,
     offset,
     limit,
   })
@@ -71,11 +94,6 @@ const UsersPage = () => {
   const createMutation = useCreateUser()
   const updateMutation = useUpdateUser()
   const deleteMutation = useDeleteUser()
-
-  const handleSearch = (value: string) => {
-    setSearch(value)
-    setOffset(0)
-  }
 
   const openCreate = () => setFormModal({ visible: true, user: null })
   const openEdit = (user: User) => setFormModal({ visible: true, user })
@@ -106,98 +124,108 @@ const UsersPage = () => {
 
   return (
     <>
-      <CCard>
-        <CCardHeader className="d-flex justify-content-between align-items-center">
-          <strong>Usuarios</strong>
-          <CButton color="primary" size="sm" onClick={openCreate}>
+      <div className="surface">
+        <div className="d-flex flex-wrap align-items-center gap-2 mb-3">
+          <SearchInput
+            value={search}
+            // `replace`: one history entry per settled keystroke would bury the page behind the list.
+            onChange={(value) => setParam('q', value, { replace: true })}
+            placeholder="Buscar por nombre o email…"
+            className="flex-grow-1"
+            style={{ maxWidth: 360 }}
+          />
+          <UsersFilters values={values} onChange={handleChange} onClear={handleClear} />
+          <CButton color="primary" className="ms-auto" onClick={openCreate}>
             <CIcon icon={cilPlus} className="me-1" />
             Nuevo usuario
           </CButton>
-        </CCardHeader>
-        <CCardBody>
-          <SearchInput
-            onChange={handleSearch}
-            placeholder="Buscar por nombre o email…"
-            className="mb-3"
-            style={{ maxWidth: 320 }}
-          />
+        </div>
 
-          <QueryState isLoading={isLoading} isError={isError} onRetry={() => void refetch()}>
-            <CTable align="middle" hover responsive>
-              <CTableHead>
+        <FilterChips chips={chips} onClearAll={handleClear} />
+
+        <QueryState isLoading={isLoading} isError={isError} onRetry={() => void refetch()}>
+          <CTable align="middle" hover responsive className="list-table">
+            <CTableHead>
+              <CTableRow>
+                <CTableHeaderCell>ID</CTableHeaderCell>
+                <CTableHeaderCell>Email</CTableHeaderCell>
+                <CTableHeaderCell>Nombre</CTableHeaderCell>
+                <CTableHeaderCell>Rol</CTableHeaderCell>
+                <CTableHeaderCell>Sucursal</CTableHeaderCell>
+                <CTableHeaderCell>Estado</CTableHeaderCell>
+                <CTableHeaderCell />
+              </CTableRow>
+            </CTableHead>
+            <CTableBody>
+              {users.length === 0 ? (
                 <CTableRow>
-                  <CTableHeaderCell className="bg-body-tertiary">ID</CTableHeaderCell>
-                  <CTableHeaderCell className="bg-body-tertiary">Email</CTableHeaderCell>
-                  <CTableHeaderCell className="bg-body-tertiary">Nombre</CTableHeaderCell>
-                  <CTableHeaderCell className="bg-body-tertiary">Rol</CTableHeaderCell>
-                  <CTableHeaderCell className="bg-body-tertiary">Sucursal</CTableHeaderCell>
-                  <CTableHeaderCell className="bg-body-tertiary">Estado</CTableHeaderCell>
-                  <CTableHeaderCell className="bg-body-tertiary" />
+                  {/* Two different dead ends: an empty catalog is a fact, an over-narrow filter is
+                      a place the user needs a way out of. */}
+                  <CTableDataCell colSpan={7} className="text-center text-body-secondary py-5">
+                    {isFiltered ? (
+                      <>
+                        <div>Ningún usuario coincide con los filtros.</div>
+                        <CButton color="link" size="sm" onClick={handleClear}>
+                          Limpiar filtros
+                        </CButton>
+                      </>
+                    ) : (
+                      'Aún no hay usuarios.'
+                    )}
+                  </CTableDataCell>
                 </CTableRow>
-              </CTableHead>
-              <CTableBody>
-                {users.length === 0 ? (
-                  <CTableRow>
-                    <CTableDataCell colSpan={7} className="text-center text-body-secondary py-5">
-                      Sin resultados
+              ) : (
+                users.map((u) => (
+                  <CTableRow key={u.id} onClick={() => openEdit(u)}>
+                    <CTableDataCell className="text-body-secondary">{u.id}</CTableDataCell>
+                    <CTableDataCell>{u.email}</CTableDataCell>
+                    <CTableDataCell>{u.fullName ?? '—'}</CTableDataCell>
+                    <CTableDataCell>
+                      <StatusBadge config={ROLE_BADGE_CONFIG} value={u.role} />
+                    </CTableDataCell>
+                    <CTableDataCell>
+                      {u.role === 'administrador'
+                        ? 'Global'
+                        : u.branchId != null
+                          ? (branchName.get(u.branchId) ?? '—')
+                          : '—'}
+                    </CTableDataCell>
+                    <CTableDataCell>
+                      <CBadge color={u.isActive ? 'success' : 'secondary'}>
+                        {u.isActive ? 'Activo' : 'Inactivo'}
+                      </CBadge>
+                    </CTableDataCell>
+                    <CTableDataCell className="text-end text-nowrap">
+                      {/* The row opens the editor, so only the destructive action keeps a button —
+                          and it must not also open it on the way. */}
+                      <CButton
+                        variant="ghost"
+                        color="danger"
+                        size="sm"
+                        aria-label={`Eliminar ${u.fullName ?? u.email}`}
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          openDelete(u)
+                        }}
+                      >
+                        <CIcon icon={cilTrash} />
+                      </CButton>
                     </CTableDataCell>
                   </CTableRow>
-                ) : (
-                  users.map((u) => (
-                    <CTableRow key={u.id}>
-                      <CTableDataCell className="text-body-secondary">{u.id}</CTableDataCell>
-                      <CTableDataCell>{u.email}</CTableDataCell>
-                      <CTableDataCell>{u.fullName ?? '—'}</CTableDataCell>
-                      <CTableDataCell>
-                        <StatusBadge config={ROLE_BADGE_CONFIG} value={u.role} />
-                      </CTableDataCell>
-                      <CTableDataCell>
-                        {u.role === 'administrador'
-                          ? 'Global'
-                          : u.branchId != null
-                            ? (branchName.get(u.branchId) ?? '—')
-                            : '—'}
-                      </CTableDataCell>
-                      <CTableDataCell>
-                        <CBadge color={u.isActive ? 'success' : 'secondary'}>
-                          {u.isActive ? 'Activo' : 'Inactivo'}
-                        </CBadge>
-                      </CTableDataCell>
-                      <CTableDataCell className="text-end text-nowrap">
-                        <CButton
-                          variant="ghost"
-                          color="secondary"
-                          size="sm"
-                          onClick={() => openEdit(u)}
-                        >
-                          <CIcon icon={cilPencil} />
-                        </CButton>
-                        <CButton
-                          variant="ghost"
-                          color="danger"
-                          size="sm"
-                          className="ms-1"
-                          onClick={() => openDelete(u)}
-                        >
-                          <CIcon icon={cilTrash} />
-                        </CButton>
-                      </CTableDataCell>
-                    </CTableRow>
-                  ))
-                )}
-              </CTableBody>
-            </CTable>
-          </QueryState>
+                ))
+              )}
+            </CTableBody>
+          </CTable>
+        </QueryState>
 
-          <Pagination
-            offset={offset}
-            limit={limit}
-            total={pagination?.total}
-            onChange={setOffset}
-            onLimitChange={handleLimitChange}
-          />
-        </CCardBody>
-      </CCard>
+        <Pagination
+          offset={offset}
+          limit={limit}
+          total={pagination?.total}
+          onChange={setOffset}
+          onLimitChange={setLimit}
+        />
+      </div>
 
       <CModal visible={formModal.visible} onClose={closeForm} backdrop="static">
         <CModalHeader>

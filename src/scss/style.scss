@@ -473,11 +473,19 @@ input[type='number'] {
     white-space: nowrap;
   }
 
-  // Rows open their record. The cursor belongs here, not in an inline style repeated per page, and
-  // the hover is an alpha of the accent so one declaration serves both themes.
+  // Rows open their record — on every listing: the ones with a detail page navigate to it, the
+  // CRUD ones open their edit modal. The cursor belongs here, not in an inline style repeated per
+  // page, and the hover is an alpha of the accent so one declaration serves both themes.
   > tbody > tr {
     cursor: pointer;
     --cui-table-hover-bg: rgba(var(--cui-primary-rgb), 0.06);
+  }
+
+  // ...except where the row genuinely does nothing: a read-only role has no edit modal to open, and
+  // a hand cursor that promises one is a lie. Opt out rather than opt in, since clickable is now
+  // the rule on all eight listings.
+  &.rows-static > tbody > tr {
+    cursor: default;
   }
 }
 
