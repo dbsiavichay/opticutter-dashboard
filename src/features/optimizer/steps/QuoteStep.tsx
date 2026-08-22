@@ -19,9 +19,8 @@ import CIcon from '@coreui/icons-react'
 import { cilCart, cilUserPlus } from '@coreui/icons'
 
 import ClientForm from 'src/features/clients/ClientForm'
-import { useCreateClient, useUpdateClient } from 'src/features/clients/useClients'
+import { useClientsMin, useCreateClient, useUpdateClient } from 'src/features/clients/useClients'
 import type { Client, ClientPayload } from 'src/features/clients/types'
-import { useClientsMin } from 'src/features/orders/useOrders'
 import { useCreatePreOrder } from 'src/features/preorders/usePreOrders'
 import {
   buildServiceLines,

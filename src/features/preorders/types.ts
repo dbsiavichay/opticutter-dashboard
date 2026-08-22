@@ -17,11 +17,23 @@ export type PreOrderStatus =
   | 'expired'
   | 'cancelled'
 
+// Listing order. Unlike orders — whose backend defaults to `oldest` because the workshop reads that
+// listing FIFO — this one defaults to `recent` on both sides: nothing reads quotes in arrival order.
+export type PreOrderSort = 'oldest' | 'recent'
+
 export interface PreOrderListParams {
-  status?: PreOrderStatus
+  // One or more statuses; with multiple the backend receives repeated `status` params.
+  status?: PreOrderStatus | PreOrderStatus[]
   clientId?: number
   // Effective filter for global roles (admin and vendedor); operador is always scoped to their branch.
   branchId?: number
+  // Quote code or id, or the client's identifier / first / last name.
+  search?: string
+  // Inclusive day bounds on createdAt, as `YYYY-MM-DD`. The backend compares them against a
+  // UTC-naive column, so the cut is a UTC day (see "UTC-naive timestamps" in CLAUDE.md).
+  createdFrom?: string
+  createdTo?: string
+  sort?: PreOrderSort
   offset?: number
   limit?: number
 }
