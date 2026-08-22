@@ -71,6 +71,13 @@ const ProductsPage = () => {
   const [typeFilter, setTypeFilter] = useState<ProductType[]>([])
   const [subtypeFilter, setSubtypeFilter] = useState<string[]>([])
   const [offset, setOffset] = useState(0)
+  const [limit, setLimit] = useState(PAGE_SIZE)
+
+  // Growing the page size invalidates the current page number, so both move together.
+  const handleLimitChange = (next: number) => {
+    setLimit(next)
+    setOffset(0)
+  }
   const [formModal, setFormModal] = useState<ProductModalState>({ visible: false, product: null })
   const [deleteModal, setDeleteModal] = useState<ProductModalState>({
     visible: false,
@@ -140,7 +147,7 @@ const ProductsPage = () => {
     setOffset(0)
   }
 
-  const queryParams: ProductListParams = { search, offset, limit: PAGE_SIZE }
+  const queryParams: ProductListParams = { search, offset, limit }
   if (typeFilter.length) queryParams.type = typeFilter
   if (subtypeFilter.length) queryParams.subtype = subtypeFilter
 
@@ -399,9 +406,10 @@ const ProductsPage = () => {
 
           <Pagination
             offset={offset}
-            limit={PAGE_SIZE}
+            limit={limit}
             total={pagination?.total}
             onChange={setOffset}
+            onLimitChange={handleLimitChange}
           />
         </CCardBody>
       </CCard>

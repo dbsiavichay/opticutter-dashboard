@@ -3,6 +3,10 @@
 // Default page size for paginated list views.
 export const PAGE_SIZE = 20
 
+// Page sizes offered by the shared pager. Capped at 100 because that is the server's own ceiling
+// (`PageParams` declares `limit: int = Query(20, ge=1, le=100)`) — a larger option would 422.
+export const PAGE_SIZE_OPTIONS = [10, 20, 50, 100]
+
 // Rows shown in CSV import preview tables before importing.
 export const PREVIEW_LIMIT = 8
 

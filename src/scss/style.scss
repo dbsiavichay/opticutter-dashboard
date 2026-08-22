@@ -451,18 +451,83 @@ input[type='number'] {
 // prints. On paper that band heads a full page of rows; here the tables run one or two rows, and a
 // saturated header outweighed its own content — two of them stacked turned the step red. The rule
 // carries the brand cue at full strength, the fill stays out of the way.
-.summary-table > thead > tr > th {
+//
+// `.list-table` is the same header on the list pages, which until now wore CoreUI's stock
+// `bg-body-tertiary` grey — the brand tint reached every detail table and none of the eight
+// listings. Note the call sites must DROP that utility class: Bootstrap's background utilities are
+// `!important` and the grey would win over this rule regardless of order.
+.summary-table > thead > tr > th,
+.list-table > thead > tr > th {
   background-color: var(--brand-coral-soft);
   color: var(--brand-black);
   border-bottom: 2px solid var(--brand-coral);
 }
 
+.list-table {
+  // A listing header labels columns rather than titling a block: smaller, spaced, and never
+  // wrapping — a two-line header on a six-column table costs a row of data on every screen.
+  > thead > tr > th {
+    font-size: 0.75rem;
+    letter-spacing: 0.03em;
+    text-transform: uppercase;
+    white-space: nowrap;
+  }
+
+  // Rows open their record. The cursor belongs here, not in an inline style repeated per page, and
+  // the hover is an alpha of the accent so one declaration serves both themes.
+  > tbody > tr {
+    cursor: pointer;
+    --cui-table-hover-bg: rgba(var(--cui-primary-rgb), 0.06);
+  }
+}
+
 // The soft coral is a light tint and would swallow the dark theme's text, so dark mode keeps the
 // same structure with the fill dropped to a translucent wash of the accent.
 @include color-mode(dark) {
-  .summary-table > thead > tr > th {
+  .summary-table > thead > tr > th,
+  .list-table > thead > tr > th {
     background-color: rgba(var(--cui-primary-rgb), 0.18);
     color: var(--cui-body-color);
+  }
+}
+
+// Bootstrap paints the active page white on `--cui-primary`, which is the same 3.58:1 the coral
+// buttons would have had — except `color-contrast()` never runs here, since the pagination's active
+// colour is a hard-coded `#fff`. Match what the buttons resolve to on their own: the dark brand ink.
+.pagination {
+  --cui-pagination-active-color: var(--brand-black);
+  --cui-pagination-active-border-color: var(--brand-coral);
+}
+
+// Applied-filter pills under a list toolbar. Built from alphas of `--cui-primary-rgb` over whatever
+// the theme's body colour is, so it needs no `color-mode(dark)` counterpart: the same declaration
+// reads as a soft coral wash on white and as a dim coral tint on the dark ground.
+.filter-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.15rem 0.4rem 0.15rem 0.6rem;
+  border: var(--cui-border-width) var(--cui-border-style) rgba(var(--cui-primary-rgb), 0.35);
+  border-radius: 10rem;
+  background-color: rgba(var(--cui-primary-rgb), 0.1);
+  color: var(--cui-body-color);
+  font-size: 0.8125rem;
+  line-height: 1.4;
+}
+
+.filter-chip-remove {
+  display: inline-flex;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  line-height: 1;
+  cursor: pointer;
+  opacity: 0.6;
+
+  &:hover,
+  &:focus-visible {
+    opacity: 1;
   }
 }
 

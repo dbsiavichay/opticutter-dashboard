@@ -55,9 +55,16 @@ const PrintingBadges = ({ branch }: { branch: Branch }) => (
 const BranchesPage = () => {
   const [search, setSearch] = useState('')
   const [offset, setOffset] = useState(0)
+  const [limit, setLimit] = useState(PAGE_SIZE)
+
+  // Growing the page size invalidates the current page number, so both move together.
+  const handleLimitChange = (next: number) => {
+    setLimit(next)
+    setOffset(0)
+  }
   const [formModal, setFormModal] = useState<ModalState>({ visible: false, branch: null })
 
-  const { data, isLoading, isError, refetch } = useBranches({ search, offset, limit: PAGE_SIZE })
+  const { data, isLoading, isError, refetch } = useBranches({ search, offset, limit })
   const branches = data?.items ?? []
   const pagination = data?.pagination
   const createMutation = useCreateBranch()
@@ -167,9 +174,10 @@ const BranchesPage = () => {
 
           <Pagination
             offset={offset}
-            limit={PAGE_SIZE}
+            limit={limit}
             total={pagination?.total}
             onChange={setOffset}
+            onLimitChange={handleLimitChange}
           />
         </CCardBody>
       </CCard>

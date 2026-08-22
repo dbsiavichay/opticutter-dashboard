@@ -1,4 +1,4 @@
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { ApiError } from 'src/shared/api/types'
 import { clientsApiMin, ordersApi } from './ordersApi'
 import type {
@@ -17,6 +17,9 @@ export const useOrders = (params?: OrderListParams) =>
   useQuery({
     queryKey: ['orders', params],
     queryFn: () => ordersApi.list(params),
+    // Every filter edit and page turn is a new query key. Without this the table is torn down to a
+    // spinner on each one — the list flashes away under the very toolbar being used to narrow it.
+    placeholderData: keepPreviousData,
   })
 
 export const useOrder = (id?: string) =>
