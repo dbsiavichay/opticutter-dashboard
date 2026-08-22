@@ -1,6 +1,6 @@
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { ApiError } from 'src/shared/api/types'
-import { clientsApiMin, ordersApi } from './ordersApi'
+import { ordersApi } from './ordersApi'
 import type {
   OrderListParams,
   UpdateStatusPayload,
@@ -118,12 +118,6 @@ export const useUpdateBanding = () => {
     },
   })
 }
-
-export const useClientsMin = (search?: string) =>
-  useQuery({
-    queryKey: ['clients-min', search],
-    queryFn: () => clientsApiMin.list(search),
-  })
 
 const cuttingPlanKey = (id: string) => ['orders', id, 'cutting-plan']
 

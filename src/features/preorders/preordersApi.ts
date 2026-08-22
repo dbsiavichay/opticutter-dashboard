@@ -13,9 +13,31 @@ import type {
 const BASE = '/api/v1/preorders'
 
 export const preordersApi = {
-  list: ({ status, clientId, branchId, offset = 0, limit = 20 }: PreOrderListParams = {}) =>
+  // `status` may be an array → repeated params (?status=a&status=b); `toQuery` handles that.
+  // Every param must be named in this destructure or `toQuery` never sees it.
+  list: ({
+    status,
+    clientId,
+    branchId,
+    search,
+    createdFrom,
+    createdTo,
+    sort,
+    offset = 0,
+    limit = 20,
+  }: PreOrderListParams = {}) =>
     httpClient.list<PreOrderSummary>(
-      `${BASE}/?${toQuery({ status, clientId, branchId, offset, limit })}`,
+      `${BASE}/?${toQuery({
+        status,
+        clientId,
+        branchId,
+        search,
+        createdFrom,
+        createdTo,
+        sort,
+        offset,
+        limit,
+      })}`,
     ),
   get: (id: number) => httpClient.get<PreOrder>(`${BASE}/${id}`),
   create: (data: PreOrderCreate) => httpClient.post<PreOrder>(`${BASE}/`, data),

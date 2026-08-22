@@ -1,7 +1,6 @@
 import { httpClient } from 'src/shared/api/httpClient'
 import { toQuery } from 'src/shared/api/crudApi'
 import { openInNewTab } from 'src/shared/utils/download'
-import type { Client } from 'src/features/clients/types'
 import type {
   AssociateInvoicePayload,
   Attachment,
@@ -84,9 +83,4 @@ export const ordersApi = {
   downloadConsolidated: async (id: string) => {
     openInNewTab(await httpClient.download(`${BASE}/${id}/consolidated?format=pdf`))
   },
-}
-
-export const clientsApiMin = {
-  list: (search?: string) =>
-    httpClient.list<Client>(`/api/v1/clients/?${toQuery({ search, offset: 0, limit: 50 })}`),
 }

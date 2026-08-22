@@ -9,37 +9,37 @@ import { clientName } from 'src/shared/utils/format'
 import { fmtDay } from 'src/shared/utils/date'
 import { useActiveBranches } from 'src/features/branches/useBranches'
 import { useClient, useClientsMin } from 'src/features/clients/useClients'
-import { ORDER_STATUS_VALUES, statusLabel } from './status'
-import type { OrderSort, OrderStatus } from './types'
+import { PREORDER_STATUS_VALUES, statusLabel } from './status'
+import type { PreOrderSort, PreOrderStatus } from './types'
 
-const STATUS_OPTIONS = ORDER_STATUS_VALUES.map((value) => ({ value, label: statusLabel(value) }))
+const STATUS_OPTIONS = PREORDER_STATUS_VALUES.map((value) => ({ value, label: statusLabel(value) }))
 
-const SORT_OPTIONS: { value: OrderSort; label: string }[] = [
+const SORT_OPTIONS: { value: PreOrderSort; label: string }[] = [
   { value: 'recent', label: 'Más recientes primero' },
   { value: 'oldest', label: 'Más antiguas primero' },
 ]
 
-export interface OrdersFilterValues {
-  status: OrderStatus[]
+export interface PreOrdersFilterValues {
+  status: PreOrderStatus[]
   clientId: string
   branchId: string
   createdFrom: string
   createdTo: string
-  sort: OrderSort
+  sort: PreOrderSort
 }
 
-interface OrdersFiltersProps {
-  values: OrdersFilterValues
-  onChange: <K extends keyof OrdersFilterValues>(key: K, value: OrdersFilterValues[K]) => void
+interface PreOrdersFiltersProps {
+  values: PreOrdersFilterValues
+  onChange: <K extends keyof PreOrdersFilterValues>(key: K, value: PreOrdersFilterValues[K]) => void
   onClear: () => void
   // Global roles (admin/vendedor) choose a branch; the operador is scoped to theirs by the backend,
   // so for them the field is not disabled — it does not exist, and never counts as a filter.
   showBranch: boolean
 }
 
-// The filter panel for /orders plus the chips describing it. Kept out of OrdersPage so the page
-// stays the shape of a page; ProductsPage is 450 lines mostly because its filter logic lives inline.
-const OrdersFilters = ({ values, onChange, onClear, showBranch }: OrdersFiltersProps) => {
+// The filter panel for /preorders plus the chips describing it — the same five fields as the orders
+// one, since a quote and an order are looked for by the same handles.
+const PreOrdersFilters = ({ values, onChange, onClear, showBranch }: PreOrdersFiltersProps) => {
   const [clientTerm, setClientTerm] = useState('')
 
   const { data: branches = [] } = useActiveBranches()
@@ -121,7 +121,7 @@ const OrdersFilters = ({ values, onChange, onClear, showBranch }: OrdersFiltersP
           <CFormSelect
             size="sm"
             value={values.sort}
-            onChange={(e) => onChange('sort', e.target.value as OrderSort)}
+            onChange={(e) => onChange('sort', e.target.value as PreOrderSort)}
           >
             {SORT_OPTIONS.map((o) => (
               <option key={o.value} value={o.value}>
@@ -135,11 +135,11 @@ const OrdersFilters = ({ values, onChange, onClear, showBranch }: OrdersFiltersP
   )
 }
 
-export default OrdersFilters
+export default PreOrdersFilters
 
 // `sort` is excluded on purpose: it is always set to something, so counting it would leave the
 // toggle permanently badged "1" and say nothing about how narrow the listing is.
-export const activeCount = (values: OrdersFilterValues, showBranch: boolean): number =>
+export const activeCount = (values: PreOrdersFilterValues, showBranch: boolean): number =>
   values.status.length +
   (values.clientId ? 1 : 0) +
   (showBranch && values.branchId ? 1 : 0) +
@@ -150,10 +150,13 @@ export const activeCount = (values: OrdersFilterValues, showBranch: boolean): nu
 // below it lists. A hook rather than a pure function because two of the labels have to be looked
 // up: the URL carries ids, and "Cliente: 7" is not a filter anyone can read. Both lookups are the
 // same queries the panel runs, so React Query serves them from cache — no extra request.
-export const useOrdersFilterChips = (
-  values: OrdersFilterValues,
+export const usePreOrdersFilterChips = (
+  values: PreOrdersFilterValues,
   showBranch: boolean,
-  onChange: <K extends keyof OrdersFilterValues>(key: K, value: OrdersFilterValues[K]) => void,
+  onChange: <K extends keyof PreOrdersFilterValues>(
+    key: K,
+    value: PreOrdersFilterValues[K],
+  ) => void,
 ): FilterChip[] => {
   const { data: branches = [] } = useActiveBranches()
   const { data: selectedClient } = useClient(values.clientId || undefined)

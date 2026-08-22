@@ -1,4 +1,4 @@
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { preordersApi } from './preordersApi'
 import type { PreOrderCreate, PreOrderListParams, PreOrderStatus } from './types'
 
@@ -6,6 +6,9 @@ export const usePreOrders = (params?: PreOrderListParams) =>
   useQuery({
     queryKey: ['preorders', params],
     queryFn: () => preordersApi.list(params),
+    // Every filter edit and page turn is a new query key. Without this the table is torn down to a
+    // spinner on each one — the list flashes away under the very toolbar being used to narrow it.
+    placeholderData: keepPreviousData,
   })
 
 export const usePreOrder = (id?: number) =>
