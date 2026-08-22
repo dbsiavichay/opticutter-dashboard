@@ -1,3 +1,5 @@
+import type { ListSort } from 'src/shared/components/FilterSortSection'
+
 export type ProductType = 'board' | 'edge_banding'
 
 export interface BoardAttributes {
@@ -51,9 +53,11 @@ export interface ProductListParams {
   search?: string
   offset?: number
   limit?: number
-  // snake_case on purpose: `toQuery` sends keys verbatim and the API param is `is_active`.
-  // Omit it to list active and inactive alike (what the catalog admin needs).
-  is_active?: boolean
+  // Omit it to list active and inactive alike (what the catalog admin needs). Was `is_active`:
+  // that was the only query param in the API still snake_case on the wire, while its own request
+  // body already used `isActive`.
+  isActive?: boolean
+  sort?: ListSort
 }
 
 export interface ProductPayload {

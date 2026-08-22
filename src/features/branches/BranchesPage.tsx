@@ -2,9 +2,6 @@ import { useState } from 'react'
 import {
   CBadge,
   CButton,
-  CCard,
-  CCardBody,
-  CCardHeader,
   CFormSwitch,
   CModal,
   CModalHeader,
@@ -17,15 +14,25 @@ import {
   CTableRow,
 } from '@coreui/react'
 import CIcon from '@coreui/icons-react'
-import { cilPencil, cilPlus } from '@coreui/icons'
+import { cilPlus } from '@coreui/icons'
 
 import BranchForm from './BranchForm'
 import { useBranches, useCreateBranch, useUpdateBranch } from './useBranches'
+import BranchesFilters, {
+  activeCount,
+  branchesFilterChips,
+  type BranchesFilterValues,
+} from './BranchesFilters'
 import type { Branch, BranchPayload, BranchUpdatePayload } from './types'
-import { PAGE_SIZE } from 'src/shared/constants'
 import SearchInput from 'src/shared/components/SearchInput'
+import FilterChips from 'src/shared/components/FilterChips'
 import Pagination from 'src/shared/components/Pagination'
 import QueryState from 'src/shared/components/QueryState'
+import type { ListSort } from 'src/shared/components/FilterSortSection'
+import { useListParams } from 'src/shared/hooks/useListParams'
+
+// Filter fields that live in the URL. `q` is the search box; the rest are the panel's.
+const FILTER_KEYS = ['q', 'isActive']
 
 interface ModalState {
   visible: boolean
@@ -53,27 +60,40 @@ const PrintingBadges = ({ branch }: { branch: Branch }) => (
 )
 
 const BranchesPage = () => {
-  const [search, setSearch] = useState('')
-  const [offset, setOffset] = useState(0)
-  const [limit, setLimit] = useState(PAGE_SIZE)
+  const { getParam, setParam, clearParams, offset, setOffset, limit, setLimit } = useListParams()
 
-  // Growing the page size invalidates the current page number, so both move together.
-  const handleLimitChange = (next: number) => {
-    setLimit(next)
-    setOffset(0)
+  const search = getParam('q')
+  const values: BranchesFilterValues = {
+    isActive: getParam('isActive'),
+    sort: (getParam('sort') || 'name') as ListSort,
   }
+
+  const handleChange = <K extends keyof BranchesFilterValues>(
+    key: K,
+    value: BranchesFilterValues[K],
+  ) => {
+    setParam(key, value)
+  }
+  const handleClear = () => clearParams(FILTER_KEYS)
+
+  const chips = branchesFilterChips(values, handleChange)
+  const isFiltered = activeCount(values) > 0 || search !== ''
+
   const [formModal, setFormModal] = useState<ModalState>({ visible: false, branch: null })
 
-  const { data, isLoading, isError, refetch } = useBranches({ search, offset, limit })
+  // Built inline, not memoised: React Query hashes the query key structurally, so a fresh object
+  // with the same contents is the same key and does not refetch.
+  const { data, isLoading, isError, refetch } = useBranches({
+    search: search || undefined,
+    isActive: values.isActive ? values.isActive === 'true' : undefined,
+    sort: values.sort,
+    offset,
+    limit,
+  })
   const branches = data?.items ?? []
   const pagination = data?.pagination
   const createMutation = useCreateBranch()
   const updateMutation = useUpdateBranch()
-
-  const handleSearch = (value: string) => {
-    setSearch(value)
-    setOffset(0)
-  }
 
   const openCreate = () => setFormModal({ visible: true, branch: null })
   const openEdit = (branch: Branch) => setFormModal({ visible: true, branch })
@@ -101,86 +121,91 @@ const BranchesPage = () => {
 
   return (
     <>
-      <CCard>
-        <CCardHeader className="d-flex justify-content-between align-items-center">
-          <strong>Sucursales</strong>
-          <CButton color="primary" size="sm" onClick={openCreate}>
+      <div className="surface">
+        <div className="d-flex flex-wrap align-items-center gap-2 mb-3">
+          <SearchInput
+            value={search}
+            // `replace`: one history entry per settled keystroke would bury the page behind the list.
+            onChange={(value) => setParam('q', value, { replace: true })}
+            placeholder="Buscar por código o nombre…"
+            className="flex-grow-1"
+            style={{ maxWidth: 360 }}
+          />
+          <BranchesFilters values={values} onChange={handleChange} onClear={handleClear} />
+          <CButton color="primary" className="ms-auto" onClick={openCreate}>
             <CIcon icon={cilPlus} className="me-1" />
             Nueva sucursal
           </CButton>
-        </CCardHeader>
-        <CCardBody>
-          <SearchInput
-            onChange={handleSearch}
-            placeholder="Buscar por código o nombre…"
-            className="mb-3"
-            style={{ maxWidth: 320 }}
-          />
+        </div>
 
-          <QueryState isLoading={isLoading} isError={isError} onRetry={() => void refetch()}>
-            <CTable align="middle" hover responsive>
-              <CTableHead>
+        <FilterChips chips={chips} onClearAll={handleClear} />
+
+        <QueryState isLoading={isLoading} isError={isError} onRetry={() => void refetch()}>
+          <CTable align="middle" hover responsive className="list-table">
+            <CTableHead>
+              <CTableRow>
+                <CTableHeaderCell>Código</CTableHeaderCell>
+                <CTableHeaderCell>Nombre</CTableHeaderCell>
+                <CTableHeaderCell>Dirección</CTableHeaderCell>
+                <CTableHeaderCell>Teléfono</CTableHeaderCell>
+                <CTableHeaderCell>Impresión</CTableHeaderCell>
+                <CTableHeaderCell>Activa</CTableHeaderCell>
+              </CTableRow>
+            </CTableHead>
+            <CTableBody>
+              {branches.length === 0 ? (
                 <CTableRow>
-                  <CTableHeaderCell className="bg-body-tertiary">Código</CTableHeaderCell>
-                  <CTableHeaderCell className="bg-body-tertiary">Nombre</CTableHeaderCell>
-                  <CTableHeaderCell className="bg-body-tertiary">Dirección</CTableHeaderCell>
-                  <CTableHeaderCell className="bg-body-tertiary">Teléfono</CTableHeaderCell>
-                  <CTableHeaderCell className="bg-body-tertiary">Impresión</CTableHeaderCell>
-                  <CTableHeaderCell className="bg-body-tertiary">Activa</CTableHeaderCell>
-                  <CTableHeaderCell className="bg-body-tertiary" />
+                  {/* Two different dead ends: an empty catalog is a fact, an over-narrow filter is
+                      a place the user needs a way out of. */}
+                  <CTableDataCell colSpan={6} className="text-center text-body-secondary py-5">
+                    {isFiltered ? (
+                      <>
+                        <div>Ninguna sucursal coincide con los filtros.</div>
+                        <CButton color="link" size="sm" onClick={handleClear}>
+                          Limpiar filtros
+                        </CButton>
+                      </>
+                    ) : (
+                      'Aún no hay sucursales.'
+                    )}
+                  </CTableDataCell>
                 </CTableRow>
-              </CTableHead>
-              <CTableBody>
-                {branches.length === 0 ? (
-                  <CTableRow>
-                    <CTableDataCell colSpan={7} className="text-center text-body-secondary py-5">
-                      Sin resultados
+              ) : (
+                branches.map((b) => (
+                  <CTableRow key={b.id} onClick={() => openEdit(b)}>
+                    <CTableDataCell className="fw-semibold">{b.code}</CTableDataCell>
+                    <CTableDataCell>{b.name}</CTableDataCell>
+                    <CTableDataCell>{b.address ?? '—'}</CTableDataCell>
+                    <CTableDataCell>{b.phone ?? '—'}</CTableDataCell>
+                    <CTableDataCell className="text-nowrap">
+                      <PrintingBadges branch={b} />
+                    </CTableDataCell>
+                    {/* The row opens the editor; this cell retires the branch instead, so the click
+                        must stop here. The switch is the only delete this listing has — DELETE is
+                        avoided to preserve FK integrity. */}
+                    <CTableDataCell onClick={(e) => e.stopPropagation()}>
+                      <CFormSwitch
+                        checked={b.isActive}
+                        disabled={updateMutation.isPending}
+                        onChange={() => toggleActive(b)}
+                        aria-label={`Sucursal ${b.name} activa`}
+                      />
                     </CTableDataCell>
                   </CTableRow>
-                ) : (
-                  branches.map((b) => (
-                    <CTableRow key={b.id}>
-                      <CTableDataCell className="fw-semibold">{b.code}</CTableDataCell>
-                      <CTableDataCell>{b.name}</CTableDataCell>
-                      <CTableDataCell>{b.address ?? '—'}</CTableDataCell>
-                      <CTableDataCell>{b.phone ?? '—'}</CTableDataCell>
-                      <CTableDataCell className="text-nowrap">
-                        <PrintingBadges branch={b} />
-                      </CTableDataCell>
-                      <CTableDataCell>
-                        <CFormSwitch
-                          checked={b.isActive}
-                          disabled={updateMutation.isPending}
-                          onChange={() => toggleActive(b)}
-                          aria-label="Activa"
-                        />
-                      </CTableDataCell>
-                      <CTableDataCell className="text-end text-nowrap">
-                        <CButton
-                          variant="ghost"
-                          color="secondary"
-                          size="sm"
-                          onClick={() => openEdit(b)}
-                        >
-                          <CIcon icon={cilPencil} />
-                        </CButton>
-                      </CTableDataCell>
-                    </CTableRow>
-                  ))
-                )}
-              </CTableBody>
-            </CTable>
-          </QueryState>
+                ))
+              )}
+            </CTableBody>
+          </CTable>
+        </QueryState>
 
-          <Pagination
-            offset={offset}
-            limit={limit}
-            total={pagination?.total}
-            onChange={setOffset}
-            onLimitChange={handleLimitChange}
-          />
-        </CCardBody>
-      </CCard>
+        <Pagination
+          offset={offset}
+          limit={limit}
+          total={pagination?.total}
+          onChange={setOffset}
+          onLimitChange={setLimit}
+        />
+      </div>
 
       <CModal visible={formModal.visible} onClose={closeForm} backdrop="static">
         <CModalHeader>

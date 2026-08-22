@@ -3,9 +3,6 @@ import {
   CAlert,
   CBadge,
   CButton,
-  CCard,
-  CCardBody,
-  CCardHeader,
   CFormInput,
   CFormLabel,
   CFormSelect,
@@ -142,80 +139,78 @@ const PrintAgentsPage = () => {
 
   return (
     <>
-      <CCard>
-        <CCardHeader className="d-flex justify-content-between align-items-center">
-          <strong>Agentes de impresión</strong>
-          <CButton color="primary" size="sm" onClick={openCreate}>
-            <CIcon icon={cilPlus} className="me-1" />
-            Nuevo agente
-          </CButton>
-        </CCardHeader>
-        <CCardBody>
-          <p className="text-body-secondary small">
+      <div className="surface">
+        <div className="d-flex flex-wrap align-items-start gap-2 mb-3">
+          {/* No search box and no filter panel: this listing is one or two rows per branch, and
+              `GET /print-jobs/agents` is not paginated. The explanation takes the room they would. */}
+          <p className="text-body-secondary small mb-0 flex-grow-1" style={{ maxWidth: '60ch' }}>
             Cada agente es el PC del taller de una sucursal: mantiene la conexión con el sistema e
             imprime en sus impresoras locales o de red. Qué se imprime en cada sucursal se configura
             en <strong>Sucursales</strong>.
           </p>
+          <CButton color="primary" className="ms-auto" onClick={openCreate}>
+            <CIcon icon={cilPlus} className="me-1" />
+            Nuevo agente
+          </CButton>
+        </div>
 
-          <QueryState isLoading={isLoading} isError={isError} onRetry={() => void refetch()}>
-            <CTable align="middle" hover responsive>
-              <CTableHead>
+        <QueryState isLoading={isLoading} isError={isError} onRetry={() => void refetch()}>
+          {/* Rows open nothing: an agent is edited through its own two actions, not a form. */}
+          <CTable align="middle" hover responsive className="list-table rows-static">
+            <CTableHead>
+              <CTableRow>
+                <CTableHeaderCell>Sucursal</CTableHeaderCell>
+                <CTableHeaderCell>Nombre</CTableHeaderCell>
+                <CTableHeaderCell>Última conexión</CTableHeaderCell>
+                <CTableHeaderCell>Activo</CTableHeaderCell>
+                <CTableHeaderCell />
+              </CTableRow>
+            </CTableHead>
+            <CTableBody>
+              {agents.length === 0 ? (
                 <CTableRow>
-                  <CTableHeaderCell className="bg-body-tertiary">Sucursal</CTableHeaderCell>
-                  <CTableHeaderCell className="bg-body-tertiary">Nombre</CTableHeaderCell>
-                  <CTableHeaderCell className="bg-body-tertiary">Última conexión</CTableHeaderCell>
-                  <CTableHeaderCell className="bg-body-tertiary">Activo</CTableHeaderCell>
-                  <CTableHeaderCell className="bg-body-tertiary" />
+                  <CTableDataCell colSpan={5} className="text-center text-body-secondary py-5">
+                    Sin agentes registrados
+                  </CTableDataCell>
                 </CTableRow>
-              </CTableHead>
-              <CTableBody>
-                {agents.length === 0 ? (
-                  <CTableRow>
-                    <CTableDataCell colSpan={5} className="text-center text-body-secondary py-5">
-                      Sin agentes registrados
+              ) : (
+                agents.map((a) => (
+                  <CTableRow key={a.id}>
+                    <CTableDataCell className="fw-semibold">
+                      {branchName(a.branchId)}
+                    </CTableDataCell>
+                    <CTableDataCell>{a.name}</CTableDataCell>
+                    <CTableDataCell>
+                      <CBadge color={a.lastSeenAt ? 'success' : 'secondary'}>{presence(a)}</CBadge>
+                    </CTableDataCell>
+                    <CTableDataCell>
+                      <CFormSwitch
+                        checked={a.isActive}
+                        disabled={setActive.isPending}
+                        onChange={() => setActive.mutate({ id: a.id, isActive: !a.isActive })}
+                        aria-label="Activo"
+                      />
+                    </CTableDataCell>
+                    <CTableDataCell className="text-end text-nowrap">
+                      <CButton
+                        variant="ghost"
+                        color="secondary"
+                        size="sm"
+                        disabled={rotateToken.isPending}
+                        title="Emitir un token nuevo (revoca el anterior)"
+                        onClick={() => setConfirmRotate(a)}
+                      >
+                        <CIcon icon={cilLoopCircular} className="me-1" />
+                        Rotar token
+                      </CButton>
                     </CTableDataCell>
                   </CTableRow>
-                ) : (
-                  agents.map((a) => (
-                    <CTableRow key={a.id}>
-                      <CTableDataCell className="fw-semibold">
-                        {branchName(a.branchId)}
-                      </CTableDataCell>
-                      <CTableDataCell>{a.name}</CTableDataCell>
-                      <CTableDataCell>
-                        <CBadge color={a.lastSeenAt ? 'success' : 'secondary'}>
-                          {presence(a)}
-                        </CBadge>
-                      </CTableDataCell>
-                      <CTableDataCell>
-                        <CFormSwitch
-                          checked={a.isActive}
-                          disabled={setActive.isPending}
-                          onChange={() => setActive.mutate({ id: a.id, isActive: !a.isActive })}
-                          aria-label="Activo"
-                        />
-                      </CTableDataCell>
-                      <CTableDataCell className="text-end text-nowrap">
-                        <CButton
-                          variant="ghost"
-                          color="secondary"
-                          size="sm"
-                          disabled={rotateToken.isPending}
-                          title="Emitir un token nuevo (revoca el anterior)"
-                          onClick={() => setConfirmRotate(a)}
-                        >
-                          <CIcon icon={cilLoopCircular} className="me-1" />
-                          Rotar token
-                        </CButton>
-                      </CTableDataCell>
-                    </CTableRow>
-                  ))
-                )}
-              </CTableBody>
-            </CTable>
-          </QueryState>
-        </CCardBody>
-      </CCard>
+                ))
+              )}
+            </CTableBody>
+          </CTable>
+        </QueryState>
+      </div>
 
       <CModal visible={formModal} onClose={() => setFormModal(false)} backdrop="static">
         <CModalHeader>

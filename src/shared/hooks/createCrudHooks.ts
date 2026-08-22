@@ -1,4 +1,4 @@
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import type { PaginatedResult } from 'src/shared/api/types'
 
 interface CrudHooksApi<T, ListParams, CreatePayload, UpdatePayload, Id> {
@@ -22,7 +22,14 @@ export const createCrudHooks = <
   api: CrudHooksApi<T, ListParams, CreatePayload, UpdatePayload, Id>,
 ) => {
   const useList = (params?: ListParams) =>
-    useQuery({ queryKey: [key, params], queryFn: () => api.list(params) })
+    useQuery({
+      queryKey: [key, params],
+      queryFn: () => api.list(params),
+      // Every filter edit and page turn is a new query key. Without this the table is torn down to
+      // a spinner on each one — the list flashes away under the very toolbar being used to narrow
+      // it. Applies to every CRUD listing at once, which is the point of them sharing this factory.
+      placeholderData: keepPreviousData,
+    })
 
   const useCreate = () => {
     const qc = useQueryClient()

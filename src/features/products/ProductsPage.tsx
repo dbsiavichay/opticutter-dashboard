@@ -9,40 +9,40 @@ import type {
 import {
   CBadge,
   CButton,
-  CCard,
-  CCardBody,
-  CCardHeader,
-  CCol,
-  CRow,
+  CModal,
+  CModalHeader,
+  CModalTitle,
   CTable,
   CTableBody,
   CTableDataCell,
   CTableHead,
   CTableHeaderCell,
   CTableRow,
-  CModal,
-  CModalHeader,
-  CModalTitle,
 } from '@coreui/react'
-import { cilPencil, cilPlus, cilSync, cilTrash } from '@coreui/icons'
+import { cilPlus, cilSync, cilTrash } from '@coreui/icons'
 import { useCreateProduct, useDeleteProduct, useProducts, useUpdateProduct } from './useProducts'
-import { useMemo, useState } from 'react'
+import { useState } from 'react'
 
 import CIcon from '@coreui/icons-react'
 import ProductForm from './ProductForm'
 import SyncCatalogModal from './SyncCatalogModal'
-import { BOARD_SUBTYPES, EDGE_BANDING_SUBTYPES, subtypeLabel } from './productSubtypes'
+import ProductsFilters, {
+  activeCount,
+  productsFilterChips,
+  prunedSubtypes,
+  type ProductsFilterValues,
+} from './ProductsFilters'
 import { useHasRole } from 'src/features/auth/useAuth'
 import { useQueryClient } from '@tanstack/react-query'
-import { PAGE_SIZE } from 'src/shared/constants'
 import { fmtMoney } from 'src/shared/utils/format'
 import SearchInput from 'src/shared/components/SearchInput'
+import FilterChips from 'src/shared/components/FilterChips'
 import Pagination from 'src/shared/components/Pagination'
 import QueryState from 'src/shared/components/QueryState'
 import DeleteConfirmModal from 'src/shared/components/DeleteConfirmModal'
 import StatusBadge, { type StatusConfigEntry } from 'src/shared/components/StatusBadge'
-import FilterMenu from 'src/shared/components/FilterMenu'
-import FilterCheckboxList, { type FilterOption } from 'src/shared/components/FilterCheckboxList'
+import type { ListSort } from 'src/shared/components/FilterSortSection'
+import { useListParams } from 'src/shared/hooks/useListParams'
 
 const TYPE_CONFIG: Record<string, StatusConfigEntry> = {
   board: { color: 'info', label: 'Tablero' },
@@ -51,13 +51,8 @@ const TYPE_CONFIG: Record<string, StatusConfigEntry> = {
 }
 const BAND_TYPE_LABELS: Record<string, string> = { Soft: 'Suave', Hard: 'Duro' }
 
-const TYPE_OPTIONS: FilterOption<ProductType>[] = [
-  { value: 'board', label: 'Tablero' },
-  { value: 'edge_banding', label: 'Tapacanto' },
-]
-
-const BOARD_SUBTYPE_SET = new Set<string>(BOARD_SUBTYPES)
-const EDGE_BANDING_SUBTYPE_SET = new Set<string>(EDGE_BANDING_SUBTYPES)
+// Filter fields that live in the URL. `q` is the search box; the rest are the panel's.
+const FILTER_KEYS = ['q', 'type', 'subtype', 'isActive']
 
 interface ProductModalState {
   visible: boolean
@@ -67,17 +62,46 @@ interface ProductModalState {
 const ProductsPage = () => {
   const isReadOnly = useHasRole('vendedor')
   const queryClient = useQueryClient()
-  const [search, setSearch] = useState('')
-  const [typeFilter, setTypeFilter] = useState<ProductType[]>([])
-  const [subtypeFilter, setSubtypeFilter] = useState<string[]>([])
-  const [offset, setOffset] = useState(0)
-  const [limit, setLimit] = useState(PAGE_SIZE)
+  const {
+    getParam,
+    getParams,
+    setParam,
+    setParams,
+    clearParams,
+    offset,
+    setOffset,
+    limit,
+    setLimit,
+  } = useListParams()
 
-  // Growing the page size invalidates the current page number, so both move together.
-  const handleLimitChange = (next: number) => {
-    setLimit(next)
-    setOffset(0)
+  const search = getParam('q')
+  const values: ProductsFilterValues = {
+    type: getParams('type') as ProductType[],
+    subtype: getParams('subtype'),
+    isActive: getParam('isActive'),
+    sort: (getParam('sort') || 'name') as ListSort,
   }
+
+  const handleChange = <K extends keyof ProductsFilterValues>(
+    key: K,
+    value: ProductsFilterValues[K],
+  ) => {
+    // Narrowing the type set can strand a subtype that no longer belongs to it, which combines
+    // into a guaranteed-empty result. Both keys move in ONE write: two `setSearchParams` in a tick
+    // do not compose — react-router's updater still sees the pre-update params, so the second wins.
+    if (key === 'type') {
+      const nextTypes = value as ProductType[]
+      const nextSubtypes = prunedSubtypes(nextTypes, values.subtype)
+      setParams({ type: nextTypes, subtype: nextSubtypes })
+      return
+    }
+    setParam(key, value)
+  }
+  const handleClear = () => clearParams(FILTER_KEYS)
+
+  const chips = productsFilterChips(values, handleChange)
+  const isFiltered = activeCount(values) > 0 || search !== ''
+
   const [formModal, setFormModal] = useState<ProductModalState>({ visible: false, product: null })
   const [deleteModal, setDeleteModal] = useState<ProductModalState>({
     visible: false,
@@ -87,69 +111,19 @@ const ProductsPage = () => {
 
   // Specialized (per-type) columns only make sense when the filter narrows to
   // exactly one type; with none or both selected, fall back to the generic view.
-  const singleType = typeFilter.length === 1 ? typeFilter[0] : null
+  const singleType = values.type.length === 1 ? values.type[0] : null
 
-  // Subtype choices are scoped to the selected type(s) — showing MDP/OSB while
-  // filtering by "Tapacanto" would only ever produce zero results. With no type
-  // selected, both groups show (grouped by header, since either can match); with
-  // exactly one type selected the group header is dropped — the Tipo filter
-  // right next to it already says so, and repeating it is just clutter.
-  const subtypeOptions = useMemo(() => {
-    const includeBoard = typeFilter.length === 0 || typeFilter.includes('board')
-    const includeEdge = typeFilter.length === 0 || typeFilter.includes('edge_banding')
-    const showGroups = includeBoard && includeEdge
-    const options: FilterOption[] = []
-    if (includeBoard) {
-      options.push(
-        ...BOARD_SUBTYPES.map((s) => ({
-          value: s,
-          label: subtypeLabel(s),
-          group: showGroups ? 'Tablero' : undefined,
-        })),
-      )
-    }
-    if (includeEdge) {
-      options.push(
-        ...EDGE_BANDING_SUBTYPES.map((s) => ({
-          value: s,
-          label: subtypeLabel(s),
-          group: showGroups ? 'Tapacanto' : undefined,
-        })),
-      )
-    }
-    return options
-  }, [typeFilter])
-
-  const handleTypeChange = (next: ProductType[]) => {
-    setTypeFilter(next)
-    setOffset(0)
-    // Drop any selected subtype that no longer belongs to the narrowed type set,
-    // so the filter never silently combines into a guaranteed-empty result.
-    const includeBoard = next.length === 0 || next.includes('board')
-    const includeEdge = next.length === 0 || next.includes('edge_banding')
-    setSubtypeFilter((prev) =>
-      prev.filter(
-        (s) =>
-          (includeBoard && BOARD_SUBTYPE_SET.has(s)) ||
-          (includeEdge && EDGE_BANDING_SUBTYPE_SET.has(s)),
-      ),
-    )
+  // Built inline, not memoised: React Query hashes the query key structurally, so a fresh object
+  // with the same contents is the same key and does not refetch.
+  const queryParams: ProductListParams = {
+    search: search || undefined,
+    type: values.type.length ? values.type : undefined,
+    subtype: values.subtype.length ? values.subtype : undefined,
+    isActive: values.isActive ? values.isActive === 'true' : undefined,
+    sort: values.sort,
+    offset,
+    limit,
   }
-
-  const handleSubtypeChange = (next: string[]) => {
-    setSubtypeFilter(next)
-    setOffset(0)
-  }
-
-  const handleClearFilters = () => {
-    setTypeFilter([])
-    setSubtypeFilter([])
-    setOffset(0)
-  }
-
-  const queryParams: ProductListParams = { search, offset, limit }
-  if (typeFilter.length) queryParams.type = typeFilter
-  if (subtypeFilter.length) queryParams.subtype = subtypeFilter
 
   const { data: productsData, isLoading, isError, refetch } = useProducts(queryParams)
   const products = productsData?.items ?? []
@@ -158,11 +132,6 @@ const ProductsPage = () => {
   const createMutation = useCreateProduct()
   const updateMutation = useUpdateProduct()
   const deleteMutation = useDeleteProduct()
-
-  const handleSearch = (value: string) => {
-    setSearch(value)
-    setOffset(0)
-  }
 
   const openCreate = () => setFormModal({ visible: true, product: null })
   const openEdit = (product: Product) => setFormModal({ visible: true, product })
@@ -195,64 +164,64 @@ const ProductsPage = () => {
     if (singleType === 'board') {
       return (
         <>
-          <CTableHeaderCell className="bg-body-tertiary">ID</CTableHeaderCell>
-          <CTableHeaderCell className="bg-body-tertiary">Código</CTableHeaderCell>
-          <CTableHeaderCell className="bg-body-tertiary">Nombre</CTableHeaderCell>
-          <CTableHeaderCell className="bg-body-tertiary">Precio</CTableHeaderCell>
-          <CTableHeaderCell className="bg-body-tertiary">Dimensiones</CTableHeaderCell>
-          <CTableHeaderCell className="bg-body-tertiary">Grosor</CTableHeaderCell>
-          <CTableHeaderCell className="bg-body-tertiary">Estado</CTableHeaderCell>
-          <CTableHeaderCell className="bg-body-tertiary" />
+          <CTableHeaderCell>ID</CTableHeaderCell>
+          <CTableHeaderCell>Código</CTableHeaderCell>
+          <CTableHeaderCell>Nombre</CTableHeaderCell>
+          <CTableHeaderCell>Precio</CTableHeaderCell>
+          <CTableHeaderCell>Dimensiones</CTableHeaderCell>
+          <CTableHeaderCell>Grosor</CTableHeaderCell>
+          <CTableHeaderCell>Estado</CTableHeaderCell>
+          <CTableHeaderCell />
         </>
       )
     }
     if (singleType === 'edge_banding') {
       return (
         <>
-          <CTableHeaderCell className="bg-body-tertiary">ID</CTableHeaderCell>
-          <CTableHeaderCell className="bg-body-tertiary">Código</CTableHeaderCell>
-          <CTableHeaderCell className="bg-body-tertiary">Nombre</CTableHeaderCell>
-          <CTableHeaderCell className="bg-body-tertiary">Precio</CTableHeaderCell>
-          <CTableHeaderCell className="bg-body-tertiary">Grosor</CTableHeaderCell>
-          <CTableHeaderCell className="bg-body-tertiary">Ancho</CTableHeaderCell>
-          <CTableHeaderCell className="bg-body-tertiary">Tipo</CTableHeaderCell>
-          <CTableHeaderCell className="bg-body-tertiary">Color</CTableHeaderCell>
-          <CTableHeaderCell className="bg-body-tertiary">Estado</CTableHeaderCell>
-          <CTableHeaderCell className="bg-body-tertiary" />
+          <CTableHeaderCell>ID</CTableHeaderCell>
+          <CTableHeaderCell>Código</CTableHeaderCell>
+          <CTableHeaderCell>Nombre</CTableHeaderCell>
+          <CTableHeaderCell>Precio</CTableHeaderCell>
+          <CTableHeaderCell>Grosor</CTableHeaderCell>
+          <CTableHeaderCell>Ancho</CTableHeaderCell>
+          <CTableHeaderCell>Tipo</CTableHeaderCell>
+          <CTableHeaderCell>Color</CTableHeaderCell>
+          <CTableHeaderCell>Estado</CTableHeaderCell>
+          <CTableHeaderCell />
         </>
       )
     }
     return (
       <>
-        <CTableHeaderCell className="bg-body-tertiary">ID</CTableHeaderCell>
-        <CTableHeaderCell className="bg-body-tertiary">Tipo</CTableHeaderCell>
-        <CTableHeaderCell className="bg-body-tertiary">Código</CTableHeaderCell>
-        <CTableHeaderCell className="bg-body-tertiary">Nombre</CTableHeaderCell>
-        <CTableHeaderCell className="bg-body-tertiary">Precio</CTableHeaderCell>
-        <CTableHeaderCell className="bg-body-tertiary">Estado</CTableHeaderCell>
-        <CTableHeaderCell className="bg-body-tertiary" />
+        <CTableHeaderCell>ID</CTableHeaderCell>
+        <CTableHeaderCell>Tipo</CTableHeaderCell>
+        <CTableHeaderCell>Código</CTableHeaderCell>
+        <CTableHeaderCell>Nombre</CTableHeaderCell>
+        <CTableHeaderCell>Precio</CTableHeaderCell>
+        <CTableHeaderCell>Estado</CTableHeaderCell>
+        <CTableHeaderCell />
       </>
     )
   }
 
   const renderRow = (p: Product) => {
+    // The row opens the editor, so only the destructive action keeps a button — and it must not
+    // also open it on the way.
     const actions = (
       <CTableDataCell className="text-end text-nowrap">
         {!isReadOnly && (
-          <>
-            <CButton variant="ghost" color="secondary" size="sm" onClick={() => openEdit(p)}>
-              <CIcon icon={cilPencil} />
-            </CButton>
-            <CButton
-              variant="ghost"
-              color="danger"
-              size="sm"
-              className="ms-1"
-              onClick={() => openDelete(p)}
-            >
-              <CIcon icon={cilTrash} />
-            </CButton>
-          </>
+          <CButton
+            variant="ghost"
+            color="danger"
+            size="sm"
+            aria-label={`Eliminar ${p.name}`}
+            onClick={(e) => {
+              e.stopPropagation()
+              openDelete(p)
+            }}
+          >
+            <CIcon icon={cilTrash} />
+          </CButton>
         )}
       </CTableDataCell>
     )
@@ -266,7 +235,7 @@ const ProductsPage = () => {
     if (singleType === 'board') {
       const a = (p.attributes ?? {}) as BoardAttributes & EdgeBandingAttributes
       return (
-        <CTableRow key={p.id}>
+        <CTableRow key={p.id} onClick={isReadOnly ? undefined : () => openEdit(p)}>
           <CTableDataCell className="text-body-secondary">{p.id}</CTableDataCell>
           <CTableDataCell>
             <strong>{p.code}</strong>
@@ -286,7 +255,7 @@ const ProductsPage = () => {
     if (singleType === 'edge_banding') {
       const a = (p.attributes ?? {}) as BoardAttributes & EdgeBandingAttributes
       return (
-        <CTableRow key={p.id}>
+        <CTableRow key={p.id} onClick={isReadOnly ? undefined : () => openEdit(p)}>
           <CTableDataCell className="text-body-secondary">{p.id}</CTableDataCell>
           <CTableDataCell>
             <strong>{p.code}</strong>
@@ -306,7 +275,7 @@ const ProductsPage = () => {
     }
 
     return (
-      <CTableRow key={p.id}>
+      <CTableRow key={p.id} onClick={isReadOnly ? undefined : () => openEdit(p)}>
         <CTableDataCell className="text-body-secondary">{p.id}</CTableDataCell>
         <CTableDataCell>
           <StatusBadge config={TYPE_CONFIG} value={p.type} />
@@ -326,93 +295,80 @@ const ProductsPage = () => {
 
   return (
     <>
-      <CCard>
-        <CCardHeader className="d-flex justify-content-between align-items-center">
-          <strong>Productos</strong>
+      <div className="surface">
+        <div className="d-flex flex-wrap align-items-center gap-2 mb-3">
+          <SearchInput
+            value={search}
+            // `replace`: one history entry per settled keystroke would bury the page behind the list.
+            onChange={(value) => setParam('q', value, { replace: true })}
+            placeholder="Buscar por código o nombre…"
+            className="flex-grow-1"
+            style={{ maxWidth: 360 }}
+          />
+          <ProductsFilters values={values} onChange={handleChange} onClear={handleClear} />
           {!isReadOnly && (
-            <div className="d-flex gap-2">
-              <CButton
-                color="secondary"
-                variant="outline"
-                size="sm"
-                onClick={() => setSyncModal(true)}
-              >
+            <div className="d-flex gap-2 ms-auto">
+              <CButton color="secondary" variant="outline" onClick={() => setSyncModal(true)}>
                 <CIcon icon={cilSync} className="me-1" />
                 Sincronizar catálogo
               </CButton>
-              <CButton color="primary" size="sm" onClick={openCreate}>
+              <CButton color="primary" onClick={openCreate}>
                 <CIcon icon={cilPlus} className="me-1" />
                 Nuevo producto
               </CButton>
             </div>
           )}
-        </CCardHeader>
-        <CCardBody>
-          <CRow className="mb-3 g-2">
-            <CCol xs={12} sm="auto">
-              <FilterMenu
-                activeCount={typeFilter.length + subtypeFilter.length}
-                onClear={handleClearFilters}
-              >
-                <div className="px-3 pb-1">
-                  <div className="fw-semibold small text-body-secondary mb-1">Tipo</div>
-                  <FilterCheckboxList
-                    values={typeFilter}
-                    options={TYPE_OPTIONS}
-                    onChange={handleTypeChange}
-                  />
-                </div>
-                <hr className="dropdown-divider" />
-                <div className="px-3 pt-1">
-                  <div className="fw-semibold small text-body-secondary mb-1">Subtipo</div>
-                  <FilterCheckboxList
-                    values={subtypeFilter}
-                    options={subtypeOptions}
-                    onChange={handleSubtypeChange}
-                  />
-                </div>
-              </FilterMenu>
-            </CCol>
-            <CCol xs={12} sm>
-              <SearchInput
-                onChange={handleSearch}
-                placeholder="Buscar por código o nombre…"
-                style={{ maxWidth: 360 }}
-              />
-            </CCol>
-          </CRow>
+        </div>
 
-          <QueryState isLoading={isLoading} isError={isError} onRetry={() => void refetch()}>
-            <CTable align="middle" hover responsive>
-              <CTableHead>
-                <CTableRow>{renderHeaders()}</CTableRow>
-              </CTableHead>
-              <CTableBody>
-                {products.length === 0 ? (
-                  <CTableRow>
-                    <CTableDataCell
-                      colSpan={colSpan}
-                      className="text-center text-body-secondary py-5"
-                    >
-                      Sin resultados
-                    </CTableDataCell>
-                  </CTableRow>
-                ) : (
-                  products.map(renderRow)
-                )}
-              </CTableBody>
-            </CTable>
-          </QueryState>
+        <FilterChips chips={chips} onClearAll={handleClear} />
 
-          <Pagination
-            offset={offset}
-            limit={limit}
-            total={pagination?.total}
-            onChange={setOffset}
-            onLimitChange={handleLimitChange}
-          />
-        </CCardBody>
-      </CCard>
+        <QueryState isLoading={isLoading} isError={isError} onRetry={() => void refetch()}>
+          {/* A vendedor has no editor to open, and a hand cursor promising one would be a lie. */}
+          <CTable
+            align="middle"
+            hover
+            responsive
+            className={`list-table${isReadOnly ? ' rows-static' : ''}`}
+          >
+            <CTableHead>
+              <CTableRow>{renderHeaders()}</CTableRow>
+            </CTableHead>
+            <CTableBody>
+              {products.length === 0 ? (
+                <CTableRow>
+                  {/* Two different dead ends: an empty catalog is a fact, an over-narrow filter is
+                      a place the user needs a way out of. */}
+                  <CTableDataCell
+                    colSpan={colSpan}
+                    className="text-center text-body-secondary py-5"
+                  >
+                    {isFiltered ? (
+                      <>
+                        <div>Ningún producto coincide con los filtros.</div>
+                        <CButton color="link" size="sm" onClick={handleClear}>
+                          Limpiar filtros
+                        </CButton>
+                      </>
+                    ) : (
+                      'Aún no hay productos.'
+                    )}
+                  </CTableDataCell>
+                </CTableRow>
+              ) : (
+                products.map(renderRow)
+              )}
+            </CTableBody>
+          </CTable>
+        </QueryState>
+
+        <Pagination
+          offset={offset}
+          limit={limit}
+          total={pagination?.total}
+          onChange={setOffset}
+          onLimitChange={setLimit}
+        />
+      </div>
 
       <CModal
         visible={formModal.visible}

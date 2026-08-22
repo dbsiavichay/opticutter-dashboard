@@ -1,3 +1,5 @@
+import type { ListSort } from 'src/shared/components/FilterSortSection'
+
 export type { Role, User } from 'src/features/auth/types'
 
 export interface UserPayload {
@@ -20,6 +22,12 @@ export interface UserUpdatePayload {
 
 export interface UserListParams {
   search?: string
+  // One or more roles; with multiple the backend receives repeated `role` params.
+  role?: import('src/features/auth/types').Role | import('src/features/auth/types').Role[]
+  branchId?: number
+  // Omit to list active and inactive alike (what the admin needs).
+  isActive?: boolean
+  sort?: ListSort
   offset?: number
   limit?: number
 }

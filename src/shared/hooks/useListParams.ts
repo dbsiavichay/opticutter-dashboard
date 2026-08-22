@@ -11,11 +11,11 @@ import { PAGE_SIZE } from 'src/shared/constants'
 // A search param leaves `pathname` alone, so `AppContent`'s ErrorBoundary (keyed on pathname) never
 // remounts the page. Same reasoning as the optimizer's `?step=` and the pre-order's `?panel=`.
 export const useListParams = () => {
-  const [params, setParams] = useSearchParams()
+  const [params, writeSearchParams] = useSearchParams()
 
   const write = useCallback(
     (mutate: (sp: URLSearchParams) => void, replace: boolean) => {
-      setParams(
+      writeSearchParams(
         (prev) => {
           const sp = new URLSearchParams(prev)
           mutate(sp)
@@ -24,7 +24,7 @@ export const useListParams = () => {
         { replace },
       )
     },
-    [setParams],
+    [writeSearchParams],
   )
 
   const getParam = useCallback((key: string) => params.get(key) ?? '', [params])
@@ -34,16 +34,30 @@ export const useListParams = () => {
   // means nothing in the new one, and landing on an empty page reads as "no results".
   // `replace` for the search box — one history entry per settled keystroke would bury the page
   // the user came from; a push for the discrete choices, so back undoes them one at a time.
-  const setParam = useCallback(
-    (key: string, value: string | string[] | undefined, options?: { replace?: boolean }) => {
+  // Several filter keys in ONE url update, for an action that changes more than one at a time:
+  // narrowing the product types strands the subtypes that no longer belong to them, and the two
+  // must move together. Two `setParam` calls in the same tick do NOT compose — react-router's
+  // functional updater still receives the pre-update params, so the second write wins and the first
+  // is silently lost. Same reason `setLimit` drops `offset` itself.
+  const setParams = useCallback(
+    (values: Record<string, string | string[] | undefined>, options?: { replace?: boolean }) => {
       write((sp) => {
-        sp.delete(key)
         sp.delete('offset')
-        const values = value == null ? [] : Array.isArray(value) ? value : [value]
-        values.filter((v) => v !== '').forEach((v) => sp.append(key, v))
+        Object.entries(values).forEach(([key, value]) => {
+          sp.delete(key)
+          const list = value == null ? [] : Array.isArray(value) ? value : [value]
+          list.filter((v) => v !== '').forEach((v) => sp.append(key, v))
+        })
       }, options?.replace ?? false)
     },
     [write],
+  )
+
+  const setParam = useCallback(
+    (key: string, value: string | string[] | undefined, options?: { replace?: boolean }) => {
+      setParams({ [key]: value }, options)
+    },
+    [setParams],
   )
 
   const clearParams = useCallback(
@@ -82,5 +96,15 @@ export const useListParams = () => {
     [write],
   )
 
-  return { getParam, getParams, setParam, clearParams, offset, setOffset, limit, setLimit }
+  return {
+    getParam,
+    getParams,
+    setParam,
+    setParams,
+    clearParams,
+    offset,
+    setOffset,
+    limit,
+    setLimit,
+  }
 }
