@@ -32,8 +32,10 @@ const FilterMenu = ({ activeCount, onClear, children }: FilterMenuProps) => (
         </CBadge>
       )}
     </CDropdownToggle>
-    <CDropdownMenu style={{ minWidth: 260, maxWidth: 340, padding: '0.5rem 0' }}>
-      <div style={{ maxHeight: 420, overflowY: 'auto' }}>{children}</div>
+    <CDropdownMenu style={{ minWidth: 280, maxWidth: 360, padding: '0.5rem 0' }}>
+      {/* Five sections (status, client, branch, dates, order) overflow a fixed 420px, and the
+          viewport-relative cap keeps the panel inside a laptop screen instead of running off it. */}
+      <div style={{ maxHeight: 'min(70vh, 520px)', overflowY: 'auto' }}>{children}</div>
       {activeCount > 0 && (
         <>
           <hr className="dropdown-divider" />
@@ -47,3 +49,18 @@ const FilterMenu = ({ activeCount, onClear, children }: FilterMenuProps) => (
 )
 
 export default FilterMenu
+
+interface FilterSectionProps {
+  label: string
+  children: ReactNode
+}
+
+// A labeled field inside the panel. `FilterCheckboxList` styles itself as `.dropdown-item` rows and
+// needs no heading of its own, but the fields that are not checkbox lists (a branch select, a date
+// range, a picker) have no other way to say what they are.
+export const FilterSection = ({ label, children }: FilterSectionProps) => (
+  <div className="pb-1">
+    <div className="dropdown-header px-3 pt-2 pb-1 text-uppercase small">{label}</div>
+    {children}
+  </div>
+)

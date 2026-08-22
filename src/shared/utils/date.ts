@@ -14,6 +14,14 @@ export const localDateKey = (date: Date = new Date()): string => {
   return `${year}-${month}-${day}`
 }
 
+// A calendar day 'YYYY-MM-DD' → 'dd/mm/yyyy', by reordering the parts rather than parsing.
+// `fmtDate` cannot do this job: `new Date('2026-08-21')` is UTC midnight, which in Ecuador (UTC-5)
+// renders as the 20th. A date-only string has no time zone to convert, so none is applied.
+export const fmtDay = (day: string): string => {
+  const [year, month, date] = day.split('-')
+  return year && month && date ? `${date}/${month}/${year}` : day
+}
+
 // A new Date `n` days before `date` (does not mutate the input).
 export const subDays = (date: Date, n: number): Date => {
   const d = new Date(date)

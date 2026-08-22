@@ -109,9 +109,21 @@ export interface OrderListParams {
   status?: OrderStatus | OrderStatus[]
   // Effective filter for global roles (admin and vendedor); operador is implicitly scoped to their branch.
   branchId?: number
+  clientId?: number
+  // Order code or id, or the client's identifier / first / last name.
+  search?: string
+  // Inclusive day bounds on createdAt, as `YYYY-MM-DD`. The backend compares them against a
+  // UTC-naive column, so the cut is a UTC day (see "UTC-naive timestamps" in CLAUDE.md).
+  createdFrom?: string
+  createdTo?: string
+  // The backend defaults to `oldest` (the workshop reads the listing FIFO); the list page asks for
+  // `recent` because the back office wants the last order first.
+  sort?: OrderSort
   offset?: number
   limit?: number
 }
+
+export type OrderSort = 'oldest' | 'recent'
 
 export interface UpdateStatusPayload {
   status: OrderStatus

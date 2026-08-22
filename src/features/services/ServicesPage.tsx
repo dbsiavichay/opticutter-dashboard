@@ -36,15 +36,17 @@ interface ModalState {
 const ServicesPage = () => {
   const [search, setSearch] = useState('')
   const [offset, setOffset] = useState(0)
+  const [limit, setLimit] = useState(PAGE_SIZE)
+
+  // Growing the page size invalidates the current page number, so both move together.
+  const handleLimitChange = (next: number) => {
+    setLimit(next)
+    setOffset(0)
+  }
   const [formModal, setFormModal] = useState<ModalState>({ visible: false, service: null })
   const [deleteModal, setDeleteModal] = useState<ModalState>({ visible: false, service: null })
 
-  const {
-    data: servicesData,
-    isLoading,
-    isError,
-    refetch,
-  } = useServices({ search, offset, limit: PAGE_SIZE })
+  const { data: servicesData, isLoading, isError, refetch } = useServices({ search, offset, limit })
   const services = servicesData?.items ?? []
   const pagination = servicesData?.pagination
   const createMutation = useCreateService()
@@ -160,9 +162,10 @@ const ServicesPage = () => {
 
           <Pagination
             offset={offset}
-            limit={PAGE_SIZE}
+            limit={limit}
             total={pagination?.total}
             onChange={setOffset}
+            onLimitChange={handleLimitChange}
           />
         </CCardBody>
       </CCard>

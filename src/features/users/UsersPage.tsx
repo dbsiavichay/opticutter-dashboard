@@ -39,6 +39,13 @@ interface ModalState {
 const UsersPage = () => {
   const [search, setSearch] = useState('')
   const [offset, setOffset] = useState(0)
+  const [limit, setLimit] = useState(PAGE_SIZE)
+
+  // Growing the page size invalidates the current page number, so both move together.
+  const handleLimitChange = (next: number) => {
+    setLimit(next)
+    setOffset(0)
+  }
   const [formModal, setFormModal] = useState<ModalState>({ visible: false, user: null })
   const [deleteModal, setDeleteModal] = useState<ModalState>({ visible: false, user: null })
 
@@ -50,7 +57,7 @@ const UsersPage = () => {
   } = useUsers({
     search,
     offset,
-    limit: PAGE_SIZE,
+    limit,
   })
   const users = usersData?.items ?? []
   const pagination = usersData?.pagination
@@ -184,9 +191,10 @@ const UsersPage = () => {
 
           <Pagination
             offset={offset}
-            limit={PAGE_SIZE}
+            limit={limit}
             total={pagination?.total}
             onChange={setOffset}
+            onLimitChange={handleLimitChange}
           />
         </CCardBody>
       </CCard>

@@ -20,8 +20,31 @@ const BASE = '/api/v1/orders'
 
 export const ordersApi = {
   // `status` may be an array → repeated params (?status=a&status=b); `toQuery` handles that.
-  list: ({ status, branchId, offset = 0, limit = 20 }: OrderListParams = {}) =>
-    httpClient.list<Order>(`${BASE}/?${toQuery({ status, branchId, offset, limit })}`),
+  // Every param must be named in this destructure or `toQuery` never sees it.
+  list: ({
+    status,
+    branchId,
+    clientId,
+    search,
+    createdFrom,
+    createdTo,
+    sort,
+    offset = 0,
+    limit = 20,
+  }: OrderListParams = {}) =>
+    httpClient.list<Order>(
+      `${BASE}/?${toQuery({
+        status,
+        branchId,
+        clientId,
+        search,
+        createdFrom,
+        createdTo,
+        sort,
+        offset,
+        limit,
+      })}`,
+    ),
   get: (id: string) => httpClient.get<Order>(`${BASE}/${id}`),
   updateStatus: (id: string, data: UpdateStatusPayload) =>
     httpClient.patch<Order>(`${BASE}/${id}/status`, data),
