@@ -70,10 +70,26 @@ export interface ProductPayload {
   attributes: BoardAttributes | EdgeBandingAttributes
 }
 
+/** A source row the sync couldn't import, identified the way the operator
+ *  finds it in the inventory system: by code and article name. */
+export interface ProductSyncIssue {
+  code: string
+  name: string
+  message: string
+}
+
 export interface ProductSyncResult {
   created: number
   updated: number
   deactivated: number
   deleted: number
   skippedMedio: number
+  /** Articles the inventory system has taken out of service (est/FecEli). */
+  skippedInactive: number
+  /** Rows whose data couldn't be parsed. Skipped, never fatal — and left
+   *  untouched in the catalog rather than treated as removed. */
+  skippedInvalid: number
+  issues: ProductSyncIssue[]
+  /** True when the pass ran and rolled back: a preview, nothing was written. */
+  dryRun: boolean
 }

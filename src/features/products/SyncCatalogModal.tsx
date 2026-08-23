@@ -1,9 +1,6 @@
-import { useRef, useState } from 'react'
-import type { ChangeEvent } from 'react'
 import {
   CAlert,
   CButton,
-  CFormLabel,
   CModal,
   CModalBody,
   CModalFooter,
@@ -14,8 +11,8 @@ import {
 
 import { ApiError } from 'src/shared/api/types'
 import type { ApiErrorItem } from 'src/shared/api/types'
-import { productsApi } from './productsApi'
-import type { ProductSyncResult } from './types'
+import { useCatalogSyncPreview, useSyncCatalog } from './useProducts'
+import type { ProductSyncIssue, ProductSyncResult } from './types'
 
 interface SyncCatalogModalProps {
   visible: boolean
@@ -23,57 +20,93 @@ interface SyncCatalogModalProps {
   onSynced: () => void
 }
 
-type Stage = 'input' | 'syncing' | 'done' | 'error'
+const plural = (n: number, singular: string, pluralWord: string) =>
+  `${n} ${n === 1 ? singular : pluralWord}`
 
+/** The counters that matter, in the order the operator reads them. */
+const summaryLines = (result: ProductSyncResult): string[] => {
+  const lines = [
+    plural(result.created, 'nuevo', 'nuevos'),
+    plural(result.updated, 'actualizado', 'actualizados'),
+  ]
+  if (result.deleted > 0) lines.push(plural(result.deleted, 'eliminado', 'eliminados'))
+  if (result.deactivated > 0)
+    lines.push(`${plural(result.deactivated, 'desactivado', 'desactivados')} (usados en un pedido)`)
+  if (result.skippedMedio > 0)
+    lines.push(`${plural(result.skippedMedio, 'omitido', 'omitidos')} (medio tablero)`)
+  if (result.skippedInactive > 0)
+    lines.push(`${plural(result.skippedInactive, 'de baja', 'de baja')} en el inventario`)
+  if (result.skippedInvalid > 0)
+    lines.push(`${plural(result.skippedInvalid, 'omitido', 'omitidos')} con datos ilegibles`)
+  return lines
+}
+
+// Rows the sync couldn't read. Shown in full, not as a count: the whole point
+// is that someone goes and fixes them in the inventory system, and for that
+// they need the code and the article name.
+const IssueList = ({ issues }: { issues: ProductSyncIssue[] }) => (
+  <>
+    <p className="small mb-1">
+      <strong>{issues.length}</strong>{' '}
+      {issues.length === 1 ? 'artículo omitido' : 'artículos omitidos'}. Quedan fuera del catálogo y
+      sus productos actuales no se modifican; corrígelos en el sistema de inventario para
+      incluirlos.
+    </p>
+    <div style={{ maxHeight: 220, overflowY: 'auto' }}>
+      <ul className="small mb-0 ps-3">
+        {issues.map((issue) => (
+          <li key={issue.code}>
+            <code>{issue.code}</code> {issue.name} — {issue.message}
+          </li>
+        ))}
+      </ul>
+    </div>
+  </>
+)
+
+const hasChanges = (result: ProductSyncResult) =>
+  result.created > 0 || result.updated > 0 || result.deactivated > 0 || result.deleted > 0
+
+const errorItems = (error: Error): ApiErrorItem[] =>
+  error instanceof ApiError && error.errors.length > 0
+    ? error.errors
+    : [{ message: error.message || 'Error al sincronizar el catálogo.' }]
+
+// There's no file to pick any more: the server reads the inventory system
+// itself. So the modal opens straight into a dry run and asks the operator to
+// approve it — the reconciliation pass deletes whatever the read no longer
+// brings, which is the one irreversible part of a sync.
 const SyncCatalogModal = ({ visible, onClose, onSynced }: SyncCatalogModalProps) => {
-  const [stage, setStage] = useState<Stage>('input')
-  const [file, setFile] = useState<File | null>(null)
-  const [result, setResult] = useState<ProductSyncResult | null>(null)
-  const [errors, setErrors] = useState<ApiErrorItem[]>([])
-  const [genericError, setGenericError] = useState<string | null>(null)
-  const inputRef = useRef<HTMLInputElement>(null)
+  const preview = useCatalogSyncPreview(visible)
+  const apply = useSyncCatalog()
 
-  const reset = () => {
-    setStage('input')
-    setFile(null)
-    setResult(null)
-    setErrors([])
-    setGenericError(null)
-    if (inputRef.current) inputRef.current.value = ''
-  }
+  const result = apply.data ?? preview.data ?? null
+  const error = apply.error ?? preview.error ?? null
 
   const close = () => {
-    reset()
+    apply.reset()
     onClose()
   }
 
-  const handleFile = (e: ChangeEvent<HTMLInputElement>) => {
-    setFile(e.target.files?.[0] ?? null)
+  const handleApply = () => {
+    apply.mutate(undefined, {
+      onSuccess: (data) => {
+        if (hasChanges(data)) onSynced()
+      },
+    })
   }
 
-  const handleSync = async () => {
-    if (!file) return
-    setStage('syncing')
-    try {
-      const data = await productsApi.syncCatalog(file)
-      setResult(data)
-      setStage('done')
-      if (data.created > 0 || data.updated > 0 || data.deactivated > 0 || data.deleted > 0)
-        onSynced()
-    } catch (err) {
-      if (err instanceof ApiError && err.errors.length > 0) {
-        setErrors(err.errors)
-      } else {
-        setGenericError(err instanceof Error ? err.message : 'Error al sincronizar el catálogo.')
-      }
-      setStage('error')
-    }
+  const handleRetry = () => {
+    apply.reset()
+    void preview.refetch()
   }
 
-  const handleDone = () => {
-    reset()
-    onClose()
-  }
+  // 503 means the inventory system didn't answer — nothing to fix in the data,
+  // unlike the row-level 422 the validation raises.
+  const unreachable = error instanceof ApiError && error.status === 503
+  const applied = apply.isSuccess && result !== null
+  const nothingToDo = !applied && result !== null && !hasChanges(result)
+  const busy = apply.isPending || (visible && preview.isFetching)
 
   return (
     <CModal visible={visible} onClose={close} size="lg" alignment="center">
@@ -81,106 +114,97 @@ const SyncCatalogModal = ({ visible, onClose, onSynced }: SyncCatalogModalProps)
         <CModalTitle>Sincronizar catálogo</CModalTitle>
       </CModalHeader>
       <CModalBody>
-        {stage === 'input' && (
+        {busy && (
+          <div className="py-4 text-center">
+            <CSpinner size="sm" className="me-2" />
+            {apply.isPending ? 'Sincronizando…' : 'Consultando el inventario…'}
+          </div>
+        )}
+
+        {!busy && error && (
           <>
-            <p className="text-body-secondary small mb-3">
-              Sube el CSV exportado por el sistema externo (tableros o tapacantos, tal cual se
-              exporta). El archivo se valida completo antes de aplicar cualquier cambio: si una sola
-              fila tiene un problema, no se crea ni actualiza nada y se muestra el detalle exacto
-              para corregirlo. Los productos que ya vinieron de una sincronización anterior y no
-              aparecen en este archivo se <strong>eliminan</strong> si nunca se usaron en un pedido,
-              o quedan <strong>inactivos</strong> si sí se usaron; los productos creados a mano en
-              el catálogo nunca se ven afectados.
-            </p>
-            <CFormLabel className="small mb-1 d-block">Archivo CSV</CFormLabel>
-            <input
-              ref={inputRef}
-              type="file"
-              accept=".csv,text/csv"
-              className="form-control form-control-sm"
-              onChange={handleFile}
-            />
+            <CAlert color="danger" className="mb-2 py-2 small">
+              {unreachable
+                ? 'No se pudo conectar con el sistema de inventario. No se modificó ningún producto — vuelve a intentarlo en un momento.'
+                : 'El inventario tiene datos que no se pudieron procesar. No se creó ni actualizó ningún producto — corrígelos en el sistema de inventario y vuelve a intentarlo.'}
+            </CAlert>
+            <div style={{ maxHeight: 260, overflowY: 'auto' }}>
+              <ul className="small mb-0 ps-3">
+                {errorItems(error).map((e, i) => (
+                  <li key={i}>{e.message}</li>
+                ))}
+              </ul>
+            </div>
           </>
         )}
 
-        {stage === 'syncing' && (
-          <div className="py-4 text-center">
-            <CSpinner size="sm" className="me-2" />
-            Sincronizando…
-          </div>
-        )}
-
-        {stage === 'done' && result && (
-          <div className="text-center py-4">
-            <p className="mb-0">
-              <strong>{result.created}</strong> creado{result.created !== 1 ? 's' : ''},{' '}
-              <strong>{result.updated}</strong> actualizado{result.updated !== 1 ? 's' : ''}
-              {result.deactivated > 0 && (
-                <>
-                  , <strong>{result.deactivated}</strong> desactivado
-                  {result.deactivated !== 1 ? 's' : ''}
-                </>
-              )}
-              {result.deleted > 0 && (
-                <>
-                  , <strong>{result.deleted}</strong> eliminado{result.deleted !== 1 ? 's' : ''}
-                </>
-              )}
-              {result.skippedMedio > 0 && (
-                <>
-                  , {result.skippedMedio} omitido{result.skippedMedio !== 1 ? 's' : ''} (medio
-                  tablero)
-                </>
-              )}
-              .
-            </p>
-          </div>
-        )}
-
-        {stage === 'error' && (
+        {!busy && !error && applied && result && (
           <>
-            <CAlert color="danger" className="mb-2 py-2 small">
-              El archivo tiene errores de validación. No se creó ni actualizó ningún producto —
-              corrígelo y vuelve a intentarlo.
-            </CAlert>
-            {genericError && <p className="text-danger small">{genericError}</p>}
-            {errors.length > 0 && (
-              <div style={{ maxHeight: 260, overflowY: 'auto' }}>
-                <ul className="small mb-0 ps-3">
-                  {errors.map((e, i) => (
-                    <li key={i}>{e.message}</li>
+            <p className="mb-0 py-3 text-center">{summaryLines(result).join(', ')}.</p>
+            {result.issues.length > 0 && (
+              <CAlert color="warning" className="mb-0 py-2">
+                <IssueList issues={result.issues} />
+              </CAlert>
+            )}
+          </>
+        )}
+
+        {!busy && !error && !applied && result && (
+          <>
+            {nothingToDo ? (
+              <p className="mb-0 py-3 text-center">El catálogo ya está al día.</p>
+            ) : (
+              <>
+                <p className="text-body-secondary small mb-2">
+                  Se traerán los tableros y tapacantos del sistema de inventario. Todavía no se ha
+                  aplicado nada — esto es lo que va a pasar:
+                </p>
+                <ul className="mb-3">
+                  {summaryLines(result).map((line, i) => (
+                    <li key={i}>{line}</li>
                   ))}
                 </ul>
-              </div>
+                <p className="text-body-secondary small mb-3">
+                  Los productos que ya vinieron de una sincronización anterior y que el inventario
+                  ya no trae se <strong>eliminan</strong> si nunca se usaron en un pedido, o quedan
+                  <strong> inactivos</strong> si sí se usaron. Los productos creados a mano en el
+                  catálogo nunca se ven afectados.
+                </p>
+                {result.issues.length > 0 && (
+                  <CAlert color="warning" className="mb-0 py-2">
+                    <IssueList issues={result.issues} />
+                  </CAlert>
+                )}
+              </>
             )}
           </>
         )}
       </CModalBody>
       <CModalFooter className="justify-content-end gap-2">
-        {stage === 'input' && (
+        {!busy && error && (
           <>
-            <CButton color="secondary" variant="outline" onClick={close}>
-              Cancelar
-            </CButton>
-            <CButton color="primary" disabled={!file} onClick={() => void handleSync()}>
-              Sincronizar
-            </CButton>
-          </>
-        )}
-        {stage === 'error' && (
-          <>
-            <CButton color="secondary" variant="outline" onClick={reset}>
-              Elegir otro archivo
+            <CButton color="secondary" variant="outline" onClick={handleRetry}>
+              Reintentar
             </CButton>
             <CButton color="secondary" onClick={close}>
               Cerrar
             </CButton>
           </>
         )}
-        {stage === 'done' && (
-          <CButton color="primary" onClick={handleDone}>
+        {!busy && !error && applied && (
+          <CButton color="primary" onClick={close}>
             Cerrar
           </CButton>
+        )}
+        {!busy && !error && !applied && result && (
+          <>
+            <CButton color="secondary" variant="outline" onClick={close}>
+              Cancelar
+            </CButton>
+            <CButton color="primary" disabled={nothingToDo} onClick={handleApply}>
+              Aplicar
+            </CButton>
+          </>
         )}
       </CModalFooter>
     </CModal>
