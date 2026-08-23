@@ -39,12 +39,10 @@ export const productsApi = {
       `${BASE}/${boardId}/edge-bandings${query ? `?${query}` : ''}`,
     )
   },
-  // Bulk upsert from the external inventory system's CSV export — distinct
-  // from the generic paste/file import above (different column shape, real
-  // server-side parsing, all-or-nothing validation with row-level errors).
-  syncCatalog: (file: File) => {
-    const form = new FormData()
-    form.append('file', file)
-    return httpClient.upload<ProductSyncResult>(`${BASE}/sync`, form)
-  },
+  // Bulk upsert straight from the external inventory system's database — no
+  // file to upload, the server reads the vendor's table itself. All-or-nothing
+  // validation with row-level errors; `dryRun` runs the whole pass and rolls
+  // back, so the operator sees the deletions before they happen.
+  syncCatalog: (dryRun = false) =>
+    httpClient.post<ProductSyncResult>(`${BASE}/sync?dryRun=${dryRun}`),
 }

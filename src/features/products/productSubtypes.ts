@@ -1,7 +1,7 @@
 // Must match the backend's `BoardSubtype`/`EdgeBandingSubtype` enum values
 // exactly (src/modules/products/types/board.py, types/edge_banding.py). Canonical
 // values are English — what's sent/stored/filtered on — because the backend
-// normalizes the vendor CSV's Spanish text into these on sync (e.g. "Pino" ->
+// normalizes the vendor's Spanish text into these on sync (e.g. "Pino" ->
 // "Pine"). The shop floor still thinks and talks in Spanish, so the UI shows
 // SUBTYPE_LABELS' translation (the same terms this catalog used before the
 // backend switched to English) instead of the raw value; only the wire value
