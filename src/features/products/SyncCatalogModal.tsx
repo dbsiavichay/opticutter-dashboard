@@ -1,3 +1,4 @@
+import type { ReactNode } from 'react'
 import {
   CAlert,
   CButton,
@@ -41,28 +42,84 @@ const summaryLines = (result: ProductSyncResult): string[] => {
   return lines
 }
 
-// Rows the sync couldn't read. Shown in full, not as a count: the whole point
-// is that someone goes and fixes them in the inventory system, and for that
-// they need the code and the article name.
-const IssueList = ({ issues }: { issues: ProductSyncIssue[] }) => (
+// Both report lists are shown in full, not as a count: the whole point is that
+// someone goes and fixes these rows in the inventory system, and for that they
+// need the code and the article name.
+//
+// The key can't be the code alone — one article can collect two warnings (no
+// alias *and* a familia nobody coordinates).
+const RowList = ({ rows, headline }: { rows: ProductSyncIssue[]; headline: ReactNode }) => (
   <>
-    <p className="small mb-1">
-      <strong>{issues.length}</strong>{' '}
-      {issues.length === 1 ? 'artículo omitido' : 'artículos omitidos'}. Quedan fuera del catálogo y
-      sus productos actuales no se modifican; corrígelos en el sistema de inventario para
-      incluirlos.
-    </p>
+    <p className="small mb-1">{headline}</p>
     <div style={{ maxHeight: 220, overflowY: 'auto' }}>
       <ul className="small mb-0 ps-3">
-        {issues.map((issue) => (
-          <li key={issue.code}>
-            <code>{issue.code}</code> {issue.name} — {issue.message}
+        {rows.map((row, i) => (
+          <li key={`${row.code}-${i}`}>
+            <code>{row.code}</code> {row.name} — {row.message}
           </li>
         ))}
       </ul>
     </div>
   </>
 )
+
+// Rows the sync couldn't read: they stay out of the catalog entirely.
+const IssueList = ({ issues }: { issues: ProductSyncIssue[] }) => (
+  <RowList
+    rows={issues}
+    headline={
+      <>
+        <strong>{issues.length}</strong>{' '}
+        {issues.length === 1 ? 'artículo omitido' : 'artículos omitidos'}. Quedan fuera del catálogo
+        y sus productos actuales no se modifican; corrígelos en el sistema de inventario para
+        incluirlos.
+      </>
+    }
+  />
+)
+
+// Rows that DID import — the distinction that earns this its own block. What
+// they lost is the tablero<->tapacanto coordination, which fails silently: the
+// tapacanto picker just comes back empty and nobody finds out until a seller
+// can't quote it. The fix is the OBS. column of the inventory system, written
+// `FAMILIA` or `FAMILIA - ALIAS`.
+const WarningList = ({ warnings }: { warnings: ProductSyncIssue[] }) => (
+  <RowList
+    rows={warnings}
+    headline={
+      <>
+        <strong>{warnings.length}</strong>{' '}
+        {warnings.length === 1 ? 'artículo importado' : 'artículos importados'} con la coordinación
+        incompleta. <strong>Sí entran al catálogo</strong>, pero el tapacanto no se va a ofrecer
+        junto a su tablero. Se corrige en la columna OBS. del sistema de inventario, escrita{' '}
+        <code>FAMILIA</code> o <code>FAMILIA - ALIAS</code>.
+      </>
+    }
+  />
+)
+
+// Everything the pass has to say about individual rows, in severity order.
+// Rendered in every non-error state — including "el catálogo ya está al día",
+// where the counters are all zero but the rows still need fixing.
+const ReportBlocks = ({ result }: { result: ProductSyncResult }) => {
+  // Nothing at all rather than an empty spacer, so the states with nothing to
+  // report keep the modal as tight as it was.
+  if (result.issues.length === 0 && result.warnings.length === 0) return null
+  return (
+    <div className="mt-3">
+      {result.issues.length > 0 && (
+        <CAlert color="warning" className="mb-2 py-2">
+          <IssueList issues={result.issues} />
+        </CAlert>
+      )}
+      {result.warnings.length > 0 && (
+        <CAlert color="info" className="mb-0 py-2">
+          <WarningList warnings={result.warnings} />
+        </CAlert>
+      )}
+    </div>
+  )
+}
 
 const hasChanges = (result: ProductSyncResult) =>
   result.created > 0 || result.updated > 0 || result.deactivated > 0 || result.deleted > 0
@@ -141,11 +198,7 @@ const SyncCatalogModal = ({ visible, onClose, onSynced }: SyncCatalogModalProps)
         {!busy && !error && applied && result && (
           <>
             <p className="mb-0 py-3 text-center">{summaryLines(result).join(', ')}.</p>
-            {result.issues.length > 0 && (
-              <CAlert color="warning" className="mb-0 py-2">
-                <IssueList issues={result.issues} />
-              </CAlert>
-            )}
+            <ReportBlocks result={result} />
           </>
         )}
 
@@ -170,13 +223,9 @@ const SyncCatalogModal = ({ visible, onClose, onSynced }: SyncCatalogModalProps)
                   <strong> inactivos</strong> si sí se usaron. Los productos creados a mano en el
                   catálogo nunca se ven afectados.
                 </p>
-                {result.issues.length > 0 && (
-                  <CAlert color="warning" className="mb-0 py-2">
-                    <IssueList issues={result.issues} />
-                  </CAlert>
-                )}
               </>
             )}
+            <ReportBlocks result={result} />
           </>
         )}
       </CModalBody>
