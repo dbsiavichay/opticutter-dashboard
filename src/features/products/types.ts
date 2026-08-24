@@ -72,6 +72,10 @@ export interface ProductPayload {
 
 /** A source row the sync couldn't import, identified the way the operator
  *  finds it in the inventory system: by code and article name. */
+/** One source row the sync has something to report about — the vendor's own
+ *  code and article name, because fixing it means finding that row in the
+ *  inventory system. Same shape for both severities; which list it lands in
+ *  (`issues` vs `warnings`) is what says how bad it is. */
 export interface ProductSyncIssue {
   code: string
   name: string
@@ -90,6 +94,12 @@ export interface ProductSyncResult {
    *  untouched in the catalog rather than treated as removed. */
   skippedInvalid: number
   issues: ProductSyncIssue[]
+  /** Rows that WERE imported but whose design data can't do its job: a
+   *  tapacanto with no familia or no alias, or a familia declared on only one
+   *  of the two categories. Nothing was skipped — it's reported because
+   *  board<->tapacanto coordination is an exact match that otherwise fails
+   *  silently, and the preview is where the operator would want to see it. */
+  warnings: ProductSyncIssue[]
   /** True when the pass ran and rolled back: a preview, nothing was written. */
   dryRun: boolean
 }

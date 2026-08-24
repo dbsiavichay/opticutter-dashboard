@@ -339,10 +339,11 @@ const ProductForm = ({ product, onSubmit, onCancel, isSubmitting, error }: Produ
                   value={attrs.family}
                   onChange={setAttr('family')}
                   maxLength={64}
-                  placeholder="Ej: CASHMERE"
+                  placeholder="Ej: Cashmere"
                 />
                 <small className="text-body-secondary">
-                  Debe coincidir con la familia del tapacanto para coordinarlos.
+                  Debe coincidir con la familia del tapacanto para coordinarlos. En los productos
+                  sincronizados sale de la columna OBS. del inventario.
                 </small>
                 <FieldError name="family" errors={fieldErrors} />
               </CCol>
@@ -434,7 +435,7 @@ const ProductForm = ({ product, onSubmit, onCancel, isSubmitting, error }: Produ
                   value={attrs.family}
                   onChange={setAttr('family')}
                   maxLength={64}
-                  placeholder="Ej: CASHMERE"
+                  placeholder="Ej: Cashmere"
                 />
                 <small className="text-body-secondary">
                   Para coordinar con el tablero (no se imprime en documentos).
@@ -450,7 +451,8 @@ const ProductForm = ({ product, onSubmit, onCancel, isSubmitting, error }: Produ
                   placeholder="Ej: CSH"
                 />
                 <small className="text-body-secondary">
-                  Código corto impreso en la notación de despiece/documentos.
+                  Código corto impreso en la notación de despiece/documentos. En los productos
+                  sincronizados es el sufijo de OBS. (<code>Cashmere - CSH</code>).
                 </small>
                 <FieldError name="alias" errors={fieldErrors} />
               </CCol>
