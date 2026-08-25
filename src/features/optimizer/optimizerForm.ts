@@ -417,22 +417,34 @@ export const CS_CD_TO_BANDTYPE: Record<string, BandType> = { CS: 'Soft', CD: 'Ha
 export const BANDTYPE_ABBR: Record<BandType, string> = { Soft: 'CS', Hard: 'CD' }
 export const BANDTYPE_LABEL: Record<BandType, string> = { Soft: 'Suave', Hard: 'Duro' }
 
-// Edge banding width (mm) that physically covers a board of this thickness. Mirrors
-// BOARD_THICKNESS_TO_EDGE_WIDTH in the backend's src/modules/products/service.py — keep both in
-// sync. Read from the board's thickness rather than from its coordinated list, because that list
-// is empty when the board has no `family` loaded and the width rule still applies.
-export const EDGE_WIDTH_FOR_THICKNESS: Record<number, number> = { 15: 19, 36: 40 }
+// A tapacanto covers a board's edge only if it is WIDER than the board is thick — the overhang
+// is what the trimmer shaves off. Mirrors edge_width_fits_board in the backend's
+// src/modules/products/service.py (EDGE_WIDTH_MIN/MAX_OVERHANG_MM) — keep both in sync.
+//
+// This used to be a map of one exact width per thickness ({ 15: 19, 36: 40 }), which held while
+// the catalog was seed data. The vendor stocks the same design in several widths (18/19/20/22 for
+// a 15mm board, 40/45 for a 36mm one), so an exact width hid most of them and left whole designs
+// with nothing at all.
+export const EDGE_WIDTH_MIN_OVERHANG_MM = 1
+export const EDGE_WIDTH_MAX_OVERHANG_MM = 10
 
-// The banding width coordinated with a board thickness, or undefined when no rule applies
-// (non-catalog material, or a thickness outside the table) — callers then skip the filter.
-export const edgeWidthForThickness = (thickness?: number): number | undefined =>
-  thickness == null ? undefined : EDGE_WIDTH_FOR_THICKNESS[thickness]
+// Whether a tapacanto of this width covers a board of this thickness. Read from the board's
+// thickness rather than from its coordinated list, because that list is empty when the board has
+// no `family` loaded and the rule still applies. Unknown thickness (non-catalog material) accepts
+// everything, so the caller shows the whole catalog instead of an empty table.
+export const edgeWidthFitsBoard = (thickness: number | undefined, width?: number): boolean => {
+  if (thickness == null || width == null) return true
+  const overhang = width - thickness
+  return overhang >= EDGE_WIDTH_MIN_OVERHANG_MM && overhang <= EDGE_WIDTH_MAX_OVERHANG_MM
+}
 
 // A trailing quick-entry token declaring the band type (e.g. "…2L1C CS").
 export const BAND_TYPE_TOKEN_RE = /^C[SD]$/i
 
-// Picks the coordinated tapacanto for a band type. `coord` is the board's coordinated list
-// (already sorted by thickness asc by the backend), so the first match is the thinnest.
+// Picks the coordinated tapacanto for a band type. `coord` is the board's coordinated list, which
+// the backend sorts by width asc (then by the tape's own thickness), so the first match is the
+// narrowest tape that covers the edge — the one the shop actually uses. A design stocked in more
+// than one width keeps its wider options behind it in the dropdown.
 export const inferBandingProductId = (
   coord: EdgeBandingProduct[],
   bandType: BandType | '' | undefined,

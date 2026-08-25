@@ -124,6 +124,20 @@ const ReportBlocks = ({ result }: { result: ProductSyncResult }) => {
 const hasChanges = (result: ProductSyncResult) =>
   result.created > 0 || result.updated > 0 || result.deactivated > 0 || result.deleted > 0
 
+const issueKey = (issue: ProductSyncIssue) => `${issue.code}|${issue.message}`
+
+// The preview and the apply are two separate reads of the same live inventory
+// table, so in the common case they report the exact same rows — the operator
+// already read and accepted them by clicking "Aplicar". Only a row that
+// WASN'T in the preview (the source changed between the two reads) is new
+// information worth keeping the modal open for.
+const hasReportsNotInPreview = (result: ProductSyncResult, preview: ProductSyncResult | null) => {
+  const previouslyShown = new Set(
+    [...(preview?.issues ?? []), ...(preview?.warnings ?? [])].map(issueKey),
+  )
+  return [...result.issues, ...result.warnings].some((i) => !previouslyShown.has(issueKey(i)))
+}
+
 const errorItems = (error: Error): ApiErrorItem[] =>
   error instanceof ApiError && error.errors.length > 0
     ? error.errors
@@ -146,9 +160,17 @@ const SyncCatalogModal = ({ visible, onClose, onSynced }: SyncCatalogModalProps)
   }
 
   const handleApply = () => {
+    const previewedResult = preview.data ?? null
     apply.mutate(undefined, {
       onSuccess: (data) => {
         if (hasChanges(data)) onSynced()
+        // The operator already read and accepted the preview's issues/
+        // warnings by clicking "Aplicar" — showing the identical list again
+        // just to be dismissed is a wasted click. Only close automatically
+        // when apply's own read didn't turn up anything the preview hadn't
+        // already shown; a genuinely new row (the source changed between the
+        // two reads) still needs a look.
+        if (!hasReportsNotInPreview(data, previewedResult)) close()
       },
     })
   }

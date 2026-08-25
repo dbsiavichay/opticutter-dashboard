@@ -22,7 +22,7 @@ import { fmtMoney } from 'src/shared/utils/format'
 import { normalizeText } from 'src/shared/utils/text'
 import type { ModalContainer } from './types'
 import type { BandType } from './optimizerForm'
-import { BANDTYPE_LABEL, BAND_TYPES } from './optimizerForm'
+import { BANDTYPE_LABEL, BAND_TYPES, edgeWidthFitsBoard } from './optimizerForm'
 
 interface EdgeBandingPickerModalProps {
   visible: boolean
@@ -30,9 +30,10 @@ interface EdgeBandingPickerModalProps {
   products: EdgeBandingProduct[]
   // Currently assigned productId ('' = none), highlighted in the list.
   value: string
-  // Width coordinated with the board's thickness. When set, the list is narrowed to it unless
-  // the user lifts the filter; undefined (non-catalog material, unusual thickness) shows all.
-  compatibleWidth?: number
+  // The board's thickness (mm). When set, the list is narrowed to the widths that cover it —
+  // several, since a design is stocked in more than one — unless the user lifts the filter;
+  // undefined (non-catalog material) shows the whole catalog.
+  boardThickness?: number
   pieceLabel?: string
   container?: ModalContainer
   onSelect: (product: EdgeBandingProduct) => void
@@ -52,7 +53,7 @@ const EdgeBandingPickerModal = ({
   visible,
   products,
   value,
-  compatibleWidth,
+  boardThickness,
   pieceLabel,
   container,
   onSelect,
@@ -65,18 +66,18 @@ const EdgeBandingPickerModal = ({
   const [bandType, setBandType] = useState<'' | BandType>('')
   const [allWidths, setAllWidths] = useState(false)
 
-  const widthFilterActive = compatibleWidth != null && !allWidths
+  const widthFilterActive = boardThickness != null && !allWidths
 
   const filtered = useMemo(() => {
     const tokens = normalizeText(query).split(/\s+/).filter(Boolean)
     return products.filter((p) => {
-      if (widthFilterActive && p.attributes.width !== compatibleWidth) return false
+      if (widthFilterActive && !edgeWidthFitsBoard(boardThickness, p.attributes.width)) return false
       if (bandType && p.attributes.bandType !== bandType) return false
       if (tokens.length === 0) return true
       const hay = normalizeText(attrText(p))
       return tokens.every((t) => hay.includes(t))
     })
-  }, [products, query, bandType, widthFilterActive, compatibleWidth])
+  }, [products, query, bandType, widthFilterActive, boardThickness])
 
   return (
     <CModal visible={visible} onClose={onClose} size="lg" alignment="center" container={container}>
@@ -108,13 +109,13 @@ const EdgeBandingPickerModal = ({
           </CFormSelect>
         </div>
 
-        {compatibleWidth != null && (
+        {boardThickness != null && (
           <CFormCheck
             className="mb-2 small"
             id="edge-banding-all-widths"
             checked={allWidths}
             onChange={(e) => setAllWidths(e.target.checked)}
-            label={`Mostrar tapacantos de otros anchos (el tablero usa ${compatibleWidth}mm)`}
+            label={`Mostrar tapacantos de cualquier ancho (el tablero es de ${boardThickness}mm)`}
           />
         )}
 
@@ -165,7 +166,7 @@ const EdgeBandingPickerModal = ({
                     className="text-center text-body-secondary small py-3"
                   >
                     Sin tapacantos que coincidan.
-                    {widthFilterActive && ' Prueba mostrando los de otros anchos.'}
+                    {widthFilterActive && ' Prueba mostrando los de cualquier ancho.'}
                   </CTableDataCell>
                 </CTableRow>
               )}
