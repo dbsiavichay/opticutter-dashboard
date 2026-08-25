@@ -32,7 +32,6 @@ import {
   BAND_TYPES,
   CANTO_NOTATIONS,
   displayedBandType,
-  edgeWidthForThickness,
   inferBandingProductId,
   isRequirementEmpty,
   needsBandingProduct,
@@ -759,7 +758,7 @@ const PieceRowsTable = ({
           visible
           products={edgeBandings}
           value={String(pickerReq.edgeBanding.productId)}
-          compatibleWidth={edgeWidthForThickness(boardThickness)}
+          boardThickness={boardThickness}
           pieceLabel={pickerReq.label.trim() || `Pieza ${flatOf(pickerRow) + 1}`}
           container={container}
           onSelect={(p) => {
