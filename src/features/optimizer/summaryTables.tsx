@@ -1,6 +1,7 @@
 import {
   CBadge,
   CCol,
+  CFormCheck,
   CTable,
   CTableBody,
   CTableDataCell,
@@ -35,8 +36,24 @@ export const Kpi = ({ label, value, md = 3 }: KpiProps) => (
 
 export const meters = (n?: number | null) => (n != null ? `${n.toFixed(2)} m` : '—')
 
-export const MaterialsSummaryTable = ({ rows }: { rows: MaterialSummary[] }) => {
+interface MaterialsSummaryTableProps {
+  rows: MaterialSummary[]
+  // Which boards the price tier's discount applies to, by materialKey. Passing `onToggleDiscount`
+  // is what turns the "Desc." column on: without it the table stays exactly as read-only as before.
+  discountedKeys?: Set<string>
+  onToggleDiscount?: (materialKey: string) => void
+  // Selection visible but frozen (a closed pre-order, or a recompute in flight).
+  discountDisabled?: boolean
+}
+
+export const MaterialsSummaryTable = ({
+  rows,
+  discountedKeys,
+  onToggleDiscount,
+  discountDisabled = false,
+}: MaterialsSummaryTableProps) => {
   if (!rows.length) return null
+  const selectable = !!onToggleDiscount
   return (
     <CTable small responsive className="summary-table mb-3">
       <CTableHead>
@@ -48,11 +65,25 @@ export const MaterialsSummaryTable = ({ rows }: { rows: MaterialSummary[] }) => 
           <CTableHeaderCell className="text-end">Cant.</CTableHeaderCell>
           <CTableHeaderCell className="text-end">Efic. avg</CTableHeaderCell>
           <CTableHeaderCell className="text-end">Costo</CTableHeaderCell>
+          {/* Last column, right after the cost it acts on: the checkbox answers "does the
+              discount apply to THIS amount", so it reads next to the amount. */}
+          {selectable && (
+            <CTableHeaderCell
+              className="text-center"
+              title="Aplicar el descuento del nivel de precio a este tablero"
+            >
+              Desc.
+            </CTableHeaderCell>
+          )}
         </CTableRow>
       </CTableHead>
       <CTableBody>
         {rows.map((m) => (
-          <CTableRow key={m.materialKey}>
+          // A material billed as full boards AND half boards yields two rows sharing one
+          // materialKey, so the key has to include `halfBoard`. Plain `materialKey` was already
+          // a duplicate-key collision; it went unnoticed while the cells were static text and
+          // would have started mixing up state now that a row carries a checkbox.
+          <CTableRow key={`${m.materialKey}-${m.halfBoard ? 'half' : 'full'}`}>
             <CTableDataCell>
               {stripHalfSuffix(m.productName) ?? m.productCode ?? m.materialKey}{' '}
               {m.halfBoard && <CBadge color="info">½ medio</CBadge>}
@@ -65,6 +96,22 @@ export const MaterialsSummaryTable = ({ rows }: { rows: MaterialSummary[] }) => 
               {m.avgEfficiency != null ? `${m.avgEfficiency.toFixed(1)}%` : '—'}
             </CTableDataCell>
             <CTableDataCell className="text-end">{fmtMoney(m.totalCost)}</CTableDataCell>
+            {selectable && (
+              <CTableDataCell className="text-center">
+                {/* Only catalog boards are discountable — an offcut or a manual measurement has no
+                    list price to discount. The two rows of one material share its mark. */}
+                {m.productId != null && (
+                  <CFormCheck
+                    checked={discountedKeys?.has(m.materialKey) ?? false}
+                    disabled={discountDisabled}
+                    onChange={() => onToggleDiscount?.(m.materialKey)}
+                    aria-label={`Aplicar descuento a ${
+                      stripHalfSuffix(m.productName) ?? m.productCode ?? m.materialKey
+                    }`}
+                  />
+                )}
+              </CTableDataCell>
+            )}
           </CTableRow>
         ))}
       </CTableBody>

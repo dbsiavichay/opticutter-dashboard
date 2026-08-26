@@ -77,6 +77,13 @@ const OptimizerPage = () => {
   const [loadingDraftId, setLoadingDraftId] = useState<number | null>(null)
   const [savedFlash, setSavedFlash] = useState(false)
   const flashTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  // The per-board discount re-prices on the server (same cached cut plan, only the `pricing`
+  // block moves), so a burst of checkbox clicks is collapsed into one request. `recalcScheduled`
+  // turns the "Recalculando…" hint on from the CLICK: during the debounce window
+  // `optimize.isPending` is still false, and the total on screen is one the user is about to
+  // stop believing.
+  const [recalcScheduled, setRecalcScheduled] = useState(false)
+  const recalcTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   // Half-filled rows found on the last attempt to leave the Despiece step; blocks the advance.
   const [issues, setIssues] = useState<RequirementIssue[]>([])
 
@@ -216,10 +223,11 @@ const OptimizerPage = () => {
     return () => clearTimeout(t)
   }, [materials, pieces.requirements, services.lines, draftId, draftName, hasWork])
 
-  // Clean up the "Guardado" flash timer on unmount.
+  // Clean up the "Guardado" flash and pending-recompute timers on unmount.
   useEffect(
     () => () => {
       if (flashTimer.current) clearTimeout(flashTimer.current)
+      if (recalcTimer.current) clearTimeout(recalcTimer.current)
     },
     [],
   )
@@ -333,15 +341,19 @@ const OptimizerPage = () => {
         variant?: number
         strategy?: PackingStrategy
         priceTierCode?: string
+        materials?: MaterialForm[]
       } = {},
     ) => {
       const nextVariant = overrides.variant ?? variant
       const nextStrategy = overrides.strategy ?? strategy
       const nextTier = overrides.priceTierCode ?? priceTierCode
 
-      const payload = buildPayload(materials, pieces.requirements)
+      const payload = buildPayload(overrides.materials ?? materials, pieces.requirements)
       if (payload.validCount === 0) {
         addToast('No hay piezas válidas para optimizar. Revisa materiales y medidas.', 'warning')
+        // Nothing was sent, so no `onSettled` will fire: a scheduled recompute that lands here
+        // would otherwise leave "Recalculando…" on screen forever.
+        setRecalcScheduled(false)
         return
       }
       const sent = signatureOf(
@@ -366,6 +378,7 @@ const OptimizerPage = () => {
           },
           onSettled: () => {
             attemptedSignature.current = sent
+            setRecalcScheduled(false)
           },
         },
       )
@@ -426,6 +439,33 @@ const OptimizerPage = () => {
   const handlePriceTierChange = (code: string) => {
     setPriceTierCode(code)
     if (canOptimize) runOptimize({ priceTierCode: code })
+  }
+
+  // Which boards the tier's discount applies to. Nothing is discounted until the seller says so,
+  // board by board — a client negotiates the melamina and not the MDF.
+  const discountedKeys = useMemo(
+    () => new Set(materials.filter((m) => m.applyDiscount).map((m) => m.uid)),
+    [materials],
+  )
+
+  // The materialKey of a summary row IS the uid of the material block that produced it
+  // (`buildPayload` uses `key: m.uid`), so the mark goes straight back onto the form state.
+  //
+  // The total is recomputed by the SERVER rather than here: the flag travels inside the request,
+  // so `/optimize` can answer it exactly, and `/optimize` is cached by input hash — the cut search
+  // is not redone, only the money. Doing the arithmetic locally would be a second implementation
+  // of the discount rule, and Python's round() is half-to-even while JS's Math.round is half-up:
+  // the two disagree by a cent on bases like $62.50 at 5%, which is precisely the kind of round
+  // number a per-board selection produces.
+  const handleToggleDiscount = (materialKey: string) => {
+    const next = materials.map((m) =>
+      m.uid === materialKey ? { ...m, applyDiscount: !m.applyDiscount } : m,
+    )
+    setMaterials(next)
+    if (recalcTimer.current) clearTimeout(recalcTimer.current)
+    if (!canOptimize) return
+    setRecalcScheduled(true)
+    recalcTimer.current = setTimeout(() => runOptimize({ materials: next }), 300)
   }
 
   // Bump the seed and recompute — each seed yields a deterministic, cached layout, genuinely
@@ -569,7 +609,9 @@ const OptimizerPage = () => {
             missingBanding={missingBanding}
             priceTierCode={priceTierCode}
             onPriceTierChange={handlePriceTierChange}
-            isPending={optimize.isPending}
+            isPending={optimize.isPending || recalcScheduled}
+            discountedKeys={discountedKeys}
+            onToggleDiscount={handleToggleDiscount}
             services={services.lines}
             onAddService={services.add}
             onUpdateService={services.update}
