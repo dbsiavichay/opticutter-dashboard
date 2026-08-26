@@ -28,6 +28,10 @@ interface CostsStepProps {
   // changing only the tier re-prices the same cut plan instead of searching again.
   onPriceTierChange: (code: string) => void
   isPending: boolean
+  // Per-board discount: the tier sets the rate, this says which boards it applies to. Nothing is
+  // discounted until the seller checks a board. Re-prices through the same cached round trip.
+  discountedKeys: Set<string>
+  onToggleDiscount: (materialKey: string) => void
   // Billed services, owned by the page so they survive stepping away and land in the autosave.
   services: ServiceLineForm[]
   onAddService: () => void
@@ -46,6 +50,8 @@ const CostsStep = ({
   priceTierCode,
   onPriceTierChange,
   isPending,
+  discountedKeys,
+  onToggleDiscount,
   services,
   onAddService,
   onUpdateService,
@@ -89,7 +95,11 @@ const CostsStep = ({
       </CRow>
 
       <div className="text-body-secondary small text-uppercase fw-semibold mb-2">Tableros</div>
-      <MaterialsSummaryTable rows={result.materialsSummary ?? []} />
+      <MaterialsSummaryTable
+        rows={result.materialsSummary ?? []}
+        discountedKeys={discountedKeys}
+        onToggleDiscount={onToggleDiscount}
+      />
 
       {result.edgeBandingsSummary?.length > 0 && (
         <>

@@ -37,6 +37,11 @@ export interface MaterialForm {
   // Catalog boards only: attached offcuts (same material) + their fill order.
   offcuts?: OffcutForm[]
   fillOrder?: PoolFillOrder
+  // Catalog boards only: does the price tier's discount apply to this board? Lives on the
+  // material rather than in a Set keyed by materialKey because reopening a pre-order mints
+  // fresh uids (`formFromPreOrderData`), which would orphan such a set — and because a field
+  // rides along in the autosave and in saved drafts for free.
+  applyDiscount?: boolean
 }
 
 export interface EdgeBandingForm {
@@ -93,6 +98,7 @@ export const emptyCatalogMaterial = (): MaterialForm => ({
   costPerUnit: '',
   offcuts: [],
   fillOrder: 'auto',
+  applyDiscount: false,
 })
 
 export const emptyOffcut = (source: OffcutSource = 'clientOffcut'): OffcutForm => ({
@@ -302,7 +308,15 @@ export const buildPayload = (
     .filter((m) => canonicalKey.get(m.uid) === m.uid)
     .map((m) => {
       if (m.source === 'catalog') {
-        const base = { key: m.uid, source: 'catalog' as const, productId: Number(m.boardId) }
+        const base = {
+          key: m.uid,
+          source: 'catalog' as const,
+          productId: Number(m.boardId),
+          // Only when marked: an omitted flag reads as false on the API and keeps the
+          // payload — and the staleness signature built from it — identical to before
+          // this feature for every quote that discounts nothing.
+          ...(m.applyDiscount ? { applyDiscount: true } : {}),
+        }
         // Only carry fillOrder when the board actually anchors a pool of offcuts.
         return hasOffcuts(m) ? { ...base, fillOrder: m.fillOrder ?? 'auto' } : base
       }

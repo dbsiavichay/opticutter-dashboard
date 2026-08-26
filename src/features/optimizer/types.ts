@@ -159,6 +159,10 @@ export interface CatalogMaterialInput {
   productId: number
   // Fill order when this board has attached (pooled) offcuts; omitted otherwise.
   fillOrder?: PoolFillOrder
+  // Whether the price tier's discount applies to THIS board. Absent/false = it does not:
+  // the seller checks board by board while quoting (a client negotiates the melamina and
+  // not the MDF). Does not affect geometry or the optimize cache hash, only `pricing`.
+  applyDiscount?: boolean
 }
 
 export interface InlineMaterialInput {

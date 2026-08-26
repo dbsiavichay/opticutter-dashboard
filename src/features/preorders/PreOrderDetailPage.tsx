@@ -111,6 +111,9 @@ function formFromPreOrderData(
         costPerUnit: '',
         offcuts: [],
         fillOrder: m.fillOrder ?? 'auto',
+        // A quote saved before the per-board discount shipped has no flag: it reads as
+        // "not discounted", which is the default the feature ships with.
+        applyDiscount: m.applyDiscount ?? false,
       }
       catalogByKey.set(m.key, form)
       matForms.push(form)
@@ -380,6 +383,21 @@ const PreOrderView = ({ preOrder }: { preOrder: PreOrder }) => {
     field: K,
     value: MaterialForm[K],
   ) => setMaterials((ms) => ms.map((m) => (m.uid === uid ? { ...m, [field]: value } : m)))
+
+  // Which boards the tier's discount applies to. The materialKey of a summary row IS the uid of
+  // the material block that produced it (`buildPayload` uses `key: m.uid`).
+  const discountedKeys = useMemo(
+    () => new Set(materials.filter((m) => m.applyDiscount).map((m) => m.uid)),
+    [materials],
+  )
+
+  // No recompute here, unlike the wizard: the pre-order re-prices through PUT /preorders/{id},
+  // so the mark is a pending edit like the tier. `editSignature` is built from `buildPayload`,
+  // which now carries the flag, so this alone enables "Actualizar cotización".
+  const toggleDiscount = (materialKey: string) =>
+    setMaterials((ms) =>
+      ms.map((m) => (m.uid === materialKey ? { ...m, applyDiscount: !m.applyDiscount } : m)),
+    )
 
   // Duplicates a material section together with all of its pieces (same behavior as the optimizer).
   const duplicateMaterial = (m: MaterialForm) => {
@@ -651,6 +669,10 @@ const PreOrderView = ({ preOrder }: { preOrder: PreOrder }) => {
           result={optimization}
           isPending={updatePreOrder.isPending}
           error={updatePreOrder.error}
+          discountedKeys={discountedKeys}
+          // A closed quote still SHOWS which boards were discounted; it just can't move them.
+          onToggleDiscount={toggleDiscount}
+          discountDisabled={!canEdit || updatePreOrder.isPending}
           priceTier={
             canEdit ? (
               <div className="d-flex flex-wrap align-items-center gap-2">

@@ -25,9 +25,22 @@ interface OptimizationPreviewProps {
   // a settings card further up because a control that moves a number belongs next to the number —
   // otherwise switching tiers means scrolling past the whole cut list to read the effect.
   priceTier?: ReactNode
+  // Per-board discount selection. Like the tier, it is a PENDING edit here: passing
+  // `onToggleDiscount` shows the column, and the totals only catch up after "Actualizar cotización".
+  discountedKeys?: Set<string>
+  onToggleDiscount?: (materialKey: string) => void
+  discountDisabled?: boolean
 }
 
-const OptimizationPreview = ({ result, isPending, error, priceTier }: OptimizationPreviewProps) => (
+const OptimizationPreview = ({
+  result,
+  isPending,
+  error,
+  priceTier,
+  discountedKeys,
+  onToggleDiscount,
+  discountDisabled,
+}: OptimizationPreviewProps) => (
   <>
     <div className="text-body-secondary small text-uppercase fw-semibold mb-2">Resultado</div>
     {/* Relative so the optimizing overlay can cover exactly this pane: the previous result stays
@@ -57,7 +70,12 @@ const OptimizationPreview = ({ result, isPending, error, priceTier }: Optimizati
             <Kpi label="Tapacanto lineal" value={meters(result.totalEdgeBandingLinearM)} />
           </CRow>
 
-          <MaterialsSummaryTable rows={result.materialsSummary ?? []} />
+          <MaterialsSummaryTable
+            rows={result.materialsSummary ?? []}
+            discountedKeys={discountedKeys}
+            onToggleDiscount={onToggleDiscount}
+            discountDisabled={discountDisabled}
+          />
           <EdgeBandingSummaryTable rows={result.edgeBandingsSummary ?? []} />
 
           <CutLayoutDiagram
@@ -66,8 +84,9 @@ const OptimizationPreview = ({ result, isPending, error, priceTier }: Optimizati
           />
 
           {/* Tier picker and totals on one line, the same pairing the Costos step uses. The tier
-              shown is the pending selection; the totals are the ones the server last computed, so
-              they only agree again after "Actualizar cotización". */}
+              shown — and the per-board discount marks above — are the pending selection; the totals
+              are the ones the server last computed, so they only agree again after "Actualizar
+              cotización". */}
           {(priceTier || result.pricing) && (
             <div className="d-flex flex-wrap justify-content-between align-items-end gap-3 border-top pt-3">
               {priceTier}
