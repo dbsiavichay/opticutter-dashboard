@@ -63,7 +63,11 @@ export const MaterialsSummaryTable = ({
           <CTableHeaderCell>Tablero</CTableHeaderCell>
           <CTableHeaderCell>Medida</CTableHeaderCell>
           <CTableHeaderCell className="text-end">Cant.</CTableHeaderCell>
-          <CTableHeaderCell className="text-end">Efic. avg</CTableHeaderCell>
+          {/* Precio unitario, no eficiencia: esta es la tabla de dinero del paso, y con solo
+              Cant. y Costo había que dividir para saber a cuánto sale el tablero — que es el
+              número que se negocia y el que decide el check de "Desc." de la misma fila. El
+              aprovechamiento se lee en Optimización (badge por patrón) y en el diagrama de cortes. */}
+          <CTableHeaderCell className="text-end">Precio unit.</CTableHeaderCell>
           <CTableHeaderCell className="text-end">Costo</CTableHeaderCell>
           {/* Last column, right after the cost it acts on: the checkbox answers "does the
               discount apply to THIS amount", so it reads next to the amount. */}
@@ -92,9 +96,10 @@ export const MaterialsSummaryTable = ({
               {m.width}×{m.height}×{m.thickness} mm
             </CTableDataCell>
             <CTableDataCell className="text-end">{m.count}</CTableDataCell>
-            <CTableDataCell className="text-end">
-              {m.avgEfficiency != null ? `${m.avgEfficiency.toFixed(1)}%` : '—'}
-            </CTableDataCell>
+            {/* Precio de lista: el descuento del nivel vive en `pricing`, no aquí, así que este
+                es el precio contra el que se lee el check de al lado. Para medio tablero ya llega
+                dividido y con su markup desde el backend, en su propia fila. */}
+            <CTableDataCell className="text-end">{fmtMoney(m.costPerUnit)}</CTableDataCell>
             <CTableDataCell className="text-end">{fmtMoney(m.totalCost)}</CTableDataCell>
             {selectable && (
               <CTableDataCell className="text-center">
