@@ -42,6 +42,10 @@ export interface MaterialForm {
   // fresh uids (`formFromPreOrderData`), which would orphan such a set — and because a field
   // rides along in the autosave and in saved drafts for free.
   applyDiscount?: boolean
+  // Catalog boards only: the client takes the WHOLE board even where the optimizer billed a half
+  // one, keeping the uncut half. Lives on the material for the same reasons as `applyDiscount`,
+  // and like it, it never re-runs the search — the cached plan is reshaped.
+  wholeBoard?: boolean
 }
 
 export interface EdgeBandingForm {
@@ -99,6 +103,7 @@ export const emptyCatalogMaterial = (): MaterialForm => ({
   offcuts: [],
   fillOrder: 'auto',
   applyDiscount: false,
+  wholeBoard: false,
 })
 
 export const emptyOffcut = (source: OffcutSource = 'clientOffcut'): OffcutForm => ({
@@ -316,6 +321,7 @@ export const buildPayload = (
           // payload — and the staleness signature built from it — identical to before
           // this feature for every quote that discounts nothing.
           ...(m.applyDiscount ? { applyDiscount: true } : {}),
+          ...(m.wholeBoard ? { wholeBoard: true } : {}),
         }
         // Only carry fillOrder when the board actually anchors a pool of offcuts.
         return hasOffcuts(m) ? { ...base, fillOrder: m.fillOrder ?? 'auto' } : base

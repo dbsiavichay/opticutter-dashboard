@@ -29,7 +29,11 @@ interface OptimizationPreviewProps {
   // `onToggleDiscount` shows the column, and the totals only catch up after "Actualizar cotización".
   discountedKeys?: Set<string>
   onToggleDiscount?: (materialKey: string) => void
-  discountDisabled?: boolean
+  // Per-board "the client takes the whole board", same pending-edit semantics.
+  wholeBoardKeys?: Set<string>
+  onToggleWholeBoard?: (materialKey: string) => void
+  // Freezes both marks (a closed quote, or a recompute in flight).
+  marksDisabled?: boolean
 }
 
 const OptimizationPreview = ({
@@ -39,7 +43,9 @@ const OptimizationPreview = ({
   priceTier,
   discountedKeys,
   onToggleDiscount,
-  discountDisabled,
+  wholeBoardKeys,
+  onToggleWholeBoard,
+  marksDisabled,
 }: OptimizationPreviewProps) => (
   <>
     <div className="text-body-secondary small text-uppercase fw-semibold mb-2">Resultado</div>
@@ -74,7 +80,9 @@ const OptimizationPreview = ({
             rows={result.materialsSummary ?? []}
             discountedKeys={discountedKeys}
             onToggleDiscount={onToggleDiscount}
-            discountDisabled={discountDisabled}
+            wholeBoardKeys={wholeBoardKeys}
+            onToggleWholeBoard={onToggleWholeBoard}
+            marksDisabled={marksDisabled}
           />
           <EdgeBandingSummaryTable rows={result.edgeBandingsSummary ?? []} />
 

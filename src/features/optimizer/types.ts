@@ -163,6 +163,10 @@ export interface CatalogMaterialInput {
   // the seller checks board by board while quoting (a client negotiates the melamina and
   // not the MDF). Does not affect geometry or the optimize cache hash, only `pricing`.
   applyDiscount?: boolean
+  // Whether a sheet the optimizer billed as a half board is delivered and charged whole, the
+  // client keeping the uncut half. Absent/false = the half board stands. Not in the hash either:
+  // the server reshapes the cached plan (the pieces do not move) instead of searching again.
+  wholeBoard?: boolean
 }
 
 export interface InlineMaterialInput {

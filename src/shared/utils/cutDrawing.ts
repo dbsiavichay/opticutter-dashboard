@@ -31,6 +31,9 @@ export const BOARD_OUTLINE = '#1d1d1b' // COLOR_BOARD_OUTLINE, and COLOR_DIM for
 export const PIECE_LABEL = '#212121' // COLOR_LABEL
 export const WASTE_FILL = '#ececec' // COLOR_WASTE_FILL
 export const WASTE_OUTLINE = '#9e9e9e' // COLOR_WASTE_OUTLINE
+// Leftover dimensions drawn inside the hatch. Darker than the outline so the text reads over the
+// pattern, lighter than PIECE_LABEL so a leftover never competes with a piece for attention.
+export const WASTE_LABEL = '#6c757d'
 
 // Edge banding has no counterpart in the backend diagram (it is drawn only on screen), so this one
 // answers to legibility over the piece fills rather than to the document.
@@ -70,13 +73,32 @@ export interface DrawablePiece {
 // A piece the renderer can also identify, for highlighting and tap callbacks.
 export type DrawnPiece = DrawablePiece & { pieceId: string }
 
+// A leftover rectangle on the sheet, in the same mm coordinate space as the pieces. The optimizer,
+// the cutting plan and the public review all send exactly these four numbers.
+export interface DrawableRemainder {
+  x: number
+  y: number
+  width: number
+  height: number
+}
+
 // What SheetSvg needs to render one sheet, regardless of which endpoint produced it. Generic over
 // the piece so callers get their own richer type back from the hover/tap callbacks.
 export interface DrawableLayout<P extends DrawnPiece = DrawnPiece> {
   material: { width: number; height: number }
   placedPieces: P[]
-  remainders: { x: number; y: number; width: number; height: number }[]
+  remainders: DrawableRemainder[]
 }
+
+// Leftover size drawn inside the rectangle: mm, no unit, like the piece labels. Rounded because a
+// sub-millimetre leftover edge is noise on a saw whose kerf is 4 mm.
+export const remainderLabel = (r: DrawableRemainder) =>
+  `${Math.round(r.width)}×${Math.round(r.height)}`
+
+// Hover text. Carries the unit and the area because it has the room the rectangle may not have, and
+// it is the only way to read a small leftover without zooming in.
+export const remainderTitle = (r: DrawableRemainder) =>
+  `Sobrante ${remainderLabel(r)} mm · ${((r.width * r.height) / 1_000_000).toFixed(2)} m²`
 
 // Identical pieces share the same nominal dimensions (originalWidth×originalHeight).
 export const pieceSig = (p: Pick<DrawablePiece, 'originalWidth' | 'originalHeight'>) =>

@@ -5,11 +5,13 @@ import { cilFullscreen, cilFullscreenExit } from '@coreui/icons'
 
 import {
   EDGE_COLOR,
+  WASTE_LABEL,
   bandedSides,
   boardRotation,
   clamp,
   insetSideLine,
   pieceSig,
+  remainderLabel,
   uprightText,
 } from 'src/shared/utils/cutDrawing'
 import useZoomPan from 'src/shared/hooks/useZoomPan'
@@ -107,21 +109,43 @@ const WorkshopBoardSvg = ({
             vectorEffect="non-scaling-stroke"
           />
 
-          {/* Remainders / waste (hatched free areas to distinguish piece vs. waste) */}
-          {(board.remainders ?? []).map((r, idx) => (
-            <rect
-              key={`rem-${idx}`}
-              x={r.x}
-              y={r.y}
-              width={r.width}
-              height={r.height}
-              fill={`url(#${wasteId})`}
-              stroke="#ced4da"
-              strokeWidth={1}
-              strokeDasharray="6 6"
-              vectorEffect="non-scaling-stroke"
-            />
-          ))}
+          {/* Remainders / waste (hatched free areas to distinguish piece vs. waste), labelled with
+              their size so the shop can set aside the retazos worth keeping. This is a touch
+              screen: there is no hover, so the label and the zoom are the only way to read it. */}
+          {(board.remainders ?? []).map((r, idx) => {
+            const showText = r.width * scale > 130 && r.height * scale > 90
+            const rcx = r.x + r.width / 2
+            const rcy = r.y + r.height / 2
+            return (
+              <g key={`rem-${idx}`}>
+                <rect
+                  x={r.x}
+                  y={r.y}
+                  width={r.width}
+                  height={r.height}
+                  fill={`url(#${wasteId})`}
+                  stroke="#ced4da"
+                  strokeWidth={1}
+                  strokeDasharray="6 6"
+                  vectorEffect="non-scaling-stroke"
+                />
+                {showText && (
+                  <text
+                    x={rcx}
+                    y={rcy}
+                    fontSize={clamp(Math.min(r.width, r.height) / 6, 18, 70)}
+                    textAnchor="middle"
+                    dominantBaseline="central"
+                    fill={WASTE_LABEL}
+                    transform={uprightText(rcx, rcy)}
+                    style={{ pointerEvents: 'none', userSelect: 'none' }}
+                  >
+                    {remainderLabel(r)}
+                  </text>
+                )}
+              </g>
+            )
+          })}
 
           {/* Piezas */}
           {board.pieces.map((p) => {

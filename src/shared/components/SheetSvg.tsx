@@ -7,12 +7,15 @@ import {
   EDGE_COLOR,
   PIECE_LABEL,
   WASTE_FILL,
+  WASTE_LABEL,
   WASTE_OUTLINE,
   bandedSides,
   boardRotation,
   clamp,
   insetSideLine,
   pieceSig,
+  remainderLabel,
+  remainderTitle,
   uprightText,
 } from 'src/shared/utils/cutDrawing'
 import type { DrawableLayout, DrawnPiece } from 'src/shared/utils/cutDrawing'
@@ -139,21 +142,45 @@ const SheetSvg = <P extends DrawnPiece>({
           vectorEffect="non-scaling-stroke"
         />
 
-        {/* Offcuts / waste */}
-        {remainders.map((r, idx) => (
-          <rect
-            key={`rem-${idx}`}
-            x={r.x}
-            y={r.y}
-            width={r.width}
-            height={r.height}
-            fill={`url(#${wasteId})`}
-            stroke={WASTE_OUTLINE}
-            strokeWidth={1}
-            strokeDasharray="6 6"
-            vectorEffect="non-scaling-stroke"
-          />
-        ))}
+        {/* Offcuts / waste, labelled with their size: a hatched rectangle alone doesn't say
+            whether it's a reusable retazo or scrap, and that is the number the client asks for.
+            Same reveal rule as the pieces, so zooming in uncovers the small ones; the <title>
+            carries it regardless of the on-screen size. */}
+        {remainders.map((r, idx) => {
+          const showText = r.width * scale > 130 && r.height * scale > 90
+          const cx = r.x + r.width / 2
+          const cy = r.y + r.height / 2
+          return (
+            <g key={`rem-${idx}`}>
+              <title>{remainderTitle(r)}</title>
+              <rect
+                x={r.x}
+                y={r.y}
+                width={r.width}
+                height={r.height}
+                fill={`url(#${wasteId})`}
+                stroke={WASTE_OUTLINE}
+                strokeWidth={1}
+                strokeDasharray="6 6"
+                vectorEffect="non-scaling-stroke"
+              />
+              {showText && (
+                <text
+                  x={cx}
+                  y={cy}
+                  fontSize={clamp(Math.min(r.width, r.height) / 6, 18, 70)}
+                  textAnchor="middle"
+                  dominantBaseline="central"
+                  fill={WASTE_LABEL}
+                  transform={uprightText(cx, cy)}
+                  style={{ pointerEvents: 'none', userSelect: 'none' }}
+                >
+                  {remainderLabel(r)}
+                </text>
+              )}
+            </g>
+          )
+        })}
 
         {placedPieces.map((p) => {
           const sig = pieceSig(p)
