@@ -1,6 +1,6 @@
-import { useQuery } from '@tanstack/react-query'
+import { useMutation, useQuery } from '@tanstack/react-query'
 import { createCrudHooks } from 'src/shared/hooks/createCrudHooks'
-import { clientsApi, clientsApiMin } from './clientsApi'
+import { clientsApi, clientsApiMin, syncClients } from './clientsApi'
 import type { Client, ClientListParams, ClientPayload } from './types'
 
 const hooks = createCrudHooks<Client, ClientListParams, ClientPayload, ClientPayload, string>(
@@ -29,4 +29,25 @@ export const useClientsMin = (search?: string) =>
   useQuery({
     queryKey: ['clients-min', search],
     queryFn: () => clientsApiMin.list(search),
+  })
+
+// The dry run behind the sync modal: the server runs the whole pass against the external system and
+// rolls back, so the operator approves the numbers before they land. Deliberately uncached
+// (`gcTime: 0`) — a preview is only true for the instant it was taken, and it's what is being
+// approved. `retry: false` so an unreachable source surfaces at once instead of after three silent
+// attempts.
+export const useClientsSyncPreview = (enabled: boolean) =>
+  useQuery({
+    queryKey: ['clients-sync-preview'],
+    queryFn: () => syncClients(true),
+    enabled,
+    gcTime: 0,
+    staleTime: 0,
+    retry: false,
+  })
+
+// The real pass. The caller refreshes the list, since only it knows whether anything changed.
+export const useSyncClients = () =>
+  useMutation({
+    mutationFn: () => syncClients(false),
   })

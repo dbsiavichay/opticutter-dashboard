@@ -11,6 +11,7 @@ import {
   CSpinner,
 } from '@coreui/react'
 import { apiErrorMessage } from 'src/shared/api/errors'
+import { identifierError } from './taxId'
 import type { Client, ClientPayload } from './types'
 
 const DEFAULT_SOURCE = 'dashboard'
@@ -51,8 +52,15 @@ const ClientForm = ({ client, onSubmit, onCancel, isSubmitting, error }: ClientF
 
   const errorMsg = apiErrorMessage(error, 'Error al guardar. Intente nuevamente.')
 
+  // Checked here so a mistyped cédula is caught while the operator still has the document in front
+  // of them; the server answers 422 on the same rule and stays the authority. Only shown once the
+  // field has something in it — flagging an empty form the moment it opens reads as an error the
+  // user made.
+  const identifierMsg = form.identifier.trim() ? identifierError(form.identifier) : null
+
   const handleSubmit = (e: FormEvent) => {
     e.preventDefault()
+    if (identifierMsg) return
     onSubmit({
       identifier: form.identifier,
       source: client?.source ?? DEFAULT_SOURCE,
@@ -76,8 +84,16 @@ const ClientForm = ({ client, onSubmit, onCancel, isSubmitting, error }: ClientF
               onChange={set('identifier')}
               required
               maxLength={32}
-              placeholder="Ej: 541155667788"
+              invalid={!!identifierMsg}
+              placeholder="Ej: 0105929863"
             />
+            {identifierMsg ? (
+              <div className="invalid-feedback d-block">{identifierMsg}</div>
+            ) : (
+              <div className="form-text">
+                Cédula o RUC. Un documento extranjero (pasaporte) se acepta tal cual.
+              </div>
+            )}
           </CCol>
           <CCol xs={6}>
             <CFormLabel>Nombre</CFormLabel>
@@ -106,7 +122,7 @@ const ClientForm = ({ client, onSubmit, onCancel, isSubmitting, error }: ClientF
         <CButton color="secondary" type="button" onClick={onCancel}>
           Cancelar
         </CButton>
-        <CButton color="primary" type="submit" disabled={isSubmitting}>
+        <CButton color="primary" type="submit" disabled={isSubmitting || !!identifierMsg}>
           {isSubmitting ? <CSpinner size="sm" /> : 'Guardar'}
         </CButton>
       </CModalFooter>
