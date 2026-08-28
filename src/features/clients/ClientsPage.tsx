@@ -12,9 +12,10 @@ import {
   CTableRow,
 } from '@coreui/react'
 import CIcon from '@coreui/icons-react'
-import { cilPlus, cilTrash } from '@coreui/icons'
+import { cilPlus, cilSync, cilTrash } from '@coreui/icons'
 
 import ClientForm from './ClientForm'
+import SyncClientsModal from './SyncClientsModal'
 import { useClients, useCreateClient, useDeleteClient, useUpdateClient } from './useClients'
 import ClientsFilters, { type ClientsFilterValues } from './ClientsFilters'
 import type { Client, ClientPayload } from './types'
@@ -25,6 +26,7 @@ import QueryState from 'src/shared/components/QueryState'
 import DeleteConfirmModal from 'src/shared/components/DeleteConfirmModal'
 import type { ListSort } from 'src/shared/components/FilterSortSection'
 import { useListParams } from 'src/shared/hooks/useListParams'
+import { useQueryClient } from '@tanstack/react-query'
 
 // Filter fields that live in the URL. Only the search box: a client has nothing else to narrow by.
 const FILTER_KEYS = ['q']
@@ -52,6 +54,8 @@ const ClientsPage = () => {
 
   const [formModal, setFormModal] = useState<ModalState>({ visible: false, client: null })
   const [deleteModal, setDeleteModal] = useState<ModalState>({ visible: false, client: null })
+  const [syncModal, setSyncModal] = useState(false)
+  const queryClient = useQueryClient()
 
   // Built inline, not memoised: React Query hashes the query key structurally, so a fresh object
   // with the same contents is the same key and does not refetch.
@@ -108,10 +112,16 @@ const ClientsPage = () => {
             style={{ maxWidth: 360 }}
           />
           <ClientsFilters values={values} onChange={handleChange} onClear={handleClear} />
-          <CButton color="primary" className="ms-auto" onClick={openCreate}>
-            <CIcon icon={cilPlus} className="me-1" />
-            Nuevo cliente
-          </CButton>
+          <div className="d-flex gap-2 ms-auto">
+            <CButton color="secondary" variant="outline" onClick={() => setSyncModal(true)}>
+              <CIcon icon={cilSync} className="me-1" />
+              Sincronizar clientes
+            </CButton>
+            <CButton color="primary" onClick={openCreate}>
+              <CIcon icon={cilPlus} className="me-1" />
+              Nuevo cliente
+            </CButton>
+          </div>
         </div>
 
         <QueryState isLoading={isLoading} isError={isError} onRetry={() => void refetch()}>
@@ -212,6 +222,12 @@ const ClientsPage = () => {
         ¿Eliminar a <strong>{deleteModal.client && clientName(deleteModal.client)}</strong> (
         {deleteModal.client?.identifier})? Esta acción no se puede deshacer.
       </DeleteConfirmModal>
+
+      <SyncClientsModal
+        visible={syncModal}
+        onClose={() => setSyncModal(false)}
+        onSynced={() => void queryClient.invalidateQueries({ queryKey: ['clients'] })}
+      />
     </>
   )
 }
