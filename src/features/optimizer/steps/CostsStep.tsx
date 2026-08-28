@@ -32,6 +32,10 @@ interface CostsStepProps {
   // discounted until the seller checks a board. Re-prices through the same cached round trip.
   discountedKeys: Set<string>
   onToggleDiscount: (materialKey: string) => void
+  // Per-board "the client takes the whole board": promotes a sheet the optimizer billed as half.
+  // Also a cached round trip — the plan is reshaped, never searched again.
+  wholeBoardKeys: Set<string>
+  onToggleWholeBoard: (materialKey: string) => void
   // Billed services, owned by the page so they survive stepping away and land in the autosave.
   services: ServiceLineForm[]
   onAddService: () => void
@@ -52,6 +56,8 @@ const CostsStep = ({
   isPending,
   discountedKeys,
   onToggleDiscount,
+  wholeBoardKeys,
+  onToggleWholeBoard,
   services,
   onAddService,
   onUpdateService,
@@ -99,6 +105,8 @@ const CostsStep = ({
         rows={result.materialsSummary ?? []}
         discountedKeys={discountedKeys}
         onToggleDiscount={onToggleDiscount}
+        wholeBoardKeys={wholeBoardKeys}
+        onToggleWholeBoard={onToggleWholeBoard}
       />
 
       {result.edgeBandingsSummary?.length > 0 && (

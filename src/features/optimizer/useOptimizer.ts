@@ -3,32 +3,36 @@ import { useMutation, useQuery } from '@tanstack/react-query'
 
 import { optimizerApi } from './optimizerApi'
 import { productsApi } from 'src/features/products/productsApi'
+import { REFERENCE_STALE_TIME } from 'src/shared/constants'
 
 export const useOptimize = () =>
   useMutation({
     mutationFn: optimizerApi.optimize,
   })
 
-// Catalog boards (products type=board). `select` narrows them to BoardProduct[].
-// The limit caps what the board picker and the CSV import can match against, so it is generous:
-// a board past it is invisible to both. A server-searched select would be the real fix.
+// Every active catalog board (products type=board). Pages through the whole list for the same
+// reason the edge bandings below do, and it is not optional: the picker, the CSV import matcher
+// and the id→board lookup of a saved quote all match against this one array, so a silent cut at
+// the server's 100-row cap makes a board unselectable AND shows a saved quote's board as
+// unpicked. The real catalog is past 200 boards. Paging is safe because the endpoint orders by
+// name. `select` narrows them to BoardProduct[].
 export const useBoards = () =>
   useQuery({
     queryKey: ['boards'],
-    queryFn: () => productsApi.list({ type: ['board'], limit: 100, isActive: true }),
-    staleTime: 5 * 60 * 1000,
-    select: (data) => data.items.filter((p): p is BoardProduct => p.type === 'board'),
+    queryFn: () => productsApi.listAll({ type: ['board'], isActive: true }),
+    staleTime: REFERENCE_STALE_TIME,
+    select: (items) => items.filter((p): p is BoardProduct => p.type === 'board'),
   })
 
-// Every active edge banding in the catalog. Unlike the boards query this pages through the whole
-// list: it backs the "Seleccionar otro…" picker (which promises the complete catalog) and the
-// id→product lookup that derives a saved tapacanto's band type, so a silent cut at 100 would
-// show a quote's tapacanto as missing. Paging is safe because the endpoint orders by name.
+// Every active edge banding in the catalog, paged through for the same reason as the boards: it
+// backs the "Seleccionar otro…" picker (which promises the complete catalog) and the id→product
+// lookup that derives a saved tapacanto's band type, so a silent cut at 100 would show a quote's
+// tapacanto as missing. Paging is safe because the endpoint orders by name.
 export const useEdgeBandings = () =>
   useQuery({
     queryKey: ['edge-bandings'],
     queryFn: () => productsApi.listAll({ type: ['edge_banding'], isActive: true }),
-    staleTime: 5 * 60 * 1000,
+    staleTime: REFERENCE_STALE_TIME,
     select: (items) => items.filter((p): p is EdgeBandingProduct => p.type === 'edge_banding'),
   })
 
@@ -40,5 +44,5 @@ export const useBoardEdgeBandings = (boardId?: string) =>
     queryKey: ['board-edge-bandings', String(boardId ?? '')],
     queryFn: () => productsApi.getEdgeBandings(String(boardId)),
     enabled: !!boardId,
-    staleTime: 5 * 60 * 1000,
+    staleTime: REFERENCE_STALE_TIME,
   })

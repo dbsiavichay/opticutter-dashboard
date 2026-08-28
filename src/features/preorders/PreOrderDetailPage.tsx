@@ -114,6 +114,7 @@ function formFromPreOrderData(
         // A quote saved before the per-board discount shipped has no flag: it reads as
         // "not discounted", which is the default the feature ships with.
         applyDiscount: m.applyDiscount ?? false,
+        wholeBoard: m.wholeBoard ?? false,
       }
       catalogByKey.set(m.key, form)
       matForms.push(form)
@@ -399,6 +400,19 @@ const PreOrderView = ({ preOrder }: { preOrder: PreOrder }) => {
       ms.map((m) => (m.uid === materialKey ? { ...m, applyDiscount: !m.applyDiscount } : m)),
     )
 
+  // Boards the client takes whole even where the optimizer billed a half one. Same pending-edit
+  // semantics as the discount mark: it rides in `buildPayload`, so `editSignature` picks it up and
+  // "Actualizar cotización" is what applies it.
+  const wholeBoardKeys = useMemo(
+    () => new Set(materials.filter((m) => m.wholeBoard).map((m) => m.uid)),
+    [materials],
+  )
+
+  const toggleWholeBoard = (materialKey: string) =>
+    setMaterials((ms) =>
+      ms.map((m) => (m.uid === materialKey ? { ...m, wholeBoard: !m.wholeBoard } : m)),
+    )
+
   // Duplicates a material section together with all of its pieces (same behavior as the optimizer).
   const duplicateMaterial = (m: MaterialForm) => {
     const clone = cloneMaterial(m)
@@ -672,7 +686,9 @@ const PreOrderView = ({ preOrder }: { preOrder: PreOrder }) => {
           discountedKeys={discountedKeys}
           // A closed quote still SHOWS which boards were discounted; it just can't move them.
           onToggleDiscount={toggleDiscount}
-          discountDisabled={!canEdit || updatePreOrder.isPending}
+          wholeBoardKeys={wholeBoardKeys}
+          onToggleWholeBoard={toggleWholeBoard}
+          marksDisabled={!canEdit || updatePreOrder.isPending}
           priceTier={
             canEdit ? (
               <div className="d-flex flex-wrap align-items-center gap-2">

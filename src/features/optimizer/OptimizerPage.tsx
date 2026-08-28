@@ -457,15 +457,39 @@ const OptimizerPage = () => {
   // of the discount rule, and Python's round() is half-to-even while JS's Math.round is half-up:
   // the two disagree by a cent on bases like $62.50 at 5%, which is precisely the kind of round
   // number a per-board selection produces.
+  // Both per-board marks recompute the same way: debounced, so ticking three boards in a row
+  // costs one round trip instead of three.
+  const scheduleRecalc = (next: MaterialForm[]) => {
+    if (recalcTimer.current) clearTimeout(recalcTimer.current)
+    if (!canOptimize) return
+    setRecalcScheduled(true)
+    recalcTimer.current = setTimeout(() => runOptimize({ materials: next }), 300)
+  }
+
   const handleToggleDiscount = (materialKey: string) => {
     const next = materials.map((m) =>
       m.uid === materialKey ? { ...m, applyDiscount: !m.applyDiscount } : m,
     )
     setMaterials(next)
-    if (recalcTimer.current) clearTimeout(recalcTimer.current)
-    if (!canOptimize) return
-    setRecalcScheduled(true)
-    recalcTimer.current = setTimeout(() => runOptimize({ materials: next }), 300)
+    scheduleRecalc(next)
+  }
+
+  // Boards the client takes whole even where the optimizer billed a half. Same shape as the
+  // discount mark, and the same round trip: `wholeBoard` is not in the optimize hash either, so
+  // `/optimize` reshapes the CACHED plan (the pieces do not move, the uncut half becomes one
+  // leftover) instead of searching again. Doing it here would mean re-deriving the promotion —
+  // and the merged billing line — in the browser.
+  const wholeBoardKeys = useMemo(
+    () => new Set(materials.filter((m) => m.wholeBoard).map((m) => m.uid)),
+    [materials],
+  )
+
+  const handleToggleWholeBoard = (materialKey: string) => {
+    const next = materials.map((m) =>
+      m.uid === materialKey ? { ...m, wholeBoard: !m.wholeBoard } : m,
+    )
+    setMaterials(next)
+    scheduleRecalc(next)
   }
 
   // Bump the seed and recompute — each seed yields a deterministic, cached layout, genuinely
@@ -612,6 +636,8 @@ const OptimizerPage = () => {
             isPending={optimize.isPending || recalcScheduled}
             discountedKeys={discountedKeys}
             onToggleDiscount={handleToggleDiscount}
+            wholeBoardKeys={wholeBoardKeys}
+            onToggleWholeBoard={handleToggleWholeBoard}
             services={services.lines}
             onAddService={services.add}
             onUpdateService={services.update}
