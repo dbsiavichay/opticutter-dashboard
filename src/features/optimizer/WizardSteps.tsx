@@ -12,6 +12,9 @@ interface WizardStepsProps {
   index: number
   // Furthest reachable step; anything past it is locked and explains why.
   maxIndex: number
+  // Why a locked step is locked. From the wizard rather than from `STEPS`: Cotización has two
+  // different answers (no result yet vs. missing tapacantos) and its static text only covers one.
+  blockedReasonFor: (id: StepId) => string
   onSelect: (id: StepId) => void
   // The page's actions menu. It rides on this row because the row exists anyway — the alternative
   // was a toolbar of its own above it, which is exactly what this redesign removed. It also has to
@@ -19,7 +22,13 @@ interface WizardStepsProps {
   actions?: ReactNode
 }
 
-const WizardSteps = ({ index, maxIndex, onSelect, actions }: WizardStepsProps) => {
+const WizardSteps = ({
+  index,
+  maxIndex,
+  blockedReasonFor,
+  onSelect,
+  actions,
+}: WizardStepsProps) => {
   const current = STEPS[index]
 
   return (
@@ -42,7 +51,7 @@ const WizardSteps = ({ index, maxIndex, onSelect, actions }: WizardStepsProps) =
                 className="wizard-step-hit"
                 disabled={locked}
                 aria-current={i === index ? 'step' : undefined}
-                title={locked ? s.blockedReason : undefined}
+                title={locked ? blockedReasonFor(s.id) : undefined}
                 onClick={() => onSelect(s.id)}
               >
                 <span className="wizard-step-marker">{state === 'done' ? '✓' : i + 1}</span>

@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
+import type { ReactNode } from 'react'
 import {
   CBadge,
   CButton,
@@ -15,12 +16,13 @@ import { cilFullscreen } from '@coreui/icons'
 
 import SheetSvg from 'src/shared/components/SheetSvg'
 import { stripHalfSuffix } from 'src/shared/utils/halfBoard'
-import type { LayoutGroup, MaterialSummary, PlacedPiece } from './types'
+import type { LayoutGroup, MaterialSummary, ModalContainer, PlacedPiece } from './types'
 import { usePieceColors } from './pieceColors'
 import { GroupedPiecesList, PieceDetailCard, SheetStats } from './sheetDetail'
 
-// One summary line + a fullscreen sheet viewer behind it. The optimizer wizard shows its sheets
-// inline through `SheetViewer`; this is the pre-order detail page's diagram.
+// One summary line + a fullscreen sheet viewer behind it. Mounted by the pre-order detail page
+// (through `OptimizationPreview`) and by the wizard's Costos step, which replaced its own
+// Optimización step — and the inline `SheetViewer` that lived there — with this.
 //
 // It used to be a grid of pattern cards, each with a thumbnail, an efficiency bar and a stats strip.
 // On a real quote that is two or three rows of cards — the single tallest thing on a page whose job
@@ -39,7 +41,7 @@ interface SheetDetailModalProps {
   colorFor: (sig: string) => string
   // Where to portal the modal. Needed so it stays inside the element put into fullscreen —
   // document.body sits outside it and the modal would render invisibly behind the page.
-  container?: () => Element | null
+  container?: ModalContainer
   onClose: () => void
 }
 
@@ -128,6 +130,12 @@ const SheetDetailModal = ({
                   setHoverSig(null)
                 }}
                 onPieceLeave={() => setHoverPiece(null)}
+                // Tapping is the only way to inspect a piece on a touch screen, where there is no
+                // hover at all. It came over from the wizard's old inline viewer.
+                onPieceTap={(p) => {
+                  setHoverPiece(p)
+                  setHoverSig(null)
+                }}
                 // The column is sticky, so anything taller than the modal's scrollport can never be
                 // scrolled into view: its bottom edge stays clipped right where the pager sits.
                 // Reserve is the modal chrome around the body — header, footer, padding. No upper
@@ -186,13 +194,18 @@ const SheetDetailModal = ({
 interface CutLayoutDiagramProps {
   layoutGroups: LayoutGroup[]
   materialsSummary: MaterialSummary[]
+  // Extra facts for the bar, from whoever mounts it. The wizard puts the linear metres here (they
+  // were KPI tiles in the step this bar replaced) plus the alternative seed; the pre-order page
+  // passes nothing, so its bar is unchanged.
+  extra?: ReactNode
   // Portal target for the expanded-sheet modal; see SheetDetailModalProps.container.
-  modalContainer?: () => Element | null
+  modalContainer?: ModalContainer
 }
 
 const CutLayoutDiagram = ({
   layoutGroups,
   materialsSummary,
+  extra,
   modalContainer,
 }: CutLayoutDiagramProps) => {
   // The open sheet is held as an INDEX, not the group object, so the modal can page to the next one.
@@ -240,8 +253,10 @@ const CutLayoutDiagram = ({
           · <strong>{totals.sheets}</strong> {plural(totals.sheets, 'tablero', 'tableros')} ·{' '}
           <strong>{totals.pieces}</strong> {plural(totals.pieces, 'pieza', 'piezas')}
         </span>
+        {extra}
         {/* The one number worth a colour: below 80% the plan is worth a second look. It was the
-            badge on every pattern card; one figure for the whole plan says the same thing. */}
+            badge on every pattern card; one figure for the whole plan says the same thing. Last,
+            after every plain measurement: it is the verdict on the list, not another item in it. */}
         <CBadge color={totals.efficiency >= 80 ? 'success' : 'warning'}>
           {totals.efficiency.toFixed(1)}% aprovechamiento
         </CBadge>

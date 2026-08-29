@@ -19,8 +19,9 @@ export interface EditorShortcuts {
   // Ctrl/Cmd+Shift+F. Omitted when the browser has no Fullscreen API.
   onToggleFullscreen?: () => void
   // Ctrl/Cmd+Enter — the "run it" idiom, and the only combo here that no browser claims. Only the
-  // Optimización step passes it, which is also the only place the quick-entry input (where a bare
-  // Enter adds a piece) is not on screen.
+  // Costos step passes it, which is the step that owns the run. Safe there despite the service
+  // lines being text inputs: Ctrl+Enter means nothing to a field, and the quick-entry input (where
+  // a bare Enter adds a piece) is back on Despiece.
   onOptimize?: () => void
   // Ctrl/Cmd+I
   onImport?: () => void

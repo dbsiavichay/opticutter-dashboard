@@ -8,9 +8,9 @@ import CutLayoutDiagram from './CutLayoutDiagram'
 import OptimizingOverlay from './OptimizingOverlay'
 import { EdgeBandingSummaryTable, Kpi, MaterialsSummaryTable, meters } from './summaryTables'
 
-// The result of a cut run: KPIs, cost tables and the pattern grid stacked together. Used by the
-// pre-order detail page; the optimizer wizard splits the same data across its Optimización and
-// Costos steps instead.
+// The result of a cut run: KPIs, cost tables and the diagram bar stacked together. Used by the
+// pre-order detail page; the optimizer wizard lays the same data out itself in `CostsStep`, and the
+// two share `CutLayoutDiagram` and the summary tables.
 //
 // No card. It used to carry one, whose header held an "Optimizar" button, a strategy picker and
 // "Otra alternativa" — none of which the only caller ever passed, since pre-orders drive the run
