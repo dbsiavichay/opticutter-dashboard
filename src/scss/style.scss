@@ -113,8 +113,9 @@ input[type='number'] {
   gap: 0;
 }
 
-// The grid cell: a quarter of the row, which is what the connector math needs. It is NOT the button
-// — a cell-wide hit area meant a click 200px away from a step still switched to it.
+// The grid cell: an equal share of the row, which is what the connector math needs (it is written
+// against the cell's own width, so the step count can change). It is NOT the button — a cell-wide
+// hit area meant a click 200px away from a step still switched to it.
 .wizard-step {
   position: relative;
   display: flex;
@@ -228,132 +229,6 @@ input[type='number'] {
   background-color: var(--cui-tertiary-bg);
 }
 
-// Sheet viewer: one board shown large with a rail of every pattern next to it. The rail is a
-// horizontal scrolling strip until there is room for a column beside the board — at narrower widths
-// a column would starve the sheet, which is the only thing on this step worth screen space.
-.sheet-viewer {
-  display: grid;
-  gap: 1rem;
-  grid-template-columns: minmax(0, 1fr);
-
-  // Narrow on purpose: the rail is a "which pattern am I on" index, not a place to read a sheet.
-  // Every pixel it gives back goes to the board, which is the only thing worth space on this step.
-  @media (min-width: 1200px) {
-    grid-template-columns: 6.5rem minmax(0, 1fr);
-    align-items: start;
-  }
-}
-
-.sheet-thumbs {
-  display: flex;
-  gap: 0.4rem;
-  overflow-x: auto;
-  padding-bottom: 0.25rem;
-
-  @media (min-width: 1200px) {
-    flex-direction: column;
-    overflow-x: visible;
-    overflow-y: auto;
-    max-height: calc(100dvh - 16rem);
-    padding-bottom: 0;
-    scrollbar-gutter: stable;
-  }
-}
-
-.sheet-thumb {
-  flex: 0 0 6rem;
-  padding: 0.25rem;
-  border: var(--cui-border-width) var(--cui-border-style) var(--cui-border-color);
-  border-radius: var(--cui-border-radius);
-  background-color: var(--cui-body-bg);
-  cursor: pointer;
-  text-align: start;
-  transition:
-    border-color 0.15s,
-    box-shadow 0.15s;
-
-  &:hover {
-    border-color: var(--cui-primary);
-  }
-
-  &[data-active] {
-    border-color: var(--cui-primary);
-    box-shadow: 0 0 0 0.15rem rgba(var(--cui-primary-rgb), 0.2);
-  }
-
-  @media (min-width: 1200px) {
-    flex: 0 0 auto;
-  }
-}
-
-.sheet-thumb-label {
-  font-size: 0.75rem;
-  font-weight: 600;
-  line-height: 1;
-}
-
-// Board · handle · detail. Stacked below `lg`, where a side panel would starve the board.
-.sheet-stage {
-  display: grid;
-  gap: 0.5rem;
-  grid-template-columns: minmax(0, 1fr);
-
-  @media (min-width: 992px) {
-    grid-template-columns: minmax(0, 1fr) auto;
-    align-items: start;
-
-    &[data-detail='open'] {
-      grid-template-columns: minmax(0, 1fr) auto minmax(0, 21rem);
-    }
-  }
-}
-
-// Collapse handle: a slim full-height bar reading as a split divider, not a labelled button — the
-// panel it opens is right beside it, so a word would only take room from the board.
-.sheet-detail-handle {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 100%;
-  min-height: 1.5rem;
-  padding: 0;
-  border: var(--cui-border-width) var(--cui-border-style) var(--cui-border-color);
-  border-radius: 0.25rem;
-  background-color: var(--cui-tertiary-bg);
-  color: var(--cui-secondary-color);
-  font-size: 0.9rem;
-  line-height: 1;
-  cursor: pointer;
-  transition:
-    background-color 0.15s,
-    color 0.15s,
-    border-color 0.15s;
-
-  &:hover,
-  &:focus-visible {
-    border-color: var(--cui-primary);
-    background-color: var(--cui-primary);
-    color: #fff;
-  }
-
-  // Stacked layout: the panel opens BELOW, not to the side, so the chevrons have to point that way.
-  // One rotation serves both states — `«` becomes down (opens) and `»` becomes up (closes).
-  > span[aria-hidden] {
-    display: inline-block;
-    transform: rotate(-90deg);
-  }
-
-  @media (min-width: 992px) {
-    align-self: stretch;
-    width: 1.1rem;
-    min-height: 0;
-
-    > span[aria-hidden] {
-      transform: none;
-    }
-  }
-}
-
 // The status badge as the handle for the history modal. A bare button so the badge keeps its own
 // shape — wrapping it in a `btn-link` would have given it link colour and an underline.
 .status-trigger {
@@ -369,7 +244,7 @@ input[type='number'] {
   }
 }
 
-// The board inside the pre-order's fullscreen sheet overlay. A 2440×1220 sheet is 2:1, so in a
+// The board inside the fullscreen sheet overlay (the pre-order page and the wizard's Costos step). A 2440×1220 sheet is 2:1, so in a
 // 7/12 column it is limited by WIDTH, not height — on a 16:10 screen that left the bottom half of
 // the dialog empty. Centring it in the space the dialog actually has costs nothing and stops the
 // overlay from looking broken.

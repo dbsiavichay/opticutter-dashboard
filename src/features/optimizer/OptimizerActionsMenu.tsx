@@ -63,7 +63,7 @@ interface OptimizerActionsMenuProps {
   onClear?: () => void
   // Wording differs: the optimizer also drops the material groups, pre-orders only the pieces.
   clearsMaterials?: boolean
-  // --- Optimización (only the Optimización step passes these) ---
+  // --- Optimización (the wizard's Costos step and the pre-order page pass these) ---
   onOptimize?: () => void
   // A result is already on screen, so the run explores an alternative rather than being the first.
   hasResult?: boolean

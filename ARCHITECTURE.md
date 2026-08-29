@@ -99,7 +99,7 @@ src/
 | `users` | `/users` | Staff user management with role assignment |
 | `settings` | `/settings` | Company info, kerf/trim parameters, quote validity, price tiers |
 | `profile` | `/profile` `/profile/password` | Self-service profile and password change |
-| `optimizer` | `/optimizer` | Cut plan optimizer: piece input, CSV/XML import (the file's `Etiqueta` is read as edge banding), packing strategy, SVG board layout, pattern cards, draft save/load |
+| `optimizer` | `/optimizer` | Cut plan wizard in 3 steps (Despiece → Costos → Cotización): piece input, CSV/XML import (the file's `Etiqueta` is read as edge banding), packing strategy, fullscreen SVG board diagram, draft save/load |
 | `review` | `/review/:token` | Public quote review and approval portal (no auth required) |
 | `widgets` | `/widgets` | Template demo — candidate for removal |
 
@@ -149,7 +149,8 @@ Four roles with distinct route access and landing pages:
 
 The most complex feature. Calls `POST /api/v1/optimize/` with materials and piece requirements.
 Backend returns layouts grouped by pattern. The frontend renders:
-- `CutLayoutDiagram.tsx` — SVG board diagrams with `boardRotation` / `uprightText` utilities
+- `CutLayoutDiagram.tsx` — the plan as one summary line plus a fullscreen diagram behind it, shared
+  by the wizard's Costos step and the pre-order detail page
 - `cutDrawing.ts` — pure drawing primitives shared with the orders workshop SVG view
 - `SheetDetailModal` — expanded pattern view with `PiecePreview` and `GroupedPiecesList`
 - `OptimizingOverlay.tsx` — cover for the results pane while `/optimize` runs (tens of seconds on a

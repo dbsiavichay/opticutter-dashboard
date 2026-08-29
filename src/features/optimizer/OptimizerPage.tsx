@@ -34,7 +34,6 @@ import OptimizerActionsMenu from './OptimizerActionsMenu'
 import PiecesSelectionBar from './PiecesSelectionBar'
 import PiecesSummary from './PiecesSummary'
 import PiecesStep from './steps/PiecesStep'
-import LayoutStep from './steps/LayoutStep'
 import CostsStep from './steps/CostsStep'
 import QuoteStep from './steps/QuoteStep'
 import DeleteMaterialModal from './DeleteMaterialModal'
@@ -84,6 +83,11 @@ const OptimizerPage = () => {
   // stop believing.
   const [recalcScheduled, setRecalcScheduled] = useState(false)
   const recalcTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  // Whether the run in flight is a cut SEARCH rather than a re-price. A search reshapes the sheets,
+  // so the viewport overlay is right; a re-price only moves the money and already announces itself
+  // with "Recalculando…" beside the tier. Without the split, ticking a discount checkbox would
+  // black out the whole screen over a number that moves by cents.
+  const [isSearching, setIsSearching] = useState(false)
   // Half-filled rows found on the last attempt to leave the Despiece step; blocks the advance.
   const [issues, setIssues] = useState<RequirementIssue[]>([])
 
@@ -193,7 +197,7 @@ const OptimizerPage = () => {
     canQuote: hasResult && missingBanding.length === 0,
   })
   const onPieces = wizard.step === 'pieces'
-  const onLayout = wizard.step === 'layout'
+  const onCosts = wizard.step === 'costs'
 
   // Is there work that would be lost on reset? (more than one material, any with data, or non-empty pieces)
   const hasWork =
@@ -347,6 +351,10 @@ const OptimizerPage = () => {
       const nextVariant = overrides.variant ?? variant
       const nextStrategy = overrides.strategy ?? strategy
       const nextTier = overrides.priceTierCode ?? priceTierCode
+      // Read off the overrides rather than from a flag every caller would have to pass: only the
+      // tier change and the per-board marks (which travel as `materials`) are re-prices. Everything
+      // else — the auto-run, the heuristic, another alternative — searches.
+      const reprice = overrides.priceTierCode !== undefined || overrides.materials !== undefined
 
       const payload = buildPayload(overrides.materials ?? materials, pieces.requirements)
       if (payload.validCount === 0) {
@@ -354,8 +362,10 @@ const OptimizerPage = () => {
         // Nothing was sent, so no `onSettled` will fire: a scheduled recompute that lands here
         // would otherwise leave "Recalculando…" on screen forever.
         setRecalcScheduled(false)
+        setIsSearching(false)
         return
       }
+      setIsSearching(!reprice)
       const sent = signatureOf(
         payload.materials,
         payload.requirements,
@@ -379,6 +389,7 @@ const OptimizerPage = () => {
           onSettled: () => {
             attemptedSignature.current = sent
             setRecalcScheduled(false)
+            setIsSearching(false)
           },
         },
       )
@@ -414,10 +425,13 @@ const OptimizerPage = () => {
     wizard.goTo(id)
   }
 
-  // Entering the Optimización step computes what is missing: a first run, or a re-run because the
-  // pieces changed. The Despiece step already validated, so there is nothing to report here.
+  // Entering the Costos step computes what is missing: a first run, or a re-run because the pieces
+  // changed. The Despiece step already validated, so there is nothing to report here. This is what
+  // replaced the Optimización step — the run is no longer a stop of its own, it is what arriving at
+  // the prices does. Note the wizard gates Costos on piece DATA, not on a result: gating it on a
+  // result would mean this effect could never fire.
   useEffect(() => {
-    if (wizard.step !== 'layout') return
+    if (wizard.step !== 'costs') return
     if (optimize.isPending || !canOptimize) return
     if (hasResult && !isStale) return
     // Already attempted and it did not succeed: leave the error on screen rather than retrying the
@@ -433,9 +447,9 @@ const OptimizerPage = () => {
     if (canOptimize) runOptimize({ strategy: newStrategy })
   }
 
-  // Changing the price tier recomputes on the spot rather than waiting for a trip back to the
-  // Optimización step: only the money in the response changes and `/optimize` is cached by input
-  // hash, so the cut search is not redone — the cost tables just catch up with the tier on screen.
+  // Changing the price tier recomputes on the spot: only the money in the response changes and
+  // `/optimize` is cached by input hash, so the cut search is not redone — the cost tables just
+  // catch up with the tier on screen.
   const handlePriceTierChange = (code: string) => {
     setPriceTierCode(code)
     if (canOptimize) runOptimize({ priceTierCode: code })
@@ -519,7 +533,7 @@ const OptimizerPage = () => {
     onDeleteSelection: onPieces && pieces.selected.size > 0 ? pieces.removeSelected : undefined,
     onToggleCollapseAll: onPieces ? groups.toggleAll : undefined,
     onToggleFullscreen: canFullscreen ? toggle : undefined,
-    onOptimize: onLayout && canRunOptimize && !optimize.isPending ? handleRun : undefined,
+    onOptimize: onCosts && canRunOptimize && !optimize.isPending ? handleRun : undefined,
     onImport: onPieces ? () => setShowImport(true) : undefined,
     onExport: onPieces && hasPieceData ? () => handleExport() : undefined,
     onNew: handleNew,
@@ -558,6 +572,7 @@ const OptimizerPage = () => {
       <WizardSteps
         index={wizard.index}
         maxIndex={wizard.maxIndex}
+        blockedReasonFor={wizard.blockedReasonFor}
         onSelect={handleSelectStep}
         actions={
           <OptimizerActionsMenu
@@ -573,13 +588,13 @@ const OptimizerPage = () => {
                 : undefined
             }
             clearsMaterials
-            onOptimize={onLayout ? handleRun : undefined}
+            onOptimize={onCosts ? handleRun : undefined}
             hasResult={hasResult}
             optimizeDisabled={!canRunOptimize}
             isOptimizing={optimize.isPending}
             variant={variant}
-            strategy={onLayout ? strategy : undefined}
-            onStrategyChange={onLayout ? handleStrategyChange : undefined}
+            strategy={onCosts ? strategy : undefined}
+            onStrategyChange={onCosts ? handleStrategyChange : undefined}
             onToggleCollapseAll={onPieces ? groups.toggleAll : undefined}
             allCollapsed={groups.allCollapsed}
             collapseDisabled={materials.length === 0}
@@ -617,19 +632,13 @@ const OptimizerPage = () => {
           />
         )}
 
-        {wizard.step === 'layout' && (
-          <LayoutStep
+        {wizard.step === 'costs' && (
+          <CostsStep
             result={result}
-            isPending={optimize.isPending}
+            isSearching={isSearching}
             error={optimize.error}
             variant={variant}
             isStale={isStale}
-          />
-        )}
-
-        {wizard.step === 'costs' && result && (
-          <CostsStep
-            result={result}
             missingBanding={missingBanding}
             priceTierCode={priceTierCode}
             onPriceTierChange={handlePriceTierChange}

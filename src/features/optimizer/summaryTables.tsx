@@ -77,7 +77,7 @@ export const MaterialsSummaryTable = ({
           {/* Precio unitario, no eficiencia: esta es la tabla de dinero del paso, y con solo
               Cant. y Costo había que dividir para saber a cuánto sale el tablero — que es el
               número que se negocia y el que decide el check de "Desc." de la misma fila. El
-              aprovechamiento se lee en Optimización (badge por patrón) y en el diagrama de cortes. */}
+              aprovechamiento se lee en la barra del diagrama de cortes (y por patrón, dentro). */}
           <CTableHeaderCell className="text-end">Precio unit.</CTableHeaderCell>
           <CTableHeaderCell className="text-end">Costo</CTableHeaderCell>
           {/* Last column, right after the cost it acts on: the checkbox answers "does the
