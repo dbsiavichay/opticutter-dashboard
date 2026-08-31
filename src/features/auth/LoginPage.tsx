@@ -20,6 +20,7 @@ import { useLogin } from './useAuth'
 import { logo } from 'src/assets/brand/logo'
 import { sygnet } from 'src/assets/brand/sygnet'
 import { ApiError } from 'src/shared/api/types'
+import PasswordInput from 'src/shared/components/PasswordInput'
 
 const LoginPage = () => {
   const [email, setEmail] = useState('')
@@ -81,20 +82,16 @@ const LoginPage = () => {
                     />
                   </CInputGroup>
 
-                  <CInputGroup className="mb-4">
-                    <CInputGroupText>
-                      <CIcon icon={cilLockLocked} />
-                    </CInputGroupText>
-                    <CFormInput
-                      type="password"
-                      placeholder="Contraseña"
-                      autoComplete="current-password"
-                      value={password}
-                      onChange={(e) => setPassword(e.target.value)}
-                      required
-                      disabled={login.isPending}
-                    />
-                  </CInputGroup>
+                  <PasswordInput
+                    className="mb-4"
+                    startIcon={<CIcon icon={cilLockLocked} />}
+                    placeholder="Contraseña"
+                    autoComplete="current-password"
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    required
+                    disabled={login.isPending}
+                  />
 
                   <CButton
                     color="primary"

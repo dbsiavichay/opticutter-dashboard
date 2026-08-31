@@ -74,7 +74,7 @@ const ServiceForm = ({ service, onSubmit, onCancel, isSubmitting, error }: Servi
           </CCol>
           <CCol xs={12}>
             <CFormLabel>
-              Precio por defecto <span className="text-danger">*</span>
+              Precio por defecto (IVA incluido) <span className="text-danger">*</span>
             </CFormLabel>
             <CFormInput
               type="number"

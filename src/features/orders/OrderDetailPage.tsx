@@ -496,16 +496,16 @@ const OrderDetailPage = () => {
           {/* `ms-auto` on the block itself: with payment absent it is the only child of the row and
               would otherwise sit on the left. */}
           <div className="ms-auto">
-            {order.subtotal != null && order.priceTierCode ? (
+            {order.subtotal != null ? (
               <PricingBlock
                 pricing={
                   {
-                    priceTierCode: order.priceTierCode,
-                    priceTierName: order.priceTierName ?? order.priceTierCode,
-                    discountRate: order.discountRate ?? 0,
-                    discountBase: order.subtotal,
+                    priceLevel: order.priceLevel ?? 1,
+                    priceLevelName: order.priceLevelName ?? `Precio ${order.priceLevel ?? 1}`,
                     subtotal: order.subtotal,
-                    discountAmount: order.discountAmount ?? 0,
+                    servicesTotal: order.additionalServicesTotal,
+                    taxRate: order.taxRate ?? 0,
+                    taxAmount: order.taxAmount ?? 0,
                     total: order.total,
                   } satisfies PricingData
                 }

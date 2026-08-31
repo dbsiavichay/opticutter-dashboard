@@ -2,9 +2,13 @@ import { CAlert, CRow, CSpinner } from '@coreui/react'
 
 import { fmtMoney } from 'src/features/review/format'
 import PricingBlock from 'src/shared/components/PricingBlock'
-import PriceTierToggle from 'src/features/settings/PriceTierToggle'
+import PriceLevelToggle from 'src/features/optimizer/PriceLevelToggle'
 import ServiceLines from 'src/features/preorders/ServiceLines'
-import { pricingWithServices, type ServiceLineForm } from 'src/features/preorders/useServiceLines'
+import {
+  pricingWithServices,
+  servicesNetTotal,
+  type ServiceLineForm,
+} from 'src/features/preorders/useServiceLines'
 import { useServices } from 'src/features/services/useServices'
 import { KEY } from 'src/shared/utils/platform'
 import type { ModalContainer, OptimizeResponse } from '../types'
@@ -41,15 +45,15 @@ interface CostsStepProps {
   // Pieces with banding sides but no tapacanto product: their cost is missing from these tables,
   // which is exactly why they block the quote.
   missingBanding: number[]
-  priceTierCode: string
+  priceLevel: number
   // Recomputes the quote. Cheap despite being a round trip: `/optimize` is cached by input hash, so
   // changing only the tier re-prices the same cut plan instead of searching again.
-  onPriceTierChange: (code: string) => void
+  onPriceLevelChange: (level: number) => void
   isPending: boolean
   // Per-board discount: the tier sets the rate, this says which boards it applies to. Nothing is
   // discounted until the seller checks a board. Re-prices through the same cached round trip.
-  discountedKeys: Set<string>
-  onToggleDiscount: (materialKey: string) => void
+  leveledKeys: Set<string>
+  onToggleLevel: (materialKey: string) => void
   // Per-board "the client takes the whole board": promotes a sheet the optimizer billed as half.
   // Also a cached round trip — the plan is reshaped, never searched again.
   wholeBoardKeys: Set<string>
@@ -73,11 +77,11 @@ const CostsStep = ({
   variant,
   isStale,
   missingBanding,
-  priceTierCode,
-  onPriceTierChange,
+  priceLevel,
+  onPriceLevelChange,
   isPending,
-  discountedKeys,
-  onToggleDiscount,
+  leveledKeys,
+  onToggleLevel,
   wholeBoardKeys,
   onToggleWholeBoard,
   services,
@@ -140,7 +144,14 @@ const CostsStep = ({
           <CRow className="g-2 mb-3">
             <Kpi label="Tableros" value={fmtMoney(boardsCost)} />
             <Kpi label="Tapacanto" value={fmtMoney(bandingCost)} />
-            <Kpi label="Costo estimado" value={fmtMoney(boardsCost + bandingCost)} />
+            {/* Net, like the two tiles beside it: they are the three parts of the
+                subtotal, and a tile with tax inside would not add up to it. The
+                services are typed tax-included below, which is exactly why this
+                one has to say which number it is showing. */}
+            <Kpi
+              label="Servicios (sin IVA)"
+              value={fmtMoney(servicesNetTotal(services, result.pricing?.taxRate ?? 0))}
+            />
             <Kpi
               label="Total"
               value={pricing ? fmtMoney(pricing.total) : fmtMoney(boardsCost + bandingCost)}
@@ -177,8 +188,8 @@ const CostsStep = ({
           <div className="text-body-secondary small text-uppercase fw-semibold mb-2">Tableros</div>
           <MaterialsSummaryTable
             rows={result.materialsSummary ?? []}
-            discountedKeys={discountedKeys}
-            onToggleDiscount={onToggleDiscount}
+            leveledKeys={leveledKeys}
+            onToggleLevel={onToggleLevel}
             wholeBoardKeys={wholeBoardKeys}
             onToggleWholeBoard={onToggleWholeBoard}
           />
@@ -214,9 +225,9 @@ const CostsStep = ({
               <span className="text-body-secondary small text-uppercase fw-semibold">
                 Nivel de precio
               </span>
-              <PriceTierToggle
-                value={priceTierCode}
-                onChange={onPriceTierChange}
+              <PriceLevelToggle
+                value={priceLevel}
+                onChange={onPriceLevelChange}
                 disabled={isPending}
               />
               {isPending && (

@@ -71,7 +71,7 @@ export interface PreOrder extends PreOrderSummary {
   clientNote: string | null // note written by client when requesting changes
   sentAt: string | null
   confirmedAt: string | null
-  priceTierCode?: string
+  priceLevel?: number
   strategy?: PackingStrategy
   // Alternative-solution seed remembered for the recompute (0 = canonical).
   variant?: number
@@ -87,7 +87,7 @@ export interface PreOrderCreate {
   clientId: number
   notes?: string
   source?: string
-  priceTierCode?: string
+  priceLevel?: number
   strategy?: PackingStrategy
   variant?: number
   materials: MaterialInput[]

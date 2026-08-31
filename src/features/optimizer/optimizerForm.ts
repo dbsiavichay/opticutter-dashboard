@@ -41,9 +41,9 @@ export interface MaterialForm {
   // material rather than in a Set keyed by materialKey because reopening a pre-order mints
   // fresh uids (`formFromPreOrderData`), which would orphan such a set — and because a field
   // rides along in the autosave and in saved drafts for free.
-  applyDiscount?: boolean
+  applyPriceLevel?: boolean
   // Catalog boards only: the client takes the WHOLE board even where the optimizer billed a half
-  // one, keeping the uncut half. Lives on the material for the same reasons as `applyDiscount`,
+  // one, keeping the uncut half. Lives on the material for the same reasons as `applyPriceLevel`,
   // and like it, it never re-runs the search — the cached plan is reshaped.
   wholeBoard?: boolean
 }
@@ -102,7 +102,7 @@ export const emptyCatalogMaterial = (): MaterialForm => ({
   costPerUnit: '',
   offcuts: [],
   fillOrder: 'auto',
-  applyDiscount: false,
+  applyPriceLevel: false,
   wholeBoard: false,
 })
 
@@ -320,7 +320,7 @@ export const buildPayload = (
           // Only when marked: an omitted flag reads as false on the API and keeps the
           // payload — and the staleness signature built from it — identical to before
           // this feature for every quote that discounts nothing.
-          ...(m.applyDiscount ? { applyDiscount: true } : {}),
+          ...(m.applyPriceLevel ? { applyPriceLevel: true } : {}),
           ...(m.wholeBoard ? { wholeBoard: true } : {}),
         }
         // Only carry fillOrder when the board actually anchors a pool of offcuts.

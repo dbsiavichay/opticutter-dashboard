@@ -59,6 +59,24 @@ interface ProductModalState {
   product: Product | null
 }
 
+// The catalog carries three net prices per article, but only the list price is
+// worth a column: on the real inventory more than half the rows publish the same
+// number at every level. The reduced ones show underneath, and only when they
+// actually differ, so the table stays readable and the exceptions stand out.
+const PriceCell = ({ product }: { product: Product }) => {
+  const lower = [product.price2, product.price3].filter(
+    (p): p is number => p != null && p !== product.price,
+  )
+  return (
+    <CTableDataCell>
+      {fmtMoney(product.price)}
+      {lower.length > 0 && (
+        <div className="text-body-secondary small">{lower.map((p) => fmtMoney(p)).join(' · ')}</div>
+      )}
+    </CTableDataCell>
+  )
+}
+
 const ProductsPage = () => {
   const isReadOnly = useHasRole('vendedor')
   const queryClient = useQueryClient()
@@ -167,7 +185,7 @@ const ProductsPage = () => {
           <CTableHeaderCell>ID</CTableHeaderCell>
           <CTableHeaderCell>Código</CTableHeaderCell>
           <CTableHeaderCell>Nombre</CTableHeaderCell>
-          <CTableHeaderCell>Precio</CTableHeaderCell>
+          <CTableHeaderCell>Precio (sin IVA)</CTableHeaderCell>
           <CTableHeaderCell>Dimensiones</CTableHeaderCell>
           <CTableHeaderCell>Grosor</CTableHeaderCell>
           <CTableHeaderCell>Estado</CTableHeaderCell>
@@ -181,7 +199,7 @@ const ProductsPage = () => {
           <CTableHeaderCell>ID</CTableHeaderCell>
           <CTableHeaderCell>Código</CTableHeaderCell>
           <CTableHeaderCell>Nombre</CTableHeaderCell>
-          <CTableHeaderCell>Precio</CTableHeaderCell>
+          <CTableHeaderCell>Precio (sin IVA)</CTableHeaderCell>
           <CTableHeaderCell>Grosor</CTableHeaderCell>
           <CTableHeaderCell>Ancho</CTableHeaderCell>
           <CTableHeaderCell>Tipo</CTableHeaderCell>
@@ -197,7 +215,7 @@ const ProductsPage = () => {
         <CTableHeaderCell>Tipo</CTableHeaderCell>
         <CTableHeaderCell>Código</CTableHeaderCell>
         <CTableHeaderCell>Nombre</CTableHeaderCell>
-        <CTableHeaderCell>Precio</CTableHeaderCell>
+        <CTableHeaderCell>Precio (sin IVA)</CTableHeaderCell>
         <CTableHeaderCell>Estado</CTableHeaderCell>
         <CTableHeaderCell />
       </>
@@ -241,7 +259,7 @@ const ProductsPage = () => {
             <strong>{p.code}</strong>
           </CTableDataCell>
           <CTableDataCell>{p.name}</CTableDataCell>
-          <CTableDataCell>{fmtMoney(p.price)}</CTableDataCell>
+          <PriceCell product={p} />
           <CTableDataCell>
             {a.height && a.width ? `${a.height} × ${a.width} mm` : '—'}
           </CTableDataCell>
@@ -261,7 +279,7 @@ const ProductsPage = () => {
             <strong>{p.code}</strong>
           </CTableDataCell>
           <CTableDataCell>{p.name}</CTableDataCell>
-          <CTableDataCell>{fmtMoney(p.price)}</CTableDataCell>
+          <PriceCell product={p} />
           <CTableDataCell>{a.thickness != null ? `${a.thickness} mm` : '—'}</CTableDataCell>
           <CTableDataCell>{a.width ? `${a.width} mm` : '—'}</CTableDataCell>
           <CTableDataCell>
@@ -284,7 +302,7 @@ const ProductsPage = () => {
           <strong>{p.code}</strong>
         </CTableDataCell>
         <CTableDataCell>{p.name}</CTableDataCell>
-        <CTableDataCell>{fmtMoney(p.price)}</CTableDataCell>
+        <PriceCell product={p} />
         <CTableDataCell>{statusBadge}</CTableDataCell>
         {actions}
       </CTableRow>
@@ -306,18 +324,21 @@ const ProductsPage = () => {
             style={{ maxWidth: 360 }}
           />
           <ProductsFilters values={values} onChange={handleChange} onClear={handleClear} />
-          {!isReadOnly && (
-            <div className="d-flex gap-2 ms-auto">
-              <CButton color="secondary" variant="outline" onClick={() => setSyncModal(true)}>
-                <CIcon icon={cilSync} className="me-1" />
-                Sincronizar catálogo
-              </CButton>
+          <div className="d-flex gap-2 ms-auto">
+            {/* The seller syncs but doesn't edit: pulling fresh prices is part of
+                quoting (it's the pass that loads Precio 2/3), editing the catalog
+                is the admin's. Backed by `products:sync` vs `products:write`. */}
+            <CButton color="secondary" variant="outline" onClick={() => setSyncModal(true)}>
+              <CIcon icon={cilSync} className="me-1" />
+              Sincronizar catálogo
+            </CButton>
+            {!isReadOnly && (
               <CButton color="primary" onClick={openCreate}>
                 <CIcon icon={cilPlus} className="me-1" />
                 Nuevo producto
               </CButton>
-            </div>
-          )}
+            )}
+          </div>
         </div>
 
         <FilterChips chips={chips} onClearAll={handleClear} />

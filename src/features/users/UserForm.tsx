@@ -15,6 +15,7 @@ import type { UserPayload, UserUpdatePayload } from './types'
 import { ApiError } from 'src/shared/api/types'
 import { apiErrorMessage } from 'src/shared/api/errors'
 import { useActiveBranches } from 'src/features/branches/useBranches'
+import PasswordInput from 'src/shared/components/PasswordInput'
 
 interface UserFormProps {
   user: User | null
@@ -144,9 +145,9 @@ const UserForm = ({ user, onSubmit, onCancel, isSubmitting, error }: UserFormPro
           <CFormLabel htmlFor="uf-password">
             {isEdit ? 'Nueva contraseña (dejar en blanco para no cambiar)' : 'Contraseña'}
           </CFormLabel>
-          <CFormInput
+          <PasswordInput
             id="uf-password"
-            type="password"
+            autoComplete="new-password"
             value={password}
             onChange={(e) => setPassword(e.target.value)}
             required={!isEdit}

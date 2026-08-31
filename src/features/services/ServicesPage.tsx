@@ -138,7 +138,7 @@ const ServicesPage = () => {
               <CTableRow>
                 <CTableHeaderCell>ID</CTableHeaderCell>
                 <CTableHeaderCell>Nombre</CTableHeaderCell>
-                <CTableHeaderCell>Precio</CTableHeaderCell>
+                <CTableHeaderCell>Precio (c/IVA)</CTableHeaderCell>
                 <CTableHeaderCell>Estado</CTableHeaderCell>
                 <CTableHeaderCell />
               </CTableRow>

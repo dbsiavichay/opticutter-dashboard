@@ -67,7 +67,7 @@ import OptimizationPreview from 'src/features/optimizer/OptimizationPreview'
 import { WizardFooter } from 'src/features/optimizer/WizardSteps'
 import PreOrderStatusBadge from './PreOrderStatusBadge'
 import PreOrderStatusStrip from './PreOrderStatusStrip'
-import PriceTierToggle from 'src/features/settings/PriceTierToggle'
+import PriceLevelToggle from 'src/features/optimizer/PriceLevelToggle'
 import StatusHistoryTable from 'src/shared/components/StatusHistoryTable'
 import ReferenceNote from 'src/shared/components/ReferenceNote'
 import { isExpiringSoon, isOpen } from './status'
@@ -115,7 +115,7 @@ function formFromPreOrderData(
         fillOrder: m.fillOrder ?? 'auto',
         // A quote saved before the per-board discount shipped has no flag: it reads as
         // "not discounted", which is the default the feature ships with.
-        applyDiscount: m.applyDiscount ?? false,
+        applyPriceLevel: m.applyPriceLevel ?? false,
         wholeBoard: m.wholeBoard ?? false,
       }
       catalogByKey.set(m.key, form)
@@ -184,7 +184,7 @@ function editSignature(
   requirements: RequirementForm[],
   services: ServiceLineForm[],
   notes: string,
-  priceTierCode: string,
+  priceLevel: number,
   strategy: PackingStrategy,
   variant: number,
 ): string {
@@ -194,7 +194,7 @@ function editSignature(
     requirements: rInputs,
     additionalServices: buildServiceLines(services),
     notes: notes || '',
-    priceTierCode,
+    priceLevel,
     strategy,
     variant,
   })
@@ -222,7 +222,7 @@ const PreOrderView = ({ preOrder }: { preOrder: PreOrder }) => {
   )
   const services = serviceLines.lines
   const [notes, setNotes] = useState(preOrder.notes ?? '')
-  const [priceTierCode, setPriceTierCode] = useState(preOrder.priceTierCode ?? 'consumidor')
+  const [priceLevel, setPriceLevel] = useState(preOrder.priceLevel ?? 1)
   const [strategy, setStrategy] = useState<PackingStrategy>(
     preOrder.optimization.strategy ?? 'default',
   )
@@ -306,7 +306,7 @@ const PreOrderView = ({ preOrder }: { preOrder: PreOrder }) => {
     editor.requirements,
     services,
     notes,
-    priceTierCode,
+    priceLevel,
     strategy,
     variant,
   )
@@ -337,7 +337,7 @@ const PreOrderView = ({ preOrder }: { preOrder: PreOrder }) => {
           requirements: rInputs,
           additionalServices: buildServiceLines(services),
           notes: notes || undefined,
-          priceTierCode,
+          priceLevel,
           strategy,
           variant: variantValue,
         },
@@ -352,7 +352,7 @@ const PreOrderView = ({ preOrder }: { preOrder: PreOrder }) => {
               editor.requirements,
               services,
               notes,
-              priceTierCode,
+              priceLevel,
               strategy,
               variantValue,
             ),
@@ -399,17 +399,17 @@ const PreOrderView = ({ preOrder }: { preOrder: PreOrder }) => {
 
   // Which boards the tier's discount applies to. The materialKey of a summary row IS the uid of
   // the material block that produced it (`buildPayload` uses `key: m.uid`).
-  const discountedKeys = useMemo(
-    () => new Set(materials.filter((m) => m.applyDiscount).map((m) => m.uid)),
+  const leveledKeys = useMemo(
+    () => new Set(materials.filter((m) => m.applyPriceLevel).map((m) => m.uid)),
     [materials],
   )
 
   // No recompute here, unlike the wizard: the pre-order re-prices through PUT /preorders/{id},
   // so the mark is a pending edit like the tier. `editSignature` is built from `buildPayload`,
   // which now carries the flag, so this alone enables "Actualizar cotización".
-  const toggleDiscount = (materialKey: string) =>
+  const toggleLevel = (materialKey: string) =>
     setMaterials((ms) =>
-      ms.map((m) => (m.uid === materialKey ? { ...m, applyDiscount: !m.applyDiscount } : m)),
+      ms.map((m) => (m.uid === materialKey ? { ...m, applyPriceLevel: !m.applyPriceLevel } : m)),
     )
 
   // Boards the client takes whole even where the optimizer billed a half one. Same pending-edit
@@ -695,21 +695,21 @@ const PreOrderView = ({ preOrder }: { preOrder: PreOrder }) => {
           result={optimization}
           isPending={updatePreOrder.isPending}
           error={updatePreOrder.error}
-          discountedKeys={discountedKeys}
+          leveledKeys={leveledKeys}
           // A closed quote still SHOWS which boards were discounted; it just can't move them.
-          onToggleDiscount={toggleDiscount}
+          onToggleLevel={toggleLevel}
           wholeBoardKeys={wholeBoardKeys}
           onToggleWholeBoard={toggleWholeBoard}
           marksDisabled={!canEdit || updatePreOrder.isPending}
-          priceTier={
+          priceLevel={
             canEdit ? (
               <div className="d-flex flex-wrap align-items-center gap-2">
                 <span className="text-body-secondary small text-uppercase fw-semibold">
                   Nivel de precio
                 </span>
-                <PriceTierToggle
-                  value={priceTierCode}
-                  onChange={setPriceTierCode}
+                <PriceLevelToggle
+                  value={priceLevel}
+                  onChange={setPriceLevel}
                   disabled={updatePreOrder.isPending}
                 />
               </div>

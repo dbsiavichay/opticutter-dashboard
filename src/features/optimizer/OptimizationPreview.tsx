@@ -24,11 +24,11 @@ interface OptimizationPreviewProps {
   // Price-tier control, rendered on the totals row beside PricingBlock. It lives here rather than in
   // a settings card further up because a control that moves a number belongs next to the number —
   // otherwise switching tiers means scrolling past the whole cut list to read the effect.
-  priceTier?: ReactNode
+  priceLevel?: ReactNode
   // Per-board discount selection. Like the tier, it is a PENDING edit here: passing
-  // `onToggleDiscount` shows the column, and the totals only catch up after "Actualizar cotización".
-  discountedKeys?: Set<string>
-  onToggleDiscount?: (materialKey: string) => void
+  // `onToggleLevel` shows the column, and the totals only catch up after "Actualizar cotización".
+  leveledKeys?: Set<string>
+  onToggleLevel?: (materialKey: string) => void
   // Per-board "the client takes the whole board", same pending-edit semantics.
   wholeBoardKeys?: Set<string>
   onToggleWholeBoard?: (materialKey: string) => void
@@ -40,9 +40,9 @@ const OptimizationPreview = ({
   result,
   isPending,
   error,
-  priceTier,
-  discountedKeys,
-  onToggleDiscount,
+  priceLevel,
+  leveledKeys,
+  onToggleLevel,
   wholeBoardKeys,
   onToggleWholeBoard,
   marksDisabled,
@@ -68,9 +68,16 @@ const OptimizationPreview = ({
         <>
           <CRow className="g-2 mb-3">
             <Kpi label="Tableros usados" value={result.totalBoardsUsed} />
+            {/* The figure the client is quoted, not the materials' net subtotal:
+                this is the headline of the quote, and everything else on the page
+                (the tables, the breakdown below) already shows the parts. Falls
+                back to boards + banding on a payload with no pricing block. */}
             <Kpi
-              label="Costo estimado"
-              value={fmtMoney((result.totalBoardsCost ?? 0) + (result.totalEdgeBandingCost ?? 0))}
+              label="Total (con IVA)"
+              value={fmtMoney(
+                result.pricing?.total ??
+                  (result.totalBoardsCost ?? 0) + (result.totalEdgeBandingCost ?? 0),
+              )}
             />
             <Kpi label="Corte lineal" value={meters(result.totalCutLinearM)} />
             <Kpi label="Tapacanto lineal" value={meters(result.totalEdgeBandingLinearM)} />
@@ -78,8 +85,8 @@ const OptimizationPreview = ({
 
           <MaterialsSummaryTable
             rows={result.materialsSummary ?? []}
-            discountedKeys={discountedKeys}
-            onToggleDiscount={onToggleDiscount}
+            leveledKeys={leveledKeys}
+            onToggleLevel={onToggleLevel}
             wholeBoardKeys={wholeBoardKeys}
             onToggleWholeBoard={onToggleWholeBoard}
             marksDisabled={marksDisabled}
@@ -95,9 +102,9 @@ const OptimizationPreview = ({
               shown — and the per-board discount marks above — are the pending selection; the totals
               are the ones the server last computed, so they only agree again after "Actualizar
               cotización". */}
-          {(priceTier || result.pricing) && (
+          {(priceLevel || result.pricing) && (
             <div className="d-flex flex-wrap justify-content-between align-items-end gap-3 border-top pt-3">
-              {priceTier}
+              {priceLevel}
               {/* ms-auto, not just the row's justify-content: on a closed quote there is no tier
                   picker, and a lone child in a space-between row lands on the left. */}
               {result.pricing && (

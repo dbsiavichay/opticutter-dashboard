@@ -59,8 +59,8 @@ export const signatureOf = (
   requirements: RequirementInput[],
   strategy: PackingStrategy,
   variant: number,
-  priceTierCode: string,
-): string => JSON.stringify({ materials, requirements, strategy, variant, priceTierCode })
+  priceLevel: number,
+): string => JSON.stringify({ materials, requirements, strategy, variant, priceLevel })
 
 export const useOptimizerWizard = ({ hasPieceData, hasResult, canQuote }: WizardGates) => {
   const [params, setParams] = useSearchParams()

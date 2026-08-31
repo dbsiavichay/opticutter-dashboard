@@ -8,8 +8,8 @@ import type { AdditionalServiceInput, PricingData } from 'src/features/optimizer
 // a quote born in the wizard started empty and could only get them after the fact.
 //
 // Services are not cut geometry: they never reach the optimizer, and the backend folds them into the
-// total *after* the tier discount, undiscounted (`optimizations/pricing.py`). That is what lets the
-// wizard preview the total without a round trip — see `servicesTotal` below.
+// net subtotal, converting them out of tax first (`optimizations/pricing.py`). That is what lets the
+// wizard preview the total without a round trip — see `pricingWithServices` below.
 
 // --- Form model (during editing; numbers may be '' while the user is typing) ---
 
@@ -53,30 +53,50 @@ export const buildServiceLines = (lines: ServiceLineForm[]): AdditionalServiceIn
     quantity: Number(s.quantity) || 1,
   }))
 
-// Sum of the complete lines, rounded the way the backend rounds it, so the wizard's preview total
-// matches the one the server returns once the pre-order exists. Only valid rows count — a half-typed
-// row must not move the total the user is reading.
+const round2 = (n: number) => Math.round(n * 100) / 100
+
+// Sum of the complete lines AS TYPED, i.e. tax included — that is how staff registers a service
+// price, and it is what the editor's own running total shows. Only valid rows count: a half-typed
+// row must not move the number the user is reading.
 export const servicesTotal = (lines: ServiceLineForm[]): number =>
-  Math.round(buildServiceLines(lines).reduce((sum, s) => sum + s.unitPrice * s.quantity, 0) * 100) /
-  100
+  round2(buildServiceLines(lines).reduce((sum, s) => sum + s.unitPrice * s.quantity, 0))
+
+// The same sum NET of tax, which is what reaches a document: every other line on a quote is net, so
+// the services convert too and one IVA line then covers the whole thing. Rounded per line, exactly
+// as `build_pricing` does it, so the column adds up to the subtotal on both sides.
+export const servicesNetTotal = (lines: ServiceLineForm[], taxRate: number): number =>
+  round2(
+    buildServiceLines(lines).reduce(
+      (sum, s) => sum + round2((s.unitPrice * s.quantity) / (1 + taxRate)),
+      0,
+    ),
+  )
 
 // Folds the services into a quote's pricing for display. `/optimize` takes no services — they are
 // not cut geometry, and feeding them in would churn its input hash for a number it does not compute
 // — so the wizard adds them here to show the real total before the pre-order exists.
 //
-// This is exact rather than an estimate, which is the only reason it is allowed: the backend also
-// adds the services *after* the tier discount and never discounts them, so `total + servicesTotal`
-// is arithmetically the same figure the pre-order comes back with.
+// It therefore assumes `pricing` carries NO services yet, which holds for both callers (they pass a
+// raw `/optimize` result); the pre-order detail page reads the server's own figures instead.
+//
+// The services are taxable like everything else, so they join the SUBTOTAL and the tax is
+// recomputed over it — adding them to an already-taxed total would undercharge the IVA on them.
+// This mirrors `build_pricing` step for step, which is the only reason a local computation is
+// allowed here at all; it is still a preview, and the server recomputes it when the quote is saved.
 export const pricingWithServices = (
   pricing: PricingData,
   lines: ServiceLineForm[],
 ): PricingData => {
-  const total = servicesTotal(lines)
-  if (total === 0) return pricing
+  const net = servicesNetTotal(lines, pricing.taxRate)
+  if (net === 0) return pricing
+  const subtotal = round2(pricing.subtotal + net)
+  const taxAmount = round2(subtotal * pricing.taxRate)
   return {
     ...pricing,
-    servicesTotal: total,
-    total: Math.round((pricing.total + total) * 100) / 100,
+    servicesTotal: net,
+    subtotal,
+    taxAmount,
+    total: round2(subtotal + taxAmount),
   }
 }
 

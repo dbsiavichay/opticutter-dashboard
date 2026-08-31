@@ -6,7 +6,7 @@ import SearchableSelect from 'src/shared/components/SearchableSelect'
 import { fmtMoney } from 'src/shared/utils/format'
 import type { AdditionalService } from 'src/features/services/types'
 import type { ModalContainer } from 'src/features/optimizer/types'
-import type { ServiceLineForm } from './useServiceLines'
+import { servicesTotal, type ServiceLineForm } from './useServiceLines'
 
 // The service lines, and nothing else — no card and no title, on the same reasoning as
 // `MaterialGroups`: the chrome belongs to whoever is placing the list. The pre-order page wraps it
@@ -61,10 +61,11 @@ const ServiceLines = ({
     }
   }
 
-  const total = services.reduce(
-    (sum, s) => sum + (Number(s.unitPrice) || 0) * (Number(s.quantity) || 0),
-    0,
-  )
+  // The editor's running total is what the seller TYPED, i.e. tax included — it
+  // has to reconcile with the price list they are reading from, not with the
+  // document. The net figure that reaches the quote is computed once, in
+  // `servicesNetTotal`, and shown by the breakdown below the tables.
+  const total = servicesTotal(services)
 
   return (
     <div className="mb-3">
@@ -103,7 +104,13 @@ const ServiceLines = ({
                   />
                 </div>
                 <div style={{ width: 120 }}>
-                  <label className="form-label small mb-1">P. Unit.</label>
+                  {/* The one price in the system that is typed WITH tax: it comes
+                      off a service price list, not from the vendor's inventory.
+                      The server converts it to net so the document's single IVA
+                      line covers it too. */}
+                  <label className="form-label small mb-1" title="IVA incluido">
+                    P. Unit. (c/IVA)
+                  </label>
                   <CFormInput
                     size="sm"
                     type="number"
@@ -131,7 +138,9 @@ const ServiceLines = ({
             )
           })}
           <div className="d-flex justify-content-end pt-2 border-top">
-            <span className="text-body-secondary me-2 small">Servicios adicionales:</span>
+            <span className="text-body-secondary me-2 small">
+              Servicios adicionales (IVA incluido):
+            </span>
             <strong className="small">{fmtMoney(total)}</strong>
           </div>
         </div>
