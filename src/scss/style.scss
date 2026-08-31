@@ -279,6 +279,134 @@ input[type='number'] {
   background-color: var(--cui-tertiary-bg);
 }
 
+// The one scroll box the pieces editor has. Every material used to bring its own 55vh window
+// (`PieceRowsTable`'s `maxHeight`), so three open groups meant four nested scroll contexts and a
+// wheel that did something different depending on where the cursor happened to be. Collapsing them
+// into one pane is what makes the two sticky headers below possible: both stick to THIS box, so the
+// offsets owe nothing to the app header — the same rules hold on the page, in the workspace's
+// fullscreen host, and inside the pre-order panel's modal.
+//
+// The height comes from the call site (it knows what else is on its screen); `min-height` keeps the
+// pane usable on a short viewport instead of letting `calc()` squeeze it to nothing.
+.pieces-pane {
+  // Published here, not on the header itself: `.pieces-table thead th` offsets by it and is not a
+  // descendant of that header, and custom properties only inherit downwards.
+  --pieces-group-header-h: 2.5rem;
+  overflow: auto;
+  min-height: 24rem;
+  scrollbar-gutter: stable;
+}
+
+// A material's identity line, pinned to the top of the pane while its rows scroll under it.
+//
+// The height is FIXED and published as a variable because `.pieces-table thead th` parks directly
+// beneath it: a constant offset means nothing has to be measured at runtime. That is also why the
+// material's form (Fuente / Tablero / medidas) is a separate row below rather than part of this one
+// — it can grow to three lines when it wraps, and the sticky block must not.
+.material-group__head {
+  position: sticky;
+  top: 0;
+  // Above the table's own sticky header (2) and above the fill handle inside a cell (3).
+  z-index: 4;
+  height: var(--pieces-group-header-h);
+  background-color: var(--cui-body-bg);
+}
+
+// The accent repeated as a dot. `.material-group`'s 6px spine is the parent's border and scrolls
+// away with the rows, so without this the pinned line would be the only thing on screen with no
+// colour tying it to the group underneath.
+.material-dot {
+  flex: 0 0 auto;
+  width: 0.6rem;
+  height: 0.6rem;
+  border-radius: 50%;
+  background-color: var(--group-accent, var(--cui-border-color));
+}
+
+// Index of materials above the pane: table of contents, compass and jump target in one row. Chips
+// rather than a rail, because a rail would take width from a table that already has 12 columns.
+.material-strip {
+  overflow-x: auto;
+  scrollbar-width: thin;
+}
+
+.material-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  flex: 0 0 auto;
+  max-width: 15rem;
+  padding: 0.15rem 0.6rem;
+  border: var(--cui-border-width) var(--cui-border-style) var(--cui-border-color);
+  border-radius: 10rem;
+  background-color: var(--cui-body-bg);
+  color: var(--cui-body-color);
+  font-size: 0.8125rem;
+  line-height: 1.4;
+  cursor: pointer;
+
+  &:hover {
+    border-color: var(--group-accent, var(--cui-primary));
+  }
+
+  // The material on screen. Tinted with its OWN accent rather than the brand coral: the point of the
+  // strip is to agree with the dot and the spine you are looking at, and a coral fill would say
+  // "selected" in a colour that belongs to a different material every time.
+  &--active {
+    border-color: var(--group-accent, var(--cui-primary));
+    box-shadow: inset 0 0 0 1px var(--group-accent, var(--cui-primary));
+    font-weight: 600;
+  }
+}
+
+// Same dot as the group header wears, so the chip and the material it points at are recognisably
+// the same thing before either name is read.
+.material-chip-dot {
+  flex: 0 0 auto;
+  width: 0.5rem;
+  height: 0.5rem;
+  border-radius: 50%;
+  background-color: var(--group-accent, var(--cui-border-color));
+}
+
+.material-chip-label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.material-chip-count {
+  color: var(--cui-secondary-color);
+  font-variant-numeric: tabular-nums;
+}
+
+// A search hit. Search paints, it never filters — a piece has no identity beyond its position, so
+// hiding a row would silently repoint the selection, the undo history and the drag handlers that
+// read row order straight off the DOM.
+//
+// `--cui-table-bg-state` rather than `background-color`: Bootstrap paints cell backgrounds as
+// `box-shadow: inset 0 0 0 9999px` over `--cui-table-bg`, so a plain background is overpainted,
+// while a TRANSLUCENT state colour composites on top. That is what lets a row be a hit and an error
+// at once — the danger red stays visible underneath. An alpha of the brand, so one value serves
+// both themes.
+.piece-hit {
+  --cui-table-bg-state: rgba(var(--cui-primary-rgb), 0.1);
+}
+
+// The match you are actually on: a heavier tint plus a solid bar in the "#" column, which is the one
+// cell narrow enough that a marker there reads as belonging to the whole row.
+.piece-hit--active {
+  --cui-table-bg-state: rgba(var(--cui-primary-rgb), 0.22);
+
+  // Both shadows in one declaration, bar first: Bootstrap paints the cell's own fill with an inset
+  // shadow too, and a rule that only set the bar would win the cascade and drop the tint here.
+  > td:nth-child(2) {
+    box-shadow:
+      inset 3px 0 0 var(--cui-primary),
+      inset 0 0 0 9999px rgba(var(--cui-primary-rgb), 0.22);
+  }
+}
+
 // Material group. No longer a card: the full border, the rounded corners and the tinted header strip
 // stacked a box inside a box inside a box before the first table row. What is left is the accent bar
 // down the left edge — which is functional, it tracks which group a row belongs to while a long

@@ -2,7 +2,14 @@ import { useEffect, useRef, useState } from 'react'
 import type { CSSProperties, KeyboardEvent } from 'react'
 import { CBadge, CButton, CFormInput, CFormLabel, CFormSelect } from '@coreui/react'
 import CIcon from '@coreui/icons-react'
-import { cilChevronBottom, cilChevronRight, cilCopy, cilPlus, cilTrash } from '@coreui/icons'
+import {
+  cilChevronBottom,
+  cilChevronRight,
+  cilCopy,
+  cilPencil,
+  cilPlus,
+  cilTrash,
+} from '@coreui/icons'
 
 import SearchableSelect from 'src/shared/components/SearchableSelect'
 import type { BoardProduct, EdgeBandingProduct } from 'src/features/products/types'
@@ -24,6 +31,7 @@ import {
   hasEdgeBanding,
   inferBandingProductId,
   isRequirementEmpty,
+  materialLabel,
   sidesFromNotation,
 } from './optimizerForm'
 import type { PiecesEditor } from './usePiecesEditor'
@@ -58,8 +66,14 @@ interface MaterialGroupCardProps {
   // Fullscreen portal target for the portaled overlays in this card: the board / tapacanto dropdown
   // menus and the modals opened from inside the pieces table.
   container?: ModalContainer
-  // Scroll cap for this group's rows; see MaterialGroups.tableMaxHeight.
-  tableMaxHeight?: string
+  // Flat indices matching the search, and the one currently revealed; passed straight to the table.
+  matches?: Set<number>
+  activeMatch?: number | null
+  // Ref callback handing this group to the navigation, which measures it to decide which material
+  // the chip strip should mark as current.
+  onRegister?: (el: HTMLElement | null) => void
+  // Jump to the first half-filled piece of THIS material. Omitted where there is no navigation.
+  onGoToIssue?: () => void
   onToggle: () => void
   onUpdate: <K extends keyof MaterialForm>(uid: string, field: K, value: MaterialForm[K]) => void
   onRequestDelete: (m: MaterialForm) => void
@@ -134,7 +148,10 @@ const MaterialGroupCard = ({
   boards,
   edgeBandings,
   container,
-  tableMaxHeight,
+  matches,
+  activeMatch,
+  onRegister,
+  onGoToIssue,
   onToggle,
   onUpdate,
   onRequestDelete,
@@ -142,6 +159,11 @@ const MaterialGroupCard = ({
 }: MaterialGroupCardProps) => {
   const [quickText, setQuickText] = useState('')
   const [quickError, setQuickError] = useState('')
+  // Display-then-edit: the material's form is what the header USED to be, and it made the header a
+  // row of selects with the board's name buried inside one of them. A material is picked once and
+  // then read a hundred times, so the read state wins the permanent slot and the form opens on
+  // demand — and always, unaided, while the material is still incomplete.
+  const [editing, setEditing] = useState(false)
 
   // Tapacantos coordinated with this group's board (same family + width rule). Empty for
   // non-catalog sources or catalog gaps — the table falls back to the global list.
@@ -156,10 +178,6 @@ const MaterialGroupCard = ({
   const board =
     m.source === 'catalog' ? boards.find((b) => String(b.id) === String(m.boardId)) : undefined
   const dims = m.source === 'catalog' ? boardDims(board) : null
-
-  // A CSV import labels the groups it creates with the text that produced them. Until a board is
-  // picked, that text is the only thing telling two pending groups apart, so it takes the dims slot.
-  const pendingLabel = m.source === 'catalog' && !m.boardId ? m.label.trim() : ''
 
   // Two rules, both waiting on the board's coordinated list, which loads asynchronously:
   //
@@ -238,9 +256,27 @@ const MaterialGroupCard = ({
     setQuickError('')
   }
 
+  const title = materialLabel(m, boards)
+  // An incomplete material has nothing to display yet, so it opens its own form: "Agregar material"
+  // still lands straight in the board picker, with no extra click.
+  const showForm = editing || !materialValid
+
   return (
-    <div className="material-group mb-3" style={{ '--group-accent': accent } as CSSProperties}>
-      <div className="d-flex flex-wrap gap-2 align-items-end py-2">
+    // `data-material-uid` marks the GROUP, not the header below: the header is sticky, so once the
+    // pane is scrolled past this material it has un-stuck and is resting on the group's bottom edge.
+    // Scrolling to it from below therefore landed on the material's LAST row instead of its first.
+    <div
+      ref={onRegister}
+      className="material-group mb-3"
+      data-material-uid={m.uid}
+      style={{ '--group-accent': accent } as CSSProperties}
+    >
+      {/* The one line that stays pinned while the group scrolls. The accent spine down the left is
+          the parent's border and scrolls away with it, which is why the identity is repeated here as
+          a dot — and why the name is text at last, instead of the label of a select. Its height is
+          fixed (`--pieces-group-header-h`) because the table's own sticky header parks right under
+          it and needs a constant offset. */}
+      <div className="material-group__head d-flex align-items-center gap-2">
         <CButton
           size="sm"
           color="secondary"
@@ -253,118 +289,46 @@ const MaterialGroupCard = ({
           <CIcon icon={collapsed ? cilChevronRight : cilChevronBottom} />
         </CButton>
 
-        <div style={{ width: 150 }}>
-          <CFormLabel className="small mb-1">Fuente</CFormLabel>
-          <CFormSelect
-            size="sm"
-            value={m.source}
-            onChange={(e) => onUpdate(m.uid, 'source', e.target.value as MaterialSourceKind)}
-          >
-            {SOURCES.map((s) => (
-              <option key={s} value={s}>
-                {SOURCE_LABELS[s]}
-              </option>
-            ))}
-          </CFormSelect>
-        </div>
-
-        {m.source === 'catalog' ? (
-          <div style={{ minWidth: 220, flex: '1 1 260px' }}>
-            {/* Dims sit on the label line (not below the select) so the field keeps the same height
-                as the others and all selects stay vertically aligned. */}
-            <div className="d-flex justify-content-between align-items-baseline gap-2 mb-1">
-              <CFormLabel className="small mb-0">Tablero</CFormLabel>
-              {pendingLabel ? (
-                <span
-                  className="small text-warning-emphasis text-truncate"
-                  style={{ maxWidth: 180 }}
-                  title={`Importado como “${pendingLabel}”`}
-                >
-                  {pendingLabel}
-                </span>
-              ) : (
-                dims && <span className="small text-body-secondary text-nowrap">{dims}</span>
-              )}
-            </div>
-            <SearchableSelect
-              size="sm"
-              value={String(m.boardId)}
-              placeholder="Seleccionar…"
-              searchPlaceholder="Buscar por nombre o código…"
-              emptyText="Sin tableros que coincidan"
-              options={boards.map((b) => ({
-                value: String(b.id),
-                label: b.name,
-                sublabel: b.code,
-              }))}
-              onChange={(v) => onUpdate(m.uid, 'boardId', v)}
-              container={container}
-            />
-          </div>
-        ) : (
-          <>
-            <div style={{ flex: '1 1 160px', minWidth: 140 }}>
-              <CFormLabel className="small mb-1">Etiqueta</CFormLabel>
-              <CFormInput
-                size="sm"
-                value={m.label}
-                placeholder="Retazo bodega 3"
-                onChange={(e) => onUpdate(m.uid, 'label', e.target.value)}
-              />
-            </div>
-            <div style={{ width: 80 }}>
-              <CFormLabel className="small mb-1">Largo</CFormLabel>
-              <CFormInput
-                size="sm"
-                type="number"
-                min={1}
-                value={m.height}
-                onChange={(e) => onUpdate(m.uid, 'height', e.target.value)}
-              />
-            </div>
-            <div style={{ width: 80 }}>
-              <CFormLabel className="small mb-1">Ancho</CFormLabel>
-              <CFormInput
-                size="sm"
-                type="number"
-                min={1}
-                value={m.width}
-                onChange={(e) => onUpdate(m.uid, 'width', e.target.value)}
-              />
-            </div>
-            <div style={{ width: 80 }}>
-              <CFormLabel className="small mb-1">Grosor</CFormLabel>
-              <CFormInput
-                size="sm"
-                type="number"
-                min={1}
-                value={m.thickness}
-                onChange={(e) => onUpdate(m.uid, 'thickness', e.target.value)}
-              />
-            </div>
-            <div style={{ width: 110 }}>
-              <CFormLabel className="small mb-1">Costo unit.</CFormLabel>
-              <CFormInput
-                size="sm"
-                type="number"
-                min={0}
-                step="0.01"
-                value={m.costPerUnit}
-                onChange={(e) => onUpdate(m.uid, 'costPerUnit', e.target.value)}
-              />
-            </div>
-          </>
+        <span className="material-dot" />
+        <span className="fw-semibold text-truncate" title={title}>
+          {title}
+        </span>
+        {dims && (
+          <span className="small text-body-secondary text-nowrap d-none d-md-inline">{dims}</span>
         )}
 
         <div className="ms-auto d-flex align-items-center gap-2">
           <span className="small text-body-secondary text-nowrap">
             <strong className="text-body">{rows.length}</strong> piezas
           </span>
-          {invalidCount > 0 && (
-            <CBadge color="danger" title="Piezas con datos incompletos">
-              {invalidCount} incompletas
-            </CBadge>
-          )}
+          {invalidCount > 0 &&
+            (onGoToIssue ? (
+              <CBadge
+                as="button"
+                type="button"
+                color="danger"
+                className="border-0"
+                title="Ir a la primera pieza incompleta de este material"
+                onClick={onGoToIssue}
+              >
+                {invalidCount === 1 ? '1 incompleta' : `${invalidCount} incompletas`}
+              </CBadge>
+            ) : (
+              <CBadge color="danger" title="Piezas con datos incompletos">
+                {invalidCount === 1 ? '1 incompleta' : `${invalidCount} incompletas`}
+              </CBadge>
+            ))}
+          <CButton
+            size="sm"
+            variant="ghost"
+            color={showForm ? 'primary' : 'secondary'}
+            type="button"
+            title={showForm ? 'Ocultar los datos del material' : 'Cambiar el material'}
+            disabled={!materialValid}
+            onClick={() => setEditing((v) => !v)}
+          >
+            <CIcon icon={cilPencil} />
+          </CButton>
           <CButton
             size="sm"
             variant="ghost"
@@ -387,6 +351,100 @@ const MaterialGroupCard = ({
           </CButton>
         </div>
       </div>
+
+      {showForm && (
+        <div className="d-flex flex-wrap gap-2 align-items-end pb-2">
+          <div style={{ width: 150 }}>
+            <CFormLabel className="small mb-1">Fuente</CFormLabel>
+            <CFormSelect
+              size="sm"
+              value={m.source}
+              onChange={(e) => onUpdate(m.uid, 'source', e.target.value as MaterialSourceKind)}
+            >
+              {SOURCES.map((s) => (
+                <option key={s} value={s}>
+                  {SOURCE_LABELS[s]}
+                </option>
+              ))}
+            </CFormSelect>
+          </div>
+
+          {m.source === 'catalog' ? (
+            <div style={{ minWidth: 220, flex: '1 1 260px' }}>
+              {/* No dims and no import label here any more: the pinned header above carries both,
+                  and it is on screen whenever this row is. */}
+              <CFormLabel className="small mb-1">Tablero</CFormLabel>
+              <SearchableSelect
+                size="sm"
+                value={String(m.boardId)}
+                placeholder="Seleccionar…"
+                searchPlaceholder="Buscar por nombre o código…"
+                emptyText="Sin tableros que coincidan"
+                options={boards.map((b) => ({
+                  value: String(b.id),
+                  label: b.name,
+                  sublabel: b.code,
+                }))}
+                onChange={(v) => onUpdate(m.uid, 'boardId', v)}
+                container={container}
+              />
+            </div>
+          ) : (
+            <>
+              <div style={{ flex: '1 1 160px', minWidth: 140 }}>
+                <CFormLabel className="small mb-1">Etiqueta</CFormLabel>
+                <CFormInput
+                  size="sm"
+                  value={m.label}
+                  placeholder="Retazo bodega 3"
+                  onChange={(e) => onUpdate(m.uid, 'label', e.target.value)}
+                />
+              </div>
+              <div style={{ width: 80 }}>
+                <CFormLabel className="small mb-1">Largo</CFormLabel>
+                <CFormInput
+                  size="sm"
+                  type="number"
+                  min={1}
+                  value={m.height}
+                  onChange={(e) => onUpdate(m.uid, 'height', e.target.value)}
+                />
+              </div>
+              <div style={{ width: 80 }}>
+                <CFormLabel className="small mb-1">Ancho</CFormLabel>
+                <CFormInput
+                  size="sm"
+                  type="number"
+                  min={1}
+                  value={m.width}
+                  onChange={(e) => onUpdate(m.uid, 'width', e.target.value)}
+                />
+              </div>
+              <div style={{ width: 80 }}>
+                <CFormLabel className="small mb-1">Grosor</CFormLabel>
+                <CFormInput
+                  size="sm"
+                  type="number"
+                  min={1}
+                  value={m.thickness}
+                  onChange={(e) => onUpdate(m.uid, 'thickness', e.target.value)}
+                />
+              </div>
+              <div style={{ width: 110 }}>
+                <CFormLabel className="small mb-1">Costo unit.</CFormLabel>
+                <CFormInput
+                  size="sm"
+                  type="number"
+                  min={0}
+                  step="0.01"
+                  value={m.costPerUnit}
+                  onChange={(e) => onUpdate(m.uid, 'costPerUnit', e.target.value)}
+                />
+              </div>
+            </>
+          )}
+        </div>
+      )}
 
       {!collapsed && (
         <div>
@@ -515,7 +573,8 @@ const MaterialGroupCard = ({
             boardEdgeBandings={boardEdgeBandings}
             boardThickness={board?.attributes.thickness}
             container={container}
-            maxHeight={tableMaxHeight}
+            matches={matches}
+            activeMatch={activeMatch}
           />
           <div className="d-flex align-items-center gap-2 mt-2 flex-wrap">
             {/* Icon-only: the input beside it already says how to add a piece, and Enter on the last

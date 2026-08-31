@@ -9,6 +9,10 @@ import type { MaterialForm } from './optimizerForm'
 export interface CollapsedGroups {
   collapsed: Set<string>
   toggle: (uid: string) => void
+  // Unfold one group, idempotently. `toggle` cannot serve here: the navigation reveals a piece
+  // without knowing whether its group was folded, and toggling an open one would hide the row it
+  // is about to scroll to.
+  expand: (uid: string) => void
   allCollapsed: boolean
   toggleAll: () => void
 }
@@ -27,6 +31,17 @@ export const useCollapsedGroups = (materials: MaterialForm[]): CollapsedGroups =
     [],
   )
 
+  const expand = useCallback(
+    (uid: string) =>
+      setCollapsed((s) => {
+        if (!s.has(uid)) return s
+        const next = new Set(s)
+        next.delete(uid)
+        return next
+      }),
+    [],
+  )
+
   const allCollapsed = useMemo(
     () => materials.length > 0 && materials.every((m) => collapsed.has(m.uid)),
     [materials, collapsed],
@@ -37,7 +52,7 @@ export const useCollapsedGroups = (materials: MaterialForm[]): CollapsedGroups =
     [allCollapsed, materials],
   )
 
-  return { collapsed, toggle, allCollapsed, toggleAll }
+  return { collapsed, toggle, expand, allCollapsed, toggleAll }
 }
 
 export default useCollapsedGroups

@@ -25,6 +25,7 @@ import {
   cilOptions,
   cilPlus,
   cilSave,
+  cilSearch,
   cilTrash,
 } from '@coreui/icons'
 
@@ -73,6 +74,7 @@ interface OptimizerActionsMenuProps {
   variant?: number
   strategy?: PackingStrategy
   onStrategyChange?: (s: PackingStrategy) => void
+  onFind?: () => void
   // --- Vista ---
   onToggleCollapseAll?: () => void
   allCollapsed?: boolean
@@ -122,6 +124,7 @@ const OptimizerActionsMenu = ({
   variant = 0,
   strategy,
   onStrategyChange,
+  onFind,
   onToggleCollapseAll,
   allCollapsed,
   collapseDisabled,
@@ -141,7 +144,7 @@ const OptimizerActionsMenu = ({
   container,
   className,
 }: OptimizerActionsMenuProps) => {
-  const hasPieces = !!(onImport || onExport || onClear)
+  const hasPieces = !!(onFind || onImport || onExport || onClear)
   const hasRun = !!(onOptimize || onStrategyChange)
   const hasView = !!(onToggleCollapseAll || onToggleFullscreen)
   const hasJob = !!(onNew || onOpenDrafts || onSaveDraft)
@@ -164,6 +167,18 @@ const OptimizerActionsMenu = ({
         {hasPieces && (
           <>
             <CDropdownHeader className="text-body-secondary small">Piezas</CDropdownHeader>
+            {onFind && (
+              <CDropdownItem
+                as="button"
+                type="button"
+                className="d-flex align-items-center"
+                onClick={onFind}
+              >
+                <CIcon icon={cilSearch} className="me-2" />
+                Buscar pieza
+                <Hint>{`${KEY.mod}+F`}</Hint>
+              </CDropdownItem>
+            )}
             {onImport && (
               <CDropdownItem
                 as="button"

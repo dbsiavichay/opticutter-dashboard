@@ -8,6 +8,7 @@ import type { ModalContainer } from './types'
 import type { MaterialForm, RequirementForm } from './optimizerForm'
 import { validMaterialUids } from './optimizerForm'
 import type { PiecesEditor } from './usePiecesEditor'
+import type { PiecesNavigation } from './usePiecesNavigation'
 import { accentFor } from './groupColors'
 import MaterialGroupCard from './MaterialGroupCard'
 
@@ -24,10 +25,13 @@ interface MaterialGroupsProps {
   edgeBandings: EdgeBandingProduct[]
   // Fullscreen portal target for a group's portaled overlays (dropdown menus, modals).
   container?: ModalContainer
-  // Scroll cap for each group's rows. The default suits a list sharing a page with everything else;
-  // a call site that gives the list the whole screen passes a taller one, or the table keeps
-  // scrolling inside its own 55vh box while half the screen below it sits empty.
-  tableMaxHeight?: string
+  // Height of the ONE scroll box the whole list shares. Each group used to own a 55vh box of its
+  // own, so three open materials meant four nested scroll contexts and a wheel that behaved
+  // differently depending on where the cursor was. Now there is one, and both sticky headers (the
+  // material's, then the table's) stick to it. Omitted ⇒ the list grows with the page.
+  paneHeight?: string
+  // Search and jump. Optional: a call site with no navigation renders the plain list.
+  nav?: PiecesNavigation
   // Folded groups, owned by the page (see useCollapsedGroups) because the menu toggles them all.
   collapsed: Set<string>
   onToggleGroup: (uid: string) => void
@@ -47,7 +51,8 @@ const MaterialGroups = ({
   boards,
   edgeBandings,
   container,
-  tableMaxHeight,
+  paneHeight,
+  nav,
   collapsed,
   onToggleGroup,
   onAddMaterial,
@@ -70,8 +75,11 @@ const MaterialGroups = ({
     return map
   }, [requirements])
 
+  // A Set so the table can test a row in O(1) while it renders; the list itself is never filtered.
+  const matches = useMemo(() => new Set(nav?.matches ?? []), [nav?.matches])
+
   return (
-    <div className="mb-3">
+    <div className="mb-3 pieces-pane" style={paneHeight ? { height: paneHeight } : undefined}>
       {materials.length === 0 && (
         <div className="text-body-secondary small mb-2">
           Agrega al menos un material para empezar.
@@ -93,7 +101,10 @@ const MaterialGroups = ({
             boards={boards}
             edgeBandings={edgeBandings}
             container={container}
-            tableMaxHeight={tableMaxHeight}
+            matches={matches}
+            activeMatch={nav?.activeMatch}
+            onRegister={nav?.registerMaterial(m.uid)}
+            onGoToIssue={nav ? () => nav.goToNextIssue(m.uid) : undefined}
             onToggle={() => onToggleGroup(m.uid)}
             onUpdate={onUpdateMaterial}
             onRequestDelete={onRequestDeleteMaterial}
