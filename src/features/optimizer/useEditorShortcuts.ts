@@ -23,6 +23,10 @@ export interface EditorShortcuts {
   // lines being text inputs: Ctrl+Enter means nothing to a field, and the quick-entry input (where
   // a bare Enter adds a piece) is back on Despiece.
   onOptimize?: () => void
+  // Ctrl/Cmd+F. Overriding the browser's own find is legitimate here and only here: every value in
+  // the pieces grid lives in an `<input>`, and find-in-page does not match input values — so the key
+  // the user reaches for finds literally nothing today.
+  onFind?: () => void
   // Ctrl/Cmd+I
   onImport?: () => void
   // Ctrl/Cmd+Shift+S
@@ -70,6 +74,7 @@ export const useEditorShortcuts = (handlers: EditorShortcuts): void => {
         onToggleCollapseAll,
         onToggleFullscreen,
         onOptimize,
+        onFind,
         onImport,
         onExport,
         onNew,
@@ -128,6 +133,11 @@ export const useEditorShortcuts = (handlers: EditorShortcuts): void => {
         if (key === 'i' && onImport) {
           e.preventDefault()
           onImport()
+          return
+        }
+        if (key === 'f' && onFind) {
+          e.preventDefault()
+          onFind()
           return
         }
       }

@@ -26,6 +26,7 @@ import {
 import { downloadCsv, requirementsToCsv } from './piecesCsv'
 import { usePiecesEditor } from './usePiecesEditor'
 import { useCollapsedGroups } from './useCollapsedGroups'
+import { usePiecesNavigation } from './usePiecesNavigation'
 import { useEditorShortcuts } from './useEditorShortcuts'
 import { signatureOf, useOptimizerWizard } from './useOptimizerWizard'
 import type { StepId } from './useOptimizerWizard'
@@ -111,6 +112,15 @@ const OptimizerPage = () => {
   const services = useServiceLines(() => (bootstrap?.services ?? []).map(serviceLineFromApi))
   const saveDraft = useSaveDraft()
   const groups = useCollapsedGroups(materials)
+  // Finding a piece and getting to it. A view over the editor, never a filter — see the note in the
+  // hook: every index in `pieces` is positional, so hiding a row would repoint the selection.
+  const nav = usePiecesNavigation({
+    requirements: pieces.requirements,
+    materials,
+    boards,
+    collapsed: groups.collapsed,
+    expand: groups.expand,
+  })
 
   const addMaterial = () => setMaterials((ms) => [...ms, emptyCatalogMaterial()])
   const updateMaterial = <K extends keyof MaterialForm>(
@@ -534,6 +544,7 @@ const OptimizerPage = () => {
     onToggleCollapseAll: onPieces ? groups.toggleAll : undefined,
     onToggleFullscreen: canFullscreen ? toggle : undefined,
     onOptimize: onCosts && canRunOptimize && !optimize.isPending ? handleRun : undefined,
+    onFind: onPieces ? nav.focusSearch : undefined,
     onImport: onPieces ? () => setShowImport(true) : undefined,
     onExport: onPieces && hasPieceData ? () => handleExport() : undefined,
     onNew: handleNew,
@@ -576,6 +587,7 @@ const OptimizerPage = () => {
         onSelect={handleSelectStep}
         actions={
           <OptimizerActionsMenu
+            onFind={onPieces ? nav.focusSearch : undefined}
             onImport={onPieces ? () => setShowImport(true) : undefined}
             onExport={onPieces ? handleExport : undefined}
             exportDisabled={!hasPieceData}
@@ -620,6 +632,7 @@ const OptimizerPage = () => {
             boards={boards}
             edgeBandings={edgeBandings}
             container={modalContainer}
+            nav={nav}
             issues={issues}
             onDismissIssues={() => setIssues([])}
             missingBanding={missingBanding}

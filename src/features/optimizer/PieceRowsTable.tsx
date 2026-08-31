@@ -61,9 +61,10 @@ interface PieceRowsTableProps {
   // Fullscreen portal target for the tapacanto dropdown menu and the picker modal, both of which
   // portal out of this table; omitted where there is no fullscreen host.
   container?: ModalContainer
-  // Height at which the rows start scrolling inside their own box. Defaults to a value that suits
-  // a list sharing a page; a full-screen call site passes a taller one.
-  maxHeight?: string
+  // Flat indices that match the current search, and the one currently revealed. The table only
+  // paints them: the list is never filtered or reordered, because every index here is positional.
+  matches?: Set<number>
+  activeMatch?: number | null
 }
 
 // Fields that accept a pasted column of values to create rows.
@@ -100,10 +101,12 @@ const handleStyle: CSSProperties = {
   zIndex: 3,
 }
 
-// Sticky column header so it stays visible while a large group scrolls inside its own box.
+// Sticky column header. It sticks to the pieces PANE (the one scroll box the whole editor shares),
+// parked directly under the material's own sticky header — which is why that header has a fixed
+// height: this offset is a constant, with nothing to measure at runtime.
 const thStyle: CSSProperties = {
   position: 'sticky',
-  top: 0,
+  top: 'var(--pieces-group-header-h)',
   background: 'var(--cui-body-bg)',
   zIndex: 2,
 }
@@ -127,7 +130,8 @@ const PieceRowsTable = ({
   boardEdgeBandings,
   boardThickness,
   container,
-  maxHeight = '55vh',
+  matches,
+  activeMatch,
 }: PieceRowsTableProps) => {
   const {
     selected,
@@ -442,8 +446,11 @@ const PieceRowsTable = ({
     </span>
   )
 
+  // The wrapper has no overflow of its own: the whole editor scrolls in one pane (see
+  // `.pieces-pane`), so the wheel does the same thing everywhere and one `scrollIntoView` reaches
+  // any row without having to drive a second, nested scroll box.
   return (
-    <div style={{ maxHeight, overflow: 'auto' }} ref={containerRef} onPaste={handlePaste}>
+    <div ref={containerRef} onPaste={handlePaste}>
       <CTable small bordered className="mb-0 pieces-table">
         <CTableHead>
           <CTableRow>
@@ -526,9 +533,17 @@ const PieceRowsTable = ({
             }
             const isDropTarget =
               !!rowDrag && rowDrag.srcRow !== rowDrag.targetRow && rowDrag.targetRow === local
+            // Search paints, it never filters: a hit keeps its place in the list so every
+            // index-based operation around it stays correct.
+            const isHit = !!matches?.has(i)
+            const isActiveHit = activeMatch === i
             return (
               <CTableRow
                 key={i}
+                data-piece-flat={i}
+                className={
+                  isActiveHit ? 'piece-hit piece-hit--active' : isHit ? 'piece-hit' : undefined
+                }
                 color={isError ? 'danger' : undefined}
                 style={rowDrag?.srcRow === local ? { opacity: 0.5 } : undefined}
                 onKeyDown={(e) => handleRowKeyDown(e, local)}

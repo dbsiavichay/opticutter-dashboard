@@ -75,6 +75,8 @@ import { preordersApi } from './preordersApi'
 import { useIsGlobalBranchRole } from 'src/features/auth/useAuth'
 import { usePiecesEditor } from 'src/features/optimizer/usePiecesEditor'
 import { useCollapsedGroups } from 'src/features/optimizer/useCollapsedGroups'
+import { usePiecesNavigation } from 'src/features/optimizer/usePiecesNavigation'
+import PiecesNav from 'src/features/optimizer/PiecesNav'
 import { useEditorShortcuts } from 'src/features/optimizer/useEditorShortcuts'
 import OptimizerActionsMenu from 'src/features/optimizer/OptimizerActionsMenu'
 import PiecesSelectionBar from 'src/features/optimizer/PiecesSelectionBar'
@@ -267,8 +269,20 @@ const PreOrderView = ({ preOrder }: { preOrder: PreOrder }) => {
   const piecesHostRef = useRef<HTMLDivElement>(null)
   const piecesContainer = useCallback(() => piecesHostRef.current?.closest('.modal') ?? null, [])
 
+  const { data: boards = [] } = useBoards()
+  const { data: edgeBandings = [] } = useEdgeBandings()
+
   const editor = usePiecesEditor(materials, initialFormData?.requirements)
   const groups = useCollapsedGroups(materials)
+  // Same navigation as the wizard's Despiece step: the panel has the same twelve-column table and
+  // the same problem of several materials with many pieces each.
+  const nav = usePiecesNavigation({
+    requirements: editor.requirements,
+    materials,
+    boards,
+    collapsed: groups.collapsed,
+    expand: groups.expand,
+  })
   // The pieces editor's shortcuts used to ride along inside `MaterialGroups`; that component is now
   // just the list, so each page that mounts it registers them itself. No fullscreen here.
   // All of these act on the pieces list, so all of them are scoped to the panel that shows it —
@@ -279,6 +293,7 @@ const PreOrderView = ({ preOrder }: { preOrder: PreOrder }) => {
     onUndo: piecesOpen && editor.canUndo ? editor.undo : undefined,
     onDeleteSelection: piecesOpen && editor.selected.size > 0 ? editor.removeSelected : undefined,
     onToggleCollapseAll: piecesOpen ? groups.toggleAll : undefined,
+    onFind: piecesOpen ? nav.focusSearch : undefined,
     onImport: piecesOpen ? () => setShowImport(true) : undefined,
     onExport: piecesOpen && editor.requirements.length > 0 ? () => exportPiecesCsv() : undefined,
   })
@@ -297,9 +312,6 @@ const PreOrderView = ({ preOrder }: { preOrder: PreOrder }) => {
   )
   const [baselineSignature, setBaselineSignature] = useState(() => currentSignature)
   const isDirty = currentSignature !== baselineSignature
-
-  const { data: boards = [] } = useBoards()
-  const { data: edgeBandings = [] } = useEdgeBandings()
 
   // Named because both the menu entry and its Ctrl+Shift+S shortcut point at it.
   const exportPiecesCsv = () =>
@@ -755,6 +767,7 @@ const PreOrderView = ({ preOrder }: { preOrder: PreOrder }) => {
             onExport={exportPiecesCsv}
             exportDisabled={editor.requirements.length === 0}
             onClear={editor.clear}
+            onFind={nav.focusSearch}
             onToggleCollapseAll={groups.toggleAll}
             allCollapsed={groups.allCollapsed}
             collapseDisabled={materials.length === 0}
@@ -774,11 +787,18 @@ const PreOrderView = ({ preOrder }: { preOrder: PreOrder }) => {
               Selecciona el tapacanto para poder actualizar la cotización.
             </CAlert>
           )}
+          <PiecesNav
+            nav={nav}
+            materials={materials}
+            requirements={editor.requirements}
+            boards={boards}
+          />
           <MaterialGroups
             editor={editor}
             materials={materials}
             boards={boards}
             edgeBandings={edgeBandings}
+            nav={nav}
             collapsed={groups.collapsed}
             onToggleGroup={groups.toggle}
             onAddMaterial={addMaterial}
@@ -786,9 +806,10 @@ const PreOrderView = ({ preOrder }: { preOrder: PreOrder }) => {
             onRequestDeleteMaterial={requestDeleteMaterial}
             onDuplicateMaterial={duplicateMaterial}
             container={piecesContainer}
-            // The panel is the whole screen, so the rows may use it. At the default 55vh a long
-            // material scrolled inside its own box with a third of the dialog empty underneath.
-            tableMaxHeight="calc(100dvh - 20rem)"
+            // The panel is the whole screen, so the list may use it. The pane leaves room for the
+            // dialog's header, the nav bar above it and the footer — and, being its own scroll box,
+            // it needs no offset for an app header that is not there.
+            paneHeight="calc(100dvh - 19rem)"
           />
         </CModalBody>
         <CModalFooter className="d-flex flex-wrap align-items-center gap-2">

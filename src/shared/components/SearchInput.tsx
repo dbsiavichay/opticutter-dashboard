@@ -1,4 +1,11 @@
-import { useEffect, useRef, useState, type CSSProperties } from 'react'
+import {
+  useEffect,
+  useRef,
+  useState,
+  type CSSProperties,
+  type KeyboardEvent,
+  type RefObject,
+} from 'react'
 import { CFormInput, CInputGroup, CInputGroupText } from '@coreui/react'
 import CIcon from '@coreui/icons-react'
 import { cilSearch } from '@coreui/icons'
@@ -15,6 +22,14 @@ interface SearchInputProps {
   delayMs?: number
   className?: string
   style?: CSSProperties
+  // Stylistic size, forwarded to both the addon and the field so they stay the same height.
+  size?: 'sm' | 'lg'
+  // Handle for the field itself: a caller that owns a "focus the search" shortcut needs to reach
+  // it, and a caller that walks results needs Enter and Escape (see onKeyDown).
+  inputRef?: RefObject<HTMLInputElement | null>
+  // Raw key events on the field, BEFORE the debounce. Used to walk matches with Enter without
+  // waiting for the query to settle again.
+  onKeyDown?: (e: KeyboardEvent<HTMLInputElement>) => void
 }
 
 // Self-contained search box: an input + magnifier icon that debounces keystrokes
@@ -26,6 +41,9 @@ const SearchInput = ({
   delayMs = SEARCH_DEBOUNCE_MS,
   className,
   style,
+  size,
+  inputRef,
+  onKeyDown,
 }: SearchInputProps) => {
   const [value, setValue] = useState(controlled ?? '')
   const debounced = useDebounce(value, delayMs)
@@ -62,14 +80,16 @@ const SearchInput = ({
   }, [controlled])
 
   return (
-    <CInputGroup className={className} style={style}>
+    <CInputGroup className={className} style={style} size={size}>
       <CInputGroupText>
         <CIcon icon={cilSearch} />
       </CInputGroupText>
       <CFormInput
+        ref={inputRef}
         placeholder={placeholder}
         value={value}
         onChange={(e) => setValue(e.target.value)}
+        onKeyDown={onKeyDown}
       />
     </CInputGroup>
   )
