@@ -37,10 +37,10 @@ export interface MaterialForm {
   // Catalog boards only: attached offcuts (same material) + their fill order.
   offcuts?: OffcutForm[]
   fillOrder?: PoolFillOrder
-  // Catalog boards only: does the price tier's discount apply to this board? Lives on the
-  // material rather than in a Set keyed by materialKey because reopening a pre-order mints
-  // fresh uids (`formFromPreOrderData`), which would orphan such a set — and because a field
-  // rides along in the autosave and in saved drafts for free.
+  // Catalog boards only: is this board billed at the quote's price level rather than the list
+  // price? Lives on the material rather than in a Set keyed by materialKey because a field rides
+  // along in the autosave and in saved drafts for free. The Set the table reads is derived, and
+  // keyed by the CANONICAL uid — see `canonicalMaterialKeys`.
   applyPriceLevel?: boolean
   // Catalog boards only: the client takes the WHOLE board even where the optimizer billed a half
   // one, keeping the uncut half. Lives on the material for the same reasons as `applyPriceLevel`,
@@ -276,25 +276,18 @@ export interface BuiltPayload {
   validCount: number
 }
 
-// Builds the contract's materials[] + requirements[] from form state. Each material uses its `uid`
-// as `key`; pieces reference it via `materialKey`. Only materials actually used by a valid piece are included.
-// Catalog materials pointing to the same board are merged into a single payload material so the
-// endpoint never receives duplicates (e.g. after duplicating a material or picking the same board in
-// two blocks); their pieces are re-pointed to the first block's key. Inline materials (offcuts) stay
-// distinct even when their dimensions coincide.
-export const buildPayload = (
-  materials: MaterialForm[],
-  requirements: RequirementForm[],
-): BuiltPayload => {
-  const validMaterials = materials.filter(isMaterialValid)
-  const validUids = validMaterialUids(materials)
-
-  // Map each material uid to the key its pieces will reference. Catalog boards collapse onto the
-  // first block that uses that productId; everything else maps to itself. A catalog board with
-  // attached offcuts stays DISTINCT (it anchors a pool) so merging can't break the pool link.
+// Maps each material uid to the key its pieces — and its payload entry — will actually use. Catalog
+// boards collapse onto the first block that uses that productId; everything else maps to itself. A
+// catalog board with attached offcuts stays DISTINCT (it anchors a pool) so merging can't break the
+// pool link. Invalid materials are absent, so every caller falls back to the uid itself.
+//
+// Exported because the per-board marks have to agree with it: the summary shows ONE row per payload
+// material, so a mark ticked on that row belongs to the whole merged group, not to whichever block
+// happened to be canonical.
+export const canonicalMaterialKeys = (materials: MaterialForm[]): Map<string, string> => {
   const canonicalKey = new Map<string, string>()
   const catalogCanonical = new Map<number, string>()
-  for (const m of validMaterials) {
+  for (const m of materials.filter(isMaterialValid)) {
     if (m.source === 'catalog' && !hasOffcuts(m)) {
       const productId = Number(m.boardId)
       const existing = catalogCanonical.get(productId)
@@ -308,6 +301,45 @@ export const buildPayload = (
       canonicalKey.set(m.uid, m.uid)
     }
   }
+  return canonicalKey
+}
+
+// The two per-board marks of a merged group, OR-ed onto its canonical key. They are properties of
+// the BOARD, not of the block: the seller sees one summary row per board and ticks that. The
+// toggles write every block of a group, so this only has to settle quotes saved before they did.
+const mergedMarks = (
+  materials: MaterialForm[],
+  canonicalKey: Map<string, string>,
+): Map<string, { applyPriceLevel: boolean; wholeBoard: boolean }> => {
+  const marks = new Map<string, { applyPriceLevel: boolean; wholeBoard: boolean }>()
+  for (const m of materials) {
+    if (m.source !== 'catalog') continue
+    const key = canonicalKey.get(m.uid)
+    if (!key) continue
+    const acc = marks.get(key)
+    marks.set(key, {
+      applyPriceLevel: !!acc?.applyPriceLevel || !!m.applyPriceLevel,
+      wholeBoard: !!acc?.wholeBoard || !!m.wholeBoard,
+    })
+  }
+  return marks
+}
+
+// Builds the contract's materials[] + requirements[] from form state. Each material uses its `uid`
+// as `key`; pieces reference it via `materialKey`. Only materials actually used by a valid piece are included.
+// Catalog materials pointing to the same board are merged into a single payload material so the
+// endpoint never receives duplicates (e.g. after duplicating a material or picking the same board in
+// two blocks); their pieces are re-pointed to the first block's key. Inline materials (offcuts) stay
+// distinct even when their dimensions coincide.
+export const buildPayload = (
+  materials: MaterialForm[],
+  requirements: RequirementForm[],
+): BuiltPayload => {
+  const validMaterials = materials.filter(isMaterialValid)
+  const validUids = validMaterialUids(materials)
+
+  const canonicalKey = canonicalMaterialKeys(materials)
+  const marks = mergedMarks(validMaterials, canonicalKey)
 
   const mappedMaterials: MaterialInput[] = validMaterials
     .filter((m) => canonicalKey.get(m.uid) === m.uid)
@@ -317,11 +349,13 @@ export const buildPayload = (
           key: m.uid,
           source: 'catalog' as const,
           productId: Number(m.boardId),
-          // Only when marked: an omitted flag reads as false on the API and keeps the
-          // payload — and the staleness signature built from it — identical to before
-          // this feature for every quote that discounts nothing.
-          ...(m.applyPriceLevel ? { applyPriceLevel: true } : {}),
-          ...(m.wholeBoard ? { wholeBoard: true } : {}),
+          // Read off the merged marks, not off `m`: two blocks of the same board become ONE payload
+          // material, and taking only the canonical block's flags dropped a mark set on the other.
+          // Only when marked: an omitted flag reads as false on the API and keeps the payload — and
+          // the staleness signature built from it — identical to before this feature for every quote
+          // that levels nothing.
+          ...(marks.get(m.uid)?.applyPriceLevel ? { applyPriceLevel: true } : {}),
+          ...(marks.get(m.uid)?.wholeBoard ? { wholeBoard: true } : {}),
         }
         // Only carry fillOrder when the board actually anchors a pool of offcuts.
         return hasOffcuts(m) ? { ...base, fillOrder: m.fillOrder ?? 'auto' } : base

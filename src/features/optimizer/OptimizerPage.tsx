@@ -8,6 +8,7 @@ import { useSaveDraft } from './useDrafts'
 import { draftsApi } from './draftsApi'
 import {
   buildPayload,
+  canonicalMaterialKeys,
   cloneMaterial,
   emptyCatalogMaterial,
   isPristineMaterial,
@@ -77,7 +78,7 @@ const OptimizerPage = () => {
   const [loadingDraftId, setLoadingDraftId] = useState<number | null>(null)
   const [savedFlash, setSavedFlash] = useState(false)
   const flashTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
-  // The per-board discount re-prices on the server (same cached cut plan, only the `pricing`
+  // The per-board level mark re-prices on the server (same cached cut plan, only the `pricing`
   // block moves), so a burst of checkbox clicks is collapsed into one request. `recalcScheduled`
   // turns the "Recalculando…" hint on from the CLICK: during the debounce window
   // `optimize.isPending` is still false, and the total on screen is one the user is about to
@@ -86,7 +87,7 @@ const OptimizerPage = () => {
   const recalcTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   // Whether the run in flight is a cut SEARCH rather than a re-price. A search reshapes the sheets,
   // so the viewport overlay is right; a re-price only moves the money and already announces itself
-  // with "Recalculando…" beside the tier. Without the split, ticking a discount checkbox would
+  // with "Recalculando…" beside the level. Without the split, ticking a Nivel checkbox would
   // black out the whole screen over a number that moves by cents.
   const [isSearching, setIsSearching] = useState(false)
   // Half-filled rows found on the last attempt to leave the Despiece step; blocks the advance.
@@ -443,12 +444,26 @@ const OptimizerPage = () => {
   useEffect(() => {
     if (wizard.step !== 'costs') return
     if (optimize.isPending || !canOptimize) return
+    // A debounced re-price is already on its way with these very inputs. Ticking a per-board mark
+    // moves the signature, so without this the effect would fire the SAME payload one render later
+    // — and with no overrides, which reads as a search: the fullscreen overlay over a number that
+    // moves by cents, plus a duplicate request 300 ms before the real one.
+    if (recalcScheduled) return
     if (hasResult && !isStale) return
     // Already attempted and it did not succeed: leave the error on screen rather than retrying the
     // same payload on every render.
     if (attemptedSignature.current === signature) return
     runOptimize()
-  }, [wizard.step, optimize.isPending, canOptimize, hasResult, isStale, signature, runOptimize])
+  }, [
+    wizard.step,
+    optimize.isPending,
+    canOptimize,
+    recalcScheduled,
+    hasResult,
+    isStale,
+    signature,
+    runOptimize,
+  ])
 
   const handleOptimize = () => runOptimize()
 
@@ -465,16 +480,22 @@ const OptimizerPage = () => {
     if (canOptimize) runOptimize({ priceLevel: level })
   }
 
+  // A summary row is one PAYLOAD material, and `buildPayload` merges every catalog block pointing at
+  // the same board into one. So both marks are keyed by the canonical uid — the key that row is
+  // actually carrying — and a toggle writes every block of the group, never just the canonical one.
+  const canonicalKeys = useMemo(() => canonicalMaterialKeys(materials), [materials])
+  const keyOf = (m: MaterialForm) => canonicalKeys.get(m.uid) ?? m.uid
+
   // Which boards get the quote's price level. Nothing is marked until the seller says so, board by
   // board — a client negotiates the melamina and not the MDF.
   const leveledKeys = useMemo(
-    () => new Set(materials.filter((m) => m.applyPriceLevel).map((m) => m.uid)),
-    [materials],
+    () =>
+      new Set(
+        materials.filter((m) => m.applyPriceLevel).map((m) => canonicalKeys.get(m.uid) ?? m.uid),
+      ),
+    [materials, canonicalKeys],
   )
 
-  // The materialKey of a summary row IS the uid of the material block that produced it
-  // (`buildPayload` uses `key: m.uid`), so the mark goes straight back onto the form state.
-  //
   // The total is recomputed by the SERVER rather than here: the flag travels inside the request,
   // so `/optimize` can answer it exactly, and `/optimize` is cached by input hash — the cut search
   // is not redone, only the money. Doing the arithmetic locally would be a second implementation
@@ -485,33 +506,39 @@ const OptimizerPage = () => {
   // costs one round trip instead of three.
   const scheduleRecalc = (next: MaterialForm[]) => {
     if (recalcTimer.current) clearTimeout(recalcTimer.current)
-    if (!canOptimize) return
+    // The timer just cleared is the only thing that would have settled the hint: with no run to
+    // reach `onSettled`, leaving the flag up strands "Recalculando…" and the level toggle disabled.
+    if (!canOptimize) {
+      setRecalcScheduled(false)
+      return
+    }
     setRecalcScheduled(true)
     recalcTimer.current = setTimeout(() => runOptimize({ materials: next }), 300)
   }
 
   const handleToggleLevel = (materialKey: string) => {
+    const on = leveledKeys.has(materialKey)
     const next = materials.map((m) =>
-      m.uid === materialKey ? { ...m, applyPriceLevel: !m.applyPriceLevel } : m,
+      keyOf(m) === materialKey ? { ...m, applyPriceLevel: !on } : m,
     )
     setMaterials(next)
     scheduleRecalc(next)
   }
 
   // Boards the client takes whole even where the optimizer billed a half. Same shape as the
-  // discount mark, and the same round trip: `wholeBoard` is not in the optimize hash either, so
+  // level mark, and the same round trip: `wholeBoard` is not in the optimize hash either, so
   // `/optimize` reshapes the CACHED plan (the pieces do not move, the uncut half becomes one
   // leftover) instead of searching again. Doing it here would mean re-deriving the promotion —
   // and the merged billing line — in the browser.
   const wholeBoardKeys = useMemo(
-    () => new Set(materials.filter((m) => m.wholeBoard).map((m) => m.uid)),
-    [materials],
+    () =>
+      new Set(materials.filter((m) => m.wholeBoard).map((m) => canonicalKeys.get(m.uid) ?? m.uid)),
+    [materials, canonicalKeys],
   )
 
   const handleToggleWholeBoard = (materialKey: string) => {
-    const next = materials.map((m) =>
-      m.uid === materialKey ? { ...m, wholeBoard: !m.wholeBoard } : m,
-    )
+    const on = wholeBoardKeys.has(materialKey)
+    const next = materials.map((m) => (keyOf(m) === materialKey ? { ...m, wholeBoard: !on } : m))
     setMaterials(next)
     scheduleRecalc(next)
   }

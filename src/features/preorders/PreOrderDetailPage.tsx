@@ -28,6 +28,7 @@ import type {
 import type { PreOrder, PreOrderStatus } from './types'
 import {
   buildPayload,
+  canonicalMaterialKeys,
   cloneMaterial,
   emptyCatalogMaterial,
   emptyEdgeBanding,
@@ -92,6 +93,20 @@ function formFromPreOrderData(
   const catalogByKey = new Map<string, MaterialForm>()
   const matForms: MaterialForm[] = []
   const pooledOffcuts: InlineMaterialInput[] = []
+  // Every uid handed out here, materials and pooled offcuts alike: they share one namespace, since
+  // `buildPayload` emits both as a payload `key`.
+  const usedUids = new Set<string>()
+  // The STORED key becomes the uid. Both per-board marks match a summary row to a material block by
+  // uid, and the rows of the loaded `optimization` were keyed by the server from these very keys —
+  // so minting a fresh one made `leveledKeys`/`wholeBoardKeys` disjoint from every `materialKey` on
+  // screen: the checks never showed, and clicking one wrote an identical array. It only healed after
+  // a save, which then sent the new uids as keys. A quote authored outside the wizard may carry an
+  // empty or repeated key, hence the fallback.
+  const uidFor = (key: string): string => {
+    const uid = key && !usedUids.has(key) ? key : nextUid()
+    usedUids.add(uid)
+    return uid
+  }
 
   for (const m of materials) {
     // A pooled offcut is not its own group: it re-attaches to its parent board.
@@ -99,7 +114,7 @@ function formFromPreOrderData(
       pooledOffcuts.push(m)
       continue
     }
-    const uid = nextUid()
+    const uid = uidFor(m.key)
     keyToUid.set(m.key, uid)
     if (m.source === 'catalog') {
       const form: MaterialForm = {
@@ -113,8 +128,8 @@ function formFromPreOrderData(
         costPerUnit: '',
         offcuts: [],
         fillOrder: m.fillOrder ?? 'auto',
-        // A quote saved before the per-board discount shipped has no flag: it reads as
-        // "not discounted", which is the default the feature ships with.
+        // A quote saved before the per-board marks shipped has no flag: it reads as
+        // "billed at the list price", which is the default the feature ships with.
         applyPriceLevel: m.applyPriceLevel ?? false,
         wholeBoard: m.wholeBoard ?? false,
       }
@@ -140,7 +155,7 @@ function formFromPreOrderData(
     if (!parent) continue
     const source: OffcutSource = o.source === 'companyOffcut' ? 'companyOffcut' : 'clientOffcut'
     const offcut: OffcutForm = {
-      uid: nextUid(),
+      uid: uidFor(o.key),
       source,
       label: o.label ?? '',
       height: o.height,
@@ -397,33 +412,44 @@ const PreOrderView = ({ preOrder }: { preOrder: PreOrder }) => {
     value: MaterialForm[K],
   ) => setMaterials((ms) => ms.map((m) => (m.uid === uid ? { ...m, [field]: value } : m)))
 
-  // Which boards the tier's discount applies to. The materialKey of a summary row IS the uid of
-  // the material block that produced it (`buildPayload` uses `key: m.uid`).
+  // A summary row is one PAYLOAD material: `buildPayload` merges every catalog block pointing at the
+  // same board, and its `key` is that block's uid — which `formFromPreOrderData` now preserves from
+  // the stored quote, so the rows of the loaded optimization agree with these sets.
+  const canonicalKeys = useMemo(() => canonicalMaterialKeys(materials), [materials])
+  const keyOf = (m: MaterialForm) => canonicalKeys.get(m.uid) ?? m.uid
+
+  // Which boards are billed at the quote's price level.
   const leveledKeys = useMemo(
-    () => new Set(materials.filter((m) => m.applyPriceLevel).map((m) => m.uid)),
-    [materials],
+    () =>
+      new Set(
+        materials.filter((m) => m.applyPriceLevel).map((m) => canonicalKeys.get(m.uid) ?? m.uid),
+      ),
+    [materials, canonicalKeys],
   )
 
   // No recompute here, unlike the wizard: the pre-order re-prices through PUT /preorders/{id},
-  // so the mark is a pending edit like the tier. `editSignature` is built from `buildPayload`,
+  // so the mark is a pending edit like the level itself. `editSignature` is built from `buildPayload`,
   // which now carries the flag, so this alone enables "Actualizar cotización".
-  const toggleLevel = (materialKey: string) =>
+  const toggleLevel = (materialKey: string) => {
+    const on = leveledKeys.has(materialKey)
     setMaterials((ms) =>
-      ms.map((m) => (m.uid === materialKey ? { ...m, applyPriceLevel: !m.applyPriceLevel } : m)),
+      ms.map((m) => (keyOf(m) === materialKey ? { ...m, applyPriceLevel: !on } : m)),
     )
+  }
 
   // Boards the client takes whole even where the optimizer billed a half one. Same pending-edit
-  // semantics as the discount mark: it rides in `buildPayload`, so `editSignature` picks it up and
+  // semantics as the level mark: it rides in `buildPayload`, so `editSignature` picks it up and
   // "Actualizar cotización" is what applies it.
   const wholeBoardKeys = useMemo(
-    () => new Set(materials.filter((m) => m.wholeBoard).map((m) => m.uid)),
-    [materials],
+    () =>
+      new Set(materials.filter((m) => m.wholeBoard).map((m) => canonicalKeys.get(m.uid) ?? m.uid)),
+    [materials, canonicalKeys],
   )
 
-  const toggleWholeBoard = (materialKey: string) =>
-    setMaterials((ms) =>
-      ms.map((m) => (m.uid === materialKey ? { ...m, wholeBoard: !m.wholeBoard } : m)),
-    )
+  const toggleWholeBoard = (materialKey: string) => {
+    const on = wholeBoardKeys.has(materialKey)
+    setMaterials((ms) => ms.map((m) => (keyOf(m) === materialKey ? { ...m, wholeBoard: !on } : m)))
+  }
 
   // Duplicates a material section together with all of its pieces (same behavior as the optimizer).
   const duplicateMaterial = (m: MaterialForm) => {
@@ -689,14 +715,14 @@ const PreOrderView = ({ preOrder }: { preOrder: PreOrder }) => {
           </>
         )}
 
-        {/* The result, with the price tier down on its totals row. The footer's primary button is
+        {/* The result, with the price level down on its totals row. The footer's primary button is
             what recomputes it: this page's "optimize" is Save+Recalculate, server-side. */}
         <OptimizationPreview
           result={optimization}
           isPending={updatePreOrder.isPending}
           error={updatePreOrder.error}
           leveledKeys={leveledKeys}
-          // A closed quote still SHOWS which boards were discounted; it just can't move them.
+          // A closed quote still SHOWS which boards were leveled; it just can't move them.
           onToggleLevel={toggleLevel}
           wholeBoardKeys={wholeBoardKeys}
           onToggleWholeBoard={toggleWholeBoard}

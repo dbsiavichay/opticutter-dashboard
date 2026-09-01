@@ -25,7 +25,7 @@ import { EdgeBandingSummaryTable, Kpi, MaterialsSummaryTable, meters } from '../
 // The bar goes ABOVE the money: arriving here, the first thing to confirm is that the optimization
 // ran and how well it went; the numbers only mean something after that.
 //
-// The price tier is chosen HERE rather than next to the client: it is the one input that changes
+// The price level is chosen HERE rather than next to the client: it is the one input that changes
 // these numbers, and picking it beside the tables it moves means the real cost is visible on the
 // spot. The additional services are here for the same reason — they used to be reachable only from
 // the pre-order detail page, so a quote built in the wizard was born without them.
@@ -35,7 +35,7 @@ interface CostsStepProps {
   // Optimización step used to.
   result?: OptimizeResponse
   // A cut SEARCH is in flight — the sheets are about to move, so the viewport overlay is right.
-  // A re-price (tier, per-board marks) is not this: it only moves the money and says so inline.
+  // A re-price (level, per-board marks) is not this: it only moves the money and says so inline.
   isSearching: boolean
   error?: Error | null
   // Alternative-solution seed of the result on screen; only shown when it is not the canonical one.
@@ -47,11 +47,11 @@ interface CostsStepProps {
   missingBanding: number[]
   priceLevel: number
   // Recomputes the quote. Cheap despite being a round trip: `/optimize` is cached by input hash, so
-  // changing only the tier re-prices the same cut plan instead of searching again.
+  // changing only the level re-prices the same cut plan instead of searching again.
   onPriceLevelChange: (level: number) => void
   isPending: boolean
-  // Per-board discount: the tier sets the rate, this says which boards it applies to. Nothing is
-  // discounted until the seller checks a board. Re-prices through the same cached round trip.
+  // Per-board mark: the toggle picks the level, this says which boards are billed at it. Every
+  // unmarked board stays at the list price. Re-prices through the same cached round trip.
   leveledKeys: Set<string>
   onToggleLevel: (materialKey: string) => void
   // Per-board "the client takes the whole board": promotes a sheet the optimizer billed as half.
@@ -215,10 +215,10 @@ const CostsStep = ({
             container={container}
           />
 
-          {/* The tier picker sits WITH the totals, not on a toolbar above the tables. It is the one
+          {/* The level picker sits WITH the totals, not on a toolbar above the tables. It is the one
               control that moves these numbers, and up there the user had to scroll past the whole
               cut list to change it and scroll back to read the effect. Segmented rather than a
-              select: there are only a handful of tiers, so switching is one click and the
+              select: there are exactly three levels, so switching is one click and the
               alternatives stay visible. */}
           <div className="d-flex flex-wrap justify-content-between align-items-end gap-3 border-top pt-3">
             <div className="d-flex flex-wrap align-items-center gap-2">

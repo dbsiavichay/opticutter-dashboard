@@ -14,7 +14,7 @@ import type { BandingStatus, OrderStatus } from './types'
 // only thing the compression drops, stays reachable in the line's `title`.
 //
 // Payment is not here: it is not progress, it is money, and it now sits with the totals — the same
-// reasoning that put the price tier next to the totals in the wizard rather than on a toolbar.
+// reasoning that put the price level next to the totals in the wizard rather than on a toolbar.
 
 interface BandingInfo {
   status?: BandingStatus

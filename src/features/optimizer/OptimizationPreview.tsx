@@ -21,11 +21,11 @@ interface OptimizationPreviewProps {
   result?: OptimizeResponse
   isPending: boolean
   error?: Error | null
-  // Price-tier control, rendered on the totals row beside PricingBlock. It lives here rather than in
+  // Price-level control, rendered on the totals row beside PricingBlock. It lives here rather than in
   // a settings card further up because a control that moves a number belongs next to the number —
-  // otherwise switching tiers means scrolling past the whole cut list to read the effect.
+  // otherwise switching levels means scrolling past the whole cut list to read the effect.
   priceLevel?: ReactNode
-  // Per-board discount selection. Like the tier, it is a PENDING edit here: passing
+  // Per-board level selection. Like the level itself, it is a PENDING edit here: passing
   // `onToggleLevel` shows the column, and the totals only catch up after "Actualizar cotización".
   leveledKeys?: Set<string>
   onToggleLevel?: (materialKey: string) => void
@@ -98,14 +98,14 @@ const OptimizationPreview = ({
             materialsSummary={result.materialsSummary}
           />
 
-          {/* Tier picker and totals on one line, the same pairing the Costos step uses. The tier
-              shown — and the per-board discount marks above — are the pending selection; the totals
+          {/* Level picker and totals on one line, the same pairing the Costos step uses. The level
+              shown — and the per-board marks above — are the pending selection; the totals
               are the ones the server last computed, so they only agree again after "Actualizar
               cotización". */}
           {(priceLevel || result.pricing) && (
             <div className="d-flex flex-wrap justify-content-between align-items-end gap-3 border-top pt-3">
               {priceLevel}
-              {/* ms-auto, not just the row's justify-content: on a closed quote there is no tier
+              {/* ms-auto, not just the row's justify-content: on a closed quote there is no level
                   picker, and a lone child in a space-between row lands on the left. */}
               {result.pricing && (
                 <div className="ms-auto">

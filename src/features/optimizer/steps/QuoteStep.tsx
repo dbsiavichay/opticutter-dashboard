@@ -41,7 +41,7 @@ import type {
 } from '../types'
 
 // Step 4. What used to be CreateQuoteModal, in a full-width step: the same four inputs the optimizer
-// cannot infer (client, branch, price tier, reference) plus the confirmation summary that never fit
+// cannot infer (client, branch, price level, reference) plus the confirmation summary that never fit
 // inside the modal. Creates a PRE-ORDER; the backend recomputes the plan from these same inputs.
 
 const fullClientLabel = (c: Client) => {

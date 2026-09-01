@@ -39,7 +39,7 @@ export const meters = (n?: number | null) => (n != null ? `${n.toFixed(2)} m` : 
 interface MaterialsSummaryTableProps {
   rows: MaterialSummary[]
   // Which boards are billed at the quote's price level, by materialKey. Passing `onToggleLevel`
-  // is what turns the "Desc." column on: without it the table stays exactly as read-only as before.
+  // is what turns the "Nivel" column on: without it the table stays exactly as read-only as before.
   leveledKeys?: Set<string>
   onToggleLevel?: (materialKey: string) => void
   // Which materials the client buys whole even where the optimizer billed a half board, by
