@@ -161,9 +161,10 @@ export interface CatalogMaterialInput {
   productId: number
   // Fill order when this board has attached (pooled) offcuts; omitted otherwise.
   fillOrder?: PoolFillOrder
-  // Whether the price tier's discount applies to THIS board. Absent/false = it does not:
-  // the seller checks board by board while quoting (a client negotiates the melamina and
-  // not the MDF). Does not affect geometry or the optimize cache hash, only `pricing`.
+  // Whether THIS board is billed at the quote's `priceLevel` rather than the list price.
+  // Absent/false = list price: the seller checks board by board while quoting (a client
+  // negotiates the melamina and not the MDF). Does not affect geometry or the optimize
+  // cache hash, only `pricing`.
   applyPriceLevel?: boolean
   // Whether a sheet the optimizer billed as a half board is delivered and charged whole, the
   // client keeping the uncut half. Absent/false = the half board stands. Not in the hash either:
@@ -206,7 +207,7 @@ export interface RequirementInput {
 
 // Billed additional service on a quote (qty × editable unit price). Not cut
 // geometry: it rides alongside the optimizer inputs and is folded into the total
-// server-side, after the discount.
+// server-side, after the per-board price level is applied.
 export interface AdditionalServiceInput {
   serviceId?: number
   name: string

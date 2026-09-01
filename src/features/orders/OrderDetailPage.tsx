@@ -471,7 +471,7 @@ const OrderDetailPage = () => {
         <hr className="my-4" />
 
         {/* The totals, with how they were paid beside them — the same pairing the wizard uses for
-            the price tier. Payment is not a status, it is the money: reading "Total $840" and
+            the price level. Payment is not a status, it is the money: reading "Total $840" and
             "Efectivo $840" in two blocks a screen apart was the old layout's doing. */}
         <div className="d-flex flex-wrap align-items-start gap-3">
           {hasPayment && (
