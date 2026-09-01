@@ -41,14 +41,8 @@ export type CuttingPayload = Partial<CuttingSettings>
 export type CompanyPayload = Partial<CompanySettings>
 export type PreorderPayload = Partial<PreorderSettings>
 
-export interface PriceTier {
-  code: string
-  name: string
-  rate: number
-  isActive: boolean
-  sortOrder: number
+export interface TaxSettings {
+  taxRate: number
 }
 
-export interface PriceTiersPayload {
-  priceTiers: PriceTier[]
-}
+export type TaxPayload = Partial<TaxSettings>

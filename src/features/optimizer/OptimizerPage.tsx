@@ -70,7 +70,7 @@ const OptimizerPage = () => {
   const [draftName, setDraftName] = useState(bootstrap?.draftName ?? '')
   const [showDrafts, setShowDrafts] = useState(false)
   const [showSaveDraft, setShowSaveDraft] = useState(false)
-  const [priceTierCode, setPriceTierCode] = useState('consumidor')
+  const [priceLevel, setPriceLevel] = useState(1)
   const [strategy, setStrategy] = useState<PackingStrategy>('default')
   // Alternative-solution seed: bumped by "Otra alternativa" to explore different layouts.
   const [variant, setVariant] = useState(0)
@@ -189,8 +189,8 @@ const OptimizerPage = () => {
   // built from the payload actually SENT (post-prune), never from this render: pruning empty rows
   // changes the signature, and seeding it from here would make the auto-run loop.
   const signature = useMemo(
-    () => signatureOf(built.materials, built.requirements, strategy, variant, priceTierCode),
-    [built, strategy, variant, priceTierCode],
+    () => signatureOf(built.materials, built.requirements, strategy, variant, priceLevel),
+    [built, strategy, variant, priceLevel],
   )
   // Set on SUCCESS: it claims "the result on screen was computed from these inputs", which a failed
   // run has not earned.
@@ -354,17 +354,17 @@ const OptimizerPage = () => {
       overrides: {
         variant?: number
         strategy?: PackingStrategy
-        priceTierCode?: string
+        priceLevel?: number
         materials?: MaterialForm[]
       } = {},
     ) => {
       const nextVariant = overrides.variant ?? variant
       const nextStrategy = overrides.strategy ?? strategy
-      const nextTier = overrides.priceTierCode ?? priceTierCode
+      const nextLevel = overrides.priceLevel ?? priceLevel
       // Read off the overrides rather than from a flag every caller would have to pass: only the
-      // tier change and the per-board marks (which travel as `materials`) are re-prices. Everything
+      // level change and the per-board marks (which travel as `materials`) are re-prices. Everything
       // else — the auto-run, the heuristic, another alternative — searches.
-      const reprice = overrides.priceTierCode !== undefined || overrides.materials !== undefined
+      const reprice = overrides.priceLevel !== undefined || overrides.materials !== undefined
 
       const payload = buildPayload(overrides.materials ?? materials, pieces.requirements)
       if (payload.validCount === 0) {
@@ -381,13 +381,13 @@ const OptimizerPage = () => {
         payload.requirements,
         nextStrategy,
         nextVariant,
-        nextTier,
+        nextLevel,
       )
       optimize.mutate(
         {
           materials: payload.materials,
           requirements: payload.requirements,
-          priceTierCode: nextTier,
+          priceLevel: nextLevel,
           strategy: nextStrategy,
           variant: nextVariant,
         },
@@ -404,7 +404,7 @@ const OptimizerPage = () => {
         },
       )
     },
-    [materials, pieces.requirements, variant, strategy, priceTierCode, optimize, addToast],
+    [materials, pieces.requirements, variant, strategy, priceLevel, optimize, addToast],
   )
 
   // Leaving the Despiece step cleans up after the editor and then refuses ambiguous input: blank
@@ -457,18 +457,18 @@ const OptimizerPage = () => {
     if (canOptimize) runOptimize({ strategy: newStrategy })
   }
 
-  // Changing the price tier recomputes on the spot: only the money in the response changes and
+  // Changing the price level recomputes on the spot: only the money in the response changes and
   // `/optimize` is cached by input hash, so the cut search is not redone — the cost tables just
-  // catch up with the tier on screen.
-  const handlePriceTierChange = (code: string) => {
-    setPriceTierCode(code)
-    if (canOptimize) runOptimize({ priceTierCode: code })
+  // catch up with the level on screen.
+  const handlePriceLevelChange = (level: number) => {
+    setPriceLevel(level)
+    if (canOptimize) runOptimize({ priceLevel: level })
   }
 
-  // Which boards the tier's discount applies to. Nothing is discounted until the seller says so,
-  // board by board — a client negotiates the melamina and not the MDF.
-  const discountedKeys = useMemo(
-    () => new Set(materials.filter((m) => m.applyDiscount).map((m) => m.uid)),
+  // Which boards get the quote's price level. Nothing is marked until the seller says so, board by
+  // board — a client negotiates the melamina and not the MDF.
+  const leveledKeys = useMemo(
+    () => new Set(materials.filter((m) => m.applyPriceLevel).map((m) => m.uid)),
     [materials],
   )
 
@@ -478,9 +478,9 @@ const OptimizerPage = () => {
   // The total is recomputed by the SERVER rather than here: the flag travels inside the request,
   // so `/optimize` can answer it exactly, and `/optimize` is cached by input hash — the cut search
   // is not redone, only the money. Doing the arithmetic locally would be a second implementation
-  // of the discount rule, and Python's round() is half-to-even while JS's Math.round is half-up:
-  // the two disagree by a cent on bases like $62.50 at 5%, which is precisely the kind of round
-  // number a per-board selection produces.
+  // of the pricing rule, and Python's round() is half-to-even while JS's Math.round is half-up:
+  // the two disagree by a cent on totals like $85.50 at 15% IVA, which is exactly the kind of
+  // number these tables produce.
   // Both per-board marks recompute the same way: debounced, so ticking three boards in a row
   // costs one round trip instead of three.
   const scheduleRecalc = (next: MaterialForm[]) => {
@@ -490,9 +490,9 @@ const OptimizerPage = () => {
     recalcTimer.current = setTimeout(() => runOptimize({ materials: next }), 300)
   }
 
-  const handleToggleDiscount = (materialKey: string) => {
+  const handleToggleLevel = (materialKey: string) => {
     const next = materials.map((m) =>
-      m.uid === materialKey ? { ...m, applyDiscount: !m.applyDiscount } : m,
+      m.uid === materialKey ? { ...m, applyPriceLevel: !m.applyPriceLevel } : m,
     )
     setMaterials(next)
     scheduleRecalc(next)
@@ -653,11 +653,11 @@ const OptimizerPage = () => {
             variant={variant}
             isStale={isStale}
             missingBanding={missingBanding}
-            priceTierCode={priceTierCode}
-            onPriceTierChange={handlePriceTierChange}
+            priceLevel={priceLevel}
+            onPriceLevelChange={handlePriceLevelChange}
             isPending={optimize.isPending || recalcScheduled}
-            discountedKeys={discountedKeys}
-            onToggleDiscount={handleToggleDiscount}
+            leveledKeys={leveledKeys}
+            onToggleLevel={handleToggleLevel}
             wholeBoardKeys={wholeBoardKeys}
             onToggleWholeBoard={handleToggleWholeBoard}
             services={services.lines}
@@ -673,7 +673,7 @@ const OptimizerPage = () => {
             result={result}
             materials={built.materials}
             requirements={built.requirements}
-            priceTierCode={priceTierCode}
+            priceLevel={priceLevel}
             strategy={strategy}
             variant={variant}
             services={services.lines}

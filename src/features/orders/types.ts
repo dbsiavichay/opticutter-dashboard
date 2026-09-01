@@ -67,10 +67,12 @@ export interface Order {
   status: OrderStatus
   subtotal?: number
   total: number
-  priceTierCode?: string
-  priceTierName?: string
-  discountRate?: number
-  discountAmount?: number
+  priceLevel?: number
+  priceLevelName?: string
+  taxRate?: number
+  taxAmount?: number
+  // Frozen NET sum of the additional services (they are registered tax-included).
+  additionalServicesTotal?: number
   client: Client
   // Owning branch (mandatory FK): always present in list and detail responses.
   branch: BranchRef

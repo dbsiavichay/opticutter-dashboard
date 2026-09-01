@@ -38,10 +38,10 @@ export const meters = (n?: number | null) => (n != null ? `${n.toFixed(2)} m` : 
 
 interface MaterialsSummaryTableProps {
   rows: MaterialSummary[]
-  // Which boards the price tier's discount applies to, by materialKey. Passing `onToggleDiscount`
+  // Which boards are billed at the quote's price level, by materialKey. Passing `onToggleLevel`
   // is what turns the "Desc." column on: without it the table stays exactly as read-only as before.
-  discountedKeys?: Set<string>
-  onToggleDiscount?: (materialKey: string) => void
+  leveledKeys?: Set<string>
+  onToggleLevel?: (materialKey: string) => void
   // Which materials the client buys whole even where the optimizer billed a half board, by
   // materialKey. Passing `onToggleWholeBoard` turns the "Entero" column on.
   wholeBoardKeys?: Set<string>
@@ -52,14 +52,14 @@ interface MaterialsSummaryTableProps {
 
 export const MaterialsSummaryTable = ({
   rows,
-  discountedKeys,
-  onToggleDiscount,
+  leveledKeys,
+  onToggleLevel,
   wholeBoardKeys,
   onToggleWholeBoard,
   marksDisabled = false,
 }: MaterialsSummaryTableProps) => {
   if (!rows.length) return null
-  const selectable = !!onToggleDiscount
+  const selectable = !!onToggleLevel
   // Only offer "Entero" where there is something to promote — a plan without half boards would
   // otherwise carry a column that does nothing. Marked keys keep it visible after the promotion,
   // which is what makes the decision reversible: once promoted, the "½ medio" row is gone.
@@ -76,21 +76,21 @@ export const MaterialsSummaryTable = ({
           <CTableHeaderCell className="text-end">Cant.</CTableHeaderCell>
           {/* Precio unitario, no eficiencia: esta es la tabla de dinero del paso, y con solo
               Cant. y Costo había que dividir para saber a cuánto sale el tablero — que es el
-              número que se negocia y el que decide el check de "Desc." de la misma fila. El
+              número que se negocia y el que decide el check de "Nivel" de la misma fila. El
               aprovechamiento se lee en la barra del diagrama de cortes (y por patrón, dentro). */}
           <CTableHeaderCell className="text-end">Precio unit.</CTableHeaderCell>
           <CTableHeaderCell className="text-end">Costo</CTableHeaderCell>
-          {/* Last column, right after the cost it acts on: the checkbox answers "does the
-              discount apply to THIS amount", so it reads next to the amount. */}
+          {/* Last column, right after the cost it acts on: the checkbox answers "is THIS amount
+              billed at the chosen level", so it reads next to the amount. */}
           {selectable && (
             <CTableHeaderCell
               className="text-center"
-              title="Aplicar el descuento del nivel de precio a este tablero"
+              title="Cobrar este tablero al nivel de precio seleccionado"
             >
-              Desc.
+              Nivel
             </CTableHeaderCell>
           )}
-          {/* Sits after "Desc." because it acts on the same row of money, and because it is the
+          {/* Sits after "Nivel" because it acts on the same row of money, and because it is the
               rarer decision of the two. */}
           {promotable && (
             <CTableHeaderCell
@@ -117,21 +117,21 @@ export const MaterialsSummaryTable = ({
               {m.width}×{m.height}×{m.thickness} mm
             </CTableDataCell>
             <CTableDataCell className="text-end">{m.count}</CTableDataCell>
-            {/* Precio de lista: el descuento del nivel vive en `pricing`, no aquí, así que este
-                es el precio contra el que se lee el check de al lado. Para medio tablero ya llega
-                dividido y con su markup desde el backend, en su propia fila. */}
+            {/* El precio al que se factura esta línea: si el tablero está marcado, ya llega con
+                el precio del nivel desde el backend (no hay fila de descuento en ningún lado).
+                Para medio tablero llega dividido y con su markup, en su propia fila. */}
             <CTableDataCell className="text-end">{fmtMoney(m.costPerUnit)}</CTableDataCell>
             <CTableDataCell className="text-end">{fmtMoney(m.totalCost)}</CTableDataCell>
             {selectable && (
               <CTableDataCell className="text-center">
-                {/* Only catalog boards are discountable — an offcut or a manual measurement has no
-                    list price to discount. The two rows of one material share its mark. */}
+                {/* Only catalog boards have levels — an offcut or a manual measurement is priced
+                    by the request. The two rows of one material share its mark. */}
                 {m.productId != null && (
                   <CFormCheck
-                    checked={discountedKeys?.has(m.materialKey) ?? false}
+                    checked={leveledKeys?.has(m.materialKey) ?? false}
                     disabled={marksDisabled}
-                    onChange={() => onToggleDiscount?.(m.materialKey)}
-                    aria-label={`Aplicar descuento a ${
+                    onChange={() => onToggleLevel?.(m.materialKey)}
+                    aria-label={`Cobrar al nivel seleccionado: ${
                       stripHalfSuffix(m.productName) ?? m.productCode ?? m.materialKey
                     }`}
                   />

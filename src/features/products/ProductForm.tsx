@@ -42,7 +42,11 @@ interface ProductFormState {
   code: string
   name: string
   description: string
+  // The three NET prices. Blank on levels 2 and 3 means "no reduced price for
+  // this article": billing falls back to level 1 rather than to zero.
   price: number | string
+  price2: number | string
+  price3: number | string
   isActive: boolean
 }
 
@@ -123,6 +127,8 @@ const ProductForm = ({ product, onSubmit, onCancel, isSubmitting, error }: Produ
     name: product?.name ?? '',
     description: product?.description ?? '',
     price: product?.price ?? '',
+    price2: product?.price2 ?? '',
+    price3: product?.price3 ?? '',
     isActive: product?.isActive ?? true,
   })
   const [attrs, setAttrs] = useState<AttrsForm>(initAttrs(product))
@@ -131,7 +137,7 @@ const ProductForm = ({ product, onSubmit, onCancel, isSubmitting, error }: Produ
   const hasGenericError = error && Object.keys(fieldErrors).length === 0
 
   const set =
-    (field: 'code' | 'name' | 'description' | 'price') =>
+    (field: 'code' | 'name' | 'description' | 'price' | 'price2' | 'price3') =>
     (e: ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) =>
       setForm((f) => ({ ...f, [field]: e.target.value }))
   const setAttr =
@@ -174,6 +180,8 @@ const ProductForm = ({ product, onSubmit, onCancel, isSubmitting, error }: Produ
       name: form.name,
       description: form.description || null,
       price: Number(form.price),
+      price2: form.price2 === '' ? null : Number(form.price2),
+      price3: form.price3 === '' ? null : Number(form.price3),
       isActive: form.isActive,
       attributes,
     })
@@ -212,7 +220,7 @@ const ProductForm = ({ product, onSubmit, onCancel, isSubmitting, error }: Produ
 
           <CCol xs={6}>
             <CFormLabel>
-              Precio <span className="text-danger">*</span>
+              Precio 1 <span className="text-danger">*</span>
             </CFormLabel>
             <CFormInput
               type="number"
@@ -220,10 +228,37 @@ const ProductForm = ({ product, onSubmit, onCancel, isSubmitting, error }: Produ
               onChange={set('price')}
               required
               min={0}
-              step="0.01"
+              step="0.000001"
               placeholder="0.00"
             />
+            <div className="form-text">Precio de lista, sin IVA.</div>
             <FieldError name="price" errors={fieldErrors} />
+          </CCol>
+
+          <CCol xs={6}>
+            <CFormLabel>Precio 2</CFormLabel>
+            <CFormInput
+              type="number"
+              value={form.price2}
+              onChange={set('price2')}
+              min={0}
+              step="0.000001"
+              placeholder="Vacío = usa el Precio 1"
+            />
+            <FieldError name="price2" errors={fieldErrors} />
+          </CCol>
+
+          <CCol xs={6}>
+            <CFormLabel>Precio 3</CFormLabel>
+            <CFormInput
+              type="number"
+              value={form.price3}
+              onChange={set('price3')}
+              min={0}
+              step="0.000001"
+              placeholder="Vacío = usa el Precio 1"
+            />
+            <FieldError name="price3" errors={fieldErrors} />
           </CCol>
 
           <CCol xs={12}>

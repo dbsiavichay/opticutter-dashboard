@@ -8,11 +8,14 @@ import type {
   CuttingSettings,
   PreorderPayload,
   PreorderSettings,
+  TaxPayload,
+  TaxSettings,
 } from './types'
 
 const CUTTING_KEY = ['settings', 'cutting']
 const COMPANY_KEY = ['settings', 'company']
 const PREORDER_KEY = ['settings', 'preorders']
+const TAX_KEY = ['settings', 'taxes']
 
 export const useCuttingSettings = () =>
   useQuery({
@@ -57,5 +60,20 @@ export const useUpdatePreorderSettings = () => {
   return useMutation({
     mutationFn: (data: PreorderPayload) => settingsApi.updatePreorders(data),
     onSuccess: (data: PreorderSettings) => qc.setQueryData(PREORDER_KEY, data),
+  })
+}
+
+export const useTaxSettings = () =>
+  useQuery({
+    queryKey: TAX_KEY,
+    queryFn: settingsApi.getTaxes,
+    staleTime: REFERENCE_STALE_TIME,
+  })
+
+export const useUpdateTaxSettings = () => {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (data: TaxPayload) => settingsApi.updateTaxes(data),
+    onSuccess: (data: TaxSettings) => qc.setQueryData(TAX_KEY, data),
   })
 }

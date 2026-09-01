@@ -6,6 +6,8 @@ import type {
   CuttingSettings,
   PreorderPayload,
   PreorderSettings,
+  TaxPayload,
+  TaxSettings,
 } from './types'
 
 const BASE = '/api/v1/settings'
@@ -20,4 +22,6 @@ export const settingsApi = {
   getPreorders: () => httpClient.get<PreorderSettings>(`${BASE}/preorders`),
   updatePreorders: (data: PreorderPayload) =>
     httpClient.patch<PreorderSettings>(`${BASE}/preorders`, data),
+  getTaxes: () => httpClient.get<TaxSettings>(`${BASE}/taxes`),
+  updateTaxes: (data: TaxPayload) => httpClient.patch<TaxSettings>(`${BASE}/taxes`, data),
 }

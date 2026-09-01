@@ -55,7 +55,7 @@ interface QuoteStepProps {
   requirements: RequirementInput[]
   // Chosen back in the Costos step, where its effect on the numbers is visible; carried here only
   // to be sent with the pre-order and shown in the summary.
-  priceTierCode: string
+  priceLevel: number
   strategy: PackingStrategy
   // Alternative-solution seed of the layout on screen; persisted with the pre-order so every
   // recompute reproduces the chosen alternative.
@@ -72,7 +72,7 @@ const QuoteStep = ({
   result,
   materials,
   requirements,
-  priceTierCode,
+  priceLevel,
   strategy,
   variant,
   services,
@@ -146,7 +146,7 @@ const QuoteStep = ({
         clientId: Number(selectedClientId),
         source: 'dashboard',
         notes: notes || undefined,
-        priceTierCode,
+        priceLevel,
         strategy,
         variant,
         materials,
@@ -295,14 +295,28 @@ const QuoteStep = ({
           <div className="d-flex justify-content-between gap-3 py-1 border-bottom">
             <span className="text-body-secondary small">Nivel de precio</span>
             <span className="small fw-semibold text-end">
-              {result?.pricing?.priceTierName ?? priceTierCode}
+              {result?.pricing?.priceLevelName ?? `Precio ${priceLevel}`}
             </span>
           </div>
           {!!pricing?.servicesTotal && (
             <div className="d-flex justify-content-between gap-3 py-1 border-bottom">
-              <span className="text-body-secondary small">Servicios adicionales</span>
+              <span className="text-body-secondary small">Servicios adicionales (sin IVA)</span>
               <span className="small fw-semibold text-end">{fmtMoney(pricing.servicesTotal)}</span>
             </div>
+          )}
+          {!!pricing && (
+            <>
+              <div className="d-flex justify-content-between gap-3 py-1 border-bottom">
+                <span className="text-body-secondary small">Subtotal</span>
+                <span className="small fw-semibold text-end">{fmtMoney(pricing.subtotal)}</span>
+              </div>
+              <div className="d-flex justify-content-between gap-3 py-1 border-bottom">
+                <span className="text-body-secondary small">
+                  IVA ({Math.round(pricing.taxRate * 100)}%)
+                </span>
+                <span className="small fw-semibold text-end">{fmtMoney(pricing.taxAmount)}</span>
+              </div>
+            </>
           )}
           <div className="d-flex justify-content-between gap-3 py-2">
             <span className="fw-semibold">Total</span>

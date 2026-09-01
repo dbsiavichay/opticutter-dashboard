@@ -120,15 +120,17 @@ export interface LayoutGroup {
 }
 
 export interface PricingData {
-  priceTierCode: string
-  priceTierName: string
-  discountRate: number
-  discountBase: number
+  // Catalog price level billed on the boards the seller marked (1 = list).
+  priceLevel: number
+  priceLevelName: string
+  // Net: every line already prints at its final price, so there is no discount
+  // row — the subtotal IS the sum of the document.
   subtotal: number
-  discountAmount: number
-  // Sum of additional services (added after the discount). Optional: absent on
-  // raw /optimize responses and pre-feature snapshots.
+  // Net sum of the additional services (they are registered tax-included and
+  // converted server-side). Optional: absent on raw /optimize responses.
   servicesTotal?: number
+  taxRate: number
+  taxAmount: number
   total: number
 }
 
@@ -162,7 +164,7 @@ export interface CatalogMaterialInput {
   // Whether the price tier's discount applies to THIS board. Absent/false = it does not:
   // the seller checks board by board while quoting (a client negotiates the melamina and
   // not the MDF). Does not affect geometry or the optimize cache hash, only `pricing`.
-  applyDiscount?: boolean
+  applyPriceLevel?: boolean
   // Whether a sheet the optimizer billed as a half board is delivered and charged whole, the
   // client keeping the uncut half. Absent/false = the half board stands. Not in the hash either:
   // the server reshapes the cached plan (the pieces do not move) instead of searching again.
@@ -216,7 +218,7 @@ export interface OptimizePayload {
   materials: MaterialInput[]
   requirements: RequirementInput[]
   clientId?: number
-  priceTierCode?: string
+  priceLevel?: number
   strategy?: PackingStrategy
   // Alternative-solution seed: bump it ("Generar otra alternativa") to get a
   // genuinely different deterministic layout when alternatives exist.

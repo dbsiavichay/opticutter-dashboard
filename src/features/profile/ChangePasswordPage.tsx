@@ -8,13 +8,13 @@ import {
   CCardHeader,
   CCol,
   CForm,
-  CFormInput,
   CFormLabel,
   CRow,
   CSpinner,
 } from '@coreui/react'
 import { ApiError } from 'src/shared/api/types'
 import FieldError from 'src/shared/components/FieldError'
+import PasswordInput from 'src/shared/components/PasswordInput'
 import { useAuthStore } from 'src/shared/store/authStore'
 import { useCurrentUser, useLogin } from 'src/features/auth/useAuth'
 import { useChangePassword } from './useProfile'
@@ -117,8 +117,7 @@ const ChangePasswordPage = () => {
             <CForm onSubmit={handleSubmit}>
               <div className="mb-3">
                 <CFormLabel>Contraseña actual</CFormLabel>
-                <CFormInput
-                  type="password"
+                <PasswordInput
                   autoComplete="current-password"
                   value={currentPassword}
                   onChange={onChange('currentPassword', setCurrentPassword)}
@@ -130,12 +129,12 @@ const ChangePasswordPage = () => {
 
               <div className="mb-3">
                 <CFormLabel>Nueva contraseña</CFormLabel>
-                <CFormInput
-                  type="password"
+                <PasswordInput
                   autoComplete="new-password"
                   value={newPassword}
                   onChange={onChange('newPassword', setNewPassword)}
                   invalid={!!fieldErrors.newPassword}
+                  minLength={MIN_LENGTH}
                   disabled={busy}
                 />
                 <FieldError name="newPassword" errors={fieldErrors} />
@@ -144,8 +143,7 @@ const ChangePasswordPage = () => {
 
               <div className="mb-4">
                 <CFormLabel>Confirmar nueva contraseña</CFormLabel>
-                <CFormInput
-                  type="password"
+                <PasswordInput
                   autoComplete="new-password"
                   value={confirmPassword}
                   onChange={onChange('confirmPassword', setConfirmPassword)}

@@ -97,9 +97,9 @@ export interface ReviewPreOrder {
   notes: string | null // commercial reference (project/site), same text printed on the proforma
   currency: string
   subtotal: number
-  priceTierName?: string
-  discountRate?: number
-  discountAmount?: number
+  priceLevelName?: string
+  taxRate?: number
+  taxAmount?: number
   servicesTotal?: number
   total: number
   totalBoardsUsed: number

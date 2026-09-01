@@ -28,7 +28,12 @@ interface ProductBase {
   externalCode?: string | null
   name: string
   description?: string | null
+  // All three NET of tax, as the vendor's inventory publishes them. `price` is
+  // level 1 (list); the other two are null when the source never loaded them, and
+  // billing then falls back to level 1.
   price: number
+  price2?: number | null
+  price3?: number | null
   isActive: boolean
 }
 
@@ -66,6 +71,8 @@ export interface ProductPayload {
   description?: string | null
   type: ProductType
   price: number
+  price2?: number | null
+  price3?: number | null
   isActive?: boolean
   attributes: BoardAttributes | EdgeBandingAttributes
 }
