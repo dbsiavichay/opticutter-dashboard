@@ -8,6 +8,6 @@ export const servicesRoutes: AppRoute[] = [
     path: '/additional-services',
     name: 'Servicios adicionales',
     element: ServicesPage,
-    roles: ['administrador'],
+    roles: ['administrador', 'vendedor'],
   },
 ]

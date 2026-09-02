@@ -5,18 +5,19 @@ import { cilFullscreen, cilFullscreenExit } from '@coreui/icons'
 
 import {
   EDGE_COLOR,
+  PIECE_LABEL,
   WASTE_LABEL,
   bandedSides,
   boardRotation,
   clamp,
   insetSideLine,
   pieceSig,
-  remainderLabel,
   uprightText,
 } from 'src/shared/utils/cutDrawing'
 import useZoomPan from 'src/shared/hooks/useZoomPan'
 import useFullscreen from 'src/shared/hooks/useFullscreen'
 import ZoomControls from 'src/shared/components/ZoomControls'
+import EdgeDimensions from 'src/shared/components/EdgeDimensions'
 import type { CutBoard, CutPiece } from './types'
 
 interface WorkshopBoardSvgProps {
@@ -109,53 +110,30 @@ const WorkshopBoardSvg = ({
             vectorEffect="non-scaling-stroke"
           />
 
-          {/* Remainders / waste (hatched free areas to distinguish piece vs. waste), labelled with
-              their size so the shop can set aside the retazos worth keeping. This is a touch
-              screen: there is no hover, so the label and the zoom are the only way to read it. */}
-          {(board.remainders ?? []).map((r, idx) => {
-            const showText = r.width * scale > 130 && r.height * scale > 90
-            const rcx = r.x + r.width / 2
-            const rcy = r.y + r.height / 2
-            return (
-              <g key={`rem-${idx}`}>
-                <rect
-                  x={r.x}
-                  y={r.y}
-                  width={r.width}
-                  height={r.height}
-                  fill={`url(#${wasteId})`}
-                  stroke="#ced4da"
-                  strokeWidth={1}
-                  strokeDasharray="6 6"
-                  vectorEffect="non-scaling-stroke"
-                />
-                {showText && (
-                  <text
-                    x={rcx}
-                    y={rcy}
-                    fontSize={clamp(Math.min(r.width, r.height) / 6, 18, 70)}
-                    textAnchor="middle"
-                    dominantBaseline="central"
-                    fill={WASTE_LABEL}
-                    transform={uprightText(rcx, rcy)}
-                    style={{ pointerEvents: 'none', userSelect: 'none' }}
-                  >
-                    {remainderLabel(r)}
-                  </text>
-                )}
-              </g>
-            )
-          })}
+          {/* Remainders / waste (hatched free areas to distinguish piece vs. waste). Their size is
+              drawn on the edges (see the dimensions group below) so the shop can set aside the
+              retazos worth keeping — this is a touch screen, there is no hover. */}
+          {(board.remainders ?? []).map((r, idx) => (
+            <rect
+              key={`rem-${idx}`}
+              x={r.x}
+              y={r.y}
+              width={r.width}
+              height={r.height}
+              fill={`url(#${wasteId})`}
+              stroke="#ced4da"
+              strokeWidth={1}
+              strokeDasharray="6 6"
+              vectorEffect="non-scaling-stroke"
+            />
+          ))}
 
           {/* Piezas */}
           {board.pieces.map((p) => {
             const sig = pieceSig(p)
             const color = colorFor(sig)
             const minSide = Math.min(p.width, p.height)
-            const fontSize = clamp(minSide / 5, 22, 90)
             const checkSize = clamp(minSide * 0.55, 36, 220)
-            // When zoomed in, small pieces reveal their dimensions (threshold based on effective scale).
-            const showText = p.width * scale > 130 && p.height * scale > 90
             const cx = p.x + p.width / 2
             const cy = p.y + p.height / 2
 
@@ -204,22 +182,6 @@ const WorkshopBoardSvg = ({
                       />
                     )
                   })}
-
-                  {showText && (
-                    <text
-                      x={cx}
-                      y={cy}
-                      fontSize={fontSize}
-                      textAnchor="middle"
-                      dominantBaseline="central"
-                      fill="#212529"
-                      transform={uprightText(cx, cy)}
-                      style={{ pointerEvents: 'none', userSelect: 'none' }}
-                    >
-                      {p.originalWidth}×{p.originalHeight}
-                      {p.rotated ? ' ↻' : ''}
-                    </text>
-                  )}
                 </g>
 
                 {/* ✓ at full opacity above the dimmed layer, so the cut state reads at a glance */}
@@ -241,6 +203,42 @@ const WorkshopBoardSvg = ({
               </g>
             )
           })}
+        </g>
+
+        {/* Measurements drawn on the edges (not centered): positioned in screen space, so this
+            sits outside the rotated board group but still carries its zoom/pan transform. Same
+            reveal rule as the shapes themselves. */}
+        <g transform={groupTransform}>
+          {(board.remainders ?? []).map((r, idx) =>
+            r.width * scale > 130 && r.height * scale > 90 ? (
+              <EdgeDimensions
+                key={`rem-dim-${idx}`}
+                x={r.x}
+                y={r.y}
+                width={r.width}
+                height={r.height}
+                boardHeight={H}
+                fontSize={clamp(Math.min(r.width, r.height) / 7, 14, 56)}
+                color={WASTE_LABEL}
+              />
+            ) : null,
+          )}
+          {board.pieces.map((p) =>
+            p.width * scale > 130 && p.height * scale > 90 ? (
+              <g key={`piece-dim-${p.id}`} opacity={p.cut ? 0.35 : 1}>
+                <EdgeDimensions
+                  x={p.x}
+                  y={p.y}
+                  width={p.width}
+                  height={p.height}
+                  boardHeight={H}
+                  fontSize={clamp(Math.min(p.width, p.height) / 6, 16, 64)}
+                  color={PIECE_LABEL}
+                  suffix={p.rotated ? ' ↻' : ''}
+                />
+              </g>
+            ) : null,
+          )}
         </g>
       </svg>
       <ZoomControls onZoomIn={zoomIn} onZoomOut={zoomOut} onReset={reset} isZoomed={isZoomed} />
