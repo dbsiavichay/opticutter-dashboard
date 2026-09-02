@@ -2,6 +2,7 @@ import { useId } from 'react'
 
 import useZoomPan from 'src/shared/hooks/useZoomPan'
 import ZoomControls from 'src/shared/components/ZoomControls'
+import EdgeDimensions from 'src/shared/components/EdgeDimensions'
 import {
   BOARD_OUTLINE,
   EDGE_COLOR,
@@ -14,7 +15,6 @@ import {
   clamp,
   insetSideLine,
   pieceSig,
-  remainderLabel,
   remainderTitle,
   uprightText,
 } from 'src/shared/utils/cutDrawing'
@@ -142,45 +142,25 @@ const SheetSvg = <P extends DrawnPiece>({
           vectorEffect="non-scaling-stroke"
         />
 
-        {/* Offcuts / waste, labelled with their size: a hatched rectangle alone doesn't say
-            whether it's a reusable retazo or scrap, and that is the number the client asks for.
-            Same reveal rule as the pieces, so zooming in uncovers the small ones; the <title>
-            carries it regardless of the on-screen size. */}
-        {remainders.map((r, idx) => {
-          const showText = r.width * scale > 130 && r.height * scale > 90
-          const cx = r.x + r.width / 2
-          const cy = r.y + r.height / 2
-          return (
-            <g key={`rem-${idx}`}>
-              <title>{remainderTitle(r)}</title>
-              <rect
-                x={r.x}
-                y={r.y}
-                width={r.width}
-                height={r.height}
-                fill={`url(#${wasteId})`}
-                stroke={WASTE_OUTLINE}
-                strokeWidth={1}
-                strokeDasharray="6 6"
-                vectorEffect="non-scaling-stroke"
-              />
-              {showText && (
-                <text
-                  x={cx}
-                  y={cy}
-                  fontSize={clamp(Math.min(r.width, r.height) / 6, 18, 70)}
-                  textAnchor="middle"
-                  dominantBaseline="central"
-                  fill={WASTE_LABEL}
-                  transform={uprightText(cx, cy)}
-                  style={{ pointerEvents: 'none', userSelect: 'none' }}
-                >
-                  {remainderLabel(r)}
-                </text>
-              )}
-            </g>
-          )
-        })}
+        {/* Offcuts / waste: a hatched rectangle alone doesn't say whether it's a reusable retazo
+            or scrap, so its size is drawn on the edges (see the dimensions group below). The
+            <title> carries it regardless of the on-screen size. */}
+        {remainders.map((r, idx) => (
+          <g key={`rem-${idx}`}>
+            <title>{remainderTitle(r)}</title>
+            <rect
+              x={r.x}
+              y={r.y}
+              width={r.width}
+              height={r.height}
+              fill={`url(#${wasteId})`}
+              stroke={WASTE_OUTLINE}
+              strokeWidth={1}
+              strokeDasharray="6 6"
+              vectorEffect="non-scaling-stroke"
+            />
+          </g>
+        ))}
 
         {placedPieces.map((p) => {
           const sig = pieceSig(p)
@@ -192,6 +172,10 @@ const SheetSvg = <P extends DrawnPiece>({
           // On zoom-in, small pieces reveal their label (threshold based on effective scale).
           const showText = p.width * scale > 130 && p.height * scale > 90
           const text = labelFor(p)
+          // The measurements now live on the edges (see the dimensions group below); only keep a
+          // centered label when `labelFor` gave a real piece name (the client review), not the
+          // dimension fallback.
+          const centeredLabel = text === defaultLabel(p) || text === pieceSig(p) ? '' : text
 
           return (
             <g
@@ -235,7 +219,7 @@ const SheetSvg = <P extends DrawnPiece>({
                 )
               })}
 
-              {showText && text && (
+              {showText && centeredLabel && (
                 <text
                   x={p.x + p.width / 2}
                   y={p.y + p.height / 2}
@@ -246,9 +230,49 @@ const SheetSvg = <P extends DrawnPiece>({
                   transform={uprightText(p.x + p.width / 2, p.y + p.height / 2)}
                   style={{ pointerEvents: 'none', userSelect: 'none' }}
                 >
-                  {text}
+                  {centeredLabel}
                 </text>
               )}
+            </g>
+          )
+        })}
+      </g>
+
+      {/* Measurements drawn on the edges (not centered): positioned in screen space, so this is
+          a sibling of the rotated board group carrying the same zoom/pan transform as the
+          board-dimension labels. Same reveal rule as the shapes themselves. */}
+      <g transform={enableZoom ? groupTransform : undefined}>
+        {remainders.map((r, idx) =>
+          r.width * scale > 130 && r.height * scale > 90 ? (
+            <EdgeDimensions
+              key={`rem-dim-${idx}`}
+              x={r.x}
+              y={r.y}
+              width={r.width}
+              height={r.height}
+              boardHeight={H}
+              fontSize={clamp(Math.min(r.width, r.height) / 7, 14, 56)}
+              color={WASTE_LABEL}
+            />
+          ) : null,
+        )}
+        {placedPieces.map((p) => {
+          if (!(p.width * scale > 130 && p.height * scale > 90)) return null
+          const sig = pieceSig(p)
+          const dimmed =
+            highlightId != null ? p.pieceId !== highlightId : dimSig != null && sig !== dimSig
+          return (
+            <g key={`piece-dim-${p.pieceId}`} opacity={dimmed ? 0.35 : 1}>
+              <EdgeDimensions
+                x={p.x}
+                y={p.y}
+                width={p.width}
+                height={p.height}
+                boardHeight={H}
+                fontSize={clamp(Math.min(p.width, p.height) / 6, 16, 64)}
+                color={PIECE_LABEL}
+                suffix={p.rotated ? ' ↻' : ''}
+              />
             </g>
           )
         })}

@@ -9,6 +9,6 @@ export const servicesNav: NavItem[] = [
     name: 'Servicios',
     to: '/additional-services',
     icon: <CIcon icon={cilBriefcase} customClassName="nav-icon" />,
-    roles: ['administrador'],
+    roles: ['administrador', 'vendedor'],
   },
 ]
