@@ -157,21 +157,32 @@ export interface BandingResult {
   bandingFinishedAt: string | null
 }
 
+export type BandType = 'Soft' | 'Hard'
+
+// One MATERIAL of the order, not one billing line: a material billed as whole boards plus a
+// half board is a single product to fetch from the rack, so the backend merges the two lines
+// and reports the split here. `name` never carries the "(medio tablero)" suffix, and `count`
+// is the sheets to fetch (`fullCount + halfCount` — a half counts as one physical sheet).
 export interface BoardUsage {
+  materialKey: string
   name: string
   count: number
+  fullCount: number
+  halfCount: number
 }
 
 export interface BandingUsage {
   name: string
+  // Canonical, translated at the point of display: the workshop board paints it as a badge.
+  bandType: BandType | null
   linearM: number
 }
 
 // An order in the shared workshop board (GET /orders/workshop-queue), used by operador,
-// canteador, and administrador. `boardUsage` is board/material name + board count, in
-// first-appearance order; practically never empty. `bandingUsage` is edge banding name
-// (already formatted as "Nombre (Suave|Duro)") + linear meters (already rounded up to the
-// whole meter server-side), also first-appearance order; empty when the order has no edge banding.
+// canteador, and administrador. `boardUsage` is one entry per material, in first-appearance
+// order (the order the shop cuts in); practically never empty. `bandingUsage` is edge banding
+// name + type + linear meters (billed: net + waste factor, server-side), also first-appearance
+// order; empty when the order has no edge banding.
 export interface WorkshopQueueItem {
   orderId: number
   orderCode: string | null
