@@ -17,11 +17,25 @@ import {
 import CIcon from '@coreui/icons-react'
 import { cilChevronLeft, cilChevronRight } from '@coreui/icons'
 
-import { sygnet } from 'src/assets/brand/sygnet'
 import { useSwipeNav } from 'src/shared/hooks/useSwipeNav'
 import OrderStatusBadge from './OrderStatusBadge'
 import BandingStatusBadge from './BandingStatusBadge'
-import type { WorkshopQueueItem } from './types'
+import BandTypeBadge from './BandTypeBadge'
+import type { BoardUsage, WorkshopQueueItem } from './types'
+
+// How the sheets of ONE material split between whole boards and the half, shown under the name
+// only when there IS a half — with none, the quantity on the right already says everything.
+//
+// The row exists because the backend used to send the two as separate materials, named apart by
+// a "(medio tablero)" suffix: the shop read one product as two, and the footer counted it twice.
+// Merging them there and spelling out the split here is what makes the row match the rack.
+const breakdown = ({ fullCount, halfCount }: BoardUsage): string | null => {
+  if (halfCount === 0) return null
+  const parts: string[] = []
+  if (fullCount > 0) parts.push(`${fullCount} ${fullCount === 1 ? 'entero' : 'enteros'}`)
+  parts.push(`${halfCount} ${halfCount === 1 ? 'medio' : 'medios'}`)
+  return parts.join(' · ')
+}
 
 interface WorkshopMaterialsModalProps {
   // The whole queue, in board order: the dialog pages through it so the materials of a shift's worth
@@ -43,6 +57,12 @@ interface WorkshopMaterialsModalProps {
 // totals sit in a `<tfoot>`, where a proforma puts them — and where "N materiales" is finally worth
 // printing: on the card it was a number that changed no decision. Only from two rows up: under a
 // single row the total restates that row.
+//
+// One row per MATERIAL, which is the backend's doing: a material billed as whole boards plus a half
+// used to arrive as two entries whose names differed by a "(medio tablero)" suffix, so an order of
+// one board and a half read as two products and the footer said "2 materiales". The split now lives
+// under the name as "2 enteros · 1 medio" — and an order like that is a single row, which is also
+// why its footer disappears (the rule above: under one row the total restates it).
 const WorkshopMaterialsModal = ({
   items,
   index,
@@ -92,8 +112,6 @@ const WorkshopMaterialsModal = ({
     >
       <CModalHeader className="materials-header">
         <div className="materials-headline">
-          {/* The isotype is three stacked boards — the subject of this dialog, not decoration. */}
-          <CIcon icon={sygnet} height={36} className="flex-shrink-0" />
           <div className="min-w-0">
             <div className="materials-eyebrow">Materiales de la orden</div>
             <CModalTitle className="materials-title">{item?.orderCode ?? '—'}</CModalTitle>
@@ -155,12 +173,22 @@ const WorkshopMaterialsModal = ({
             </CTableHead>
             <CTableBody>
               {boards.length > 0 ? (
-                boards.map((board) => (
-                  <CTableRow key={board.name}>
-                    <CTableDataCell>{board.name}</CTableDataCell>
-                    <CTableDataCell className="text-end fw-semibold">{board.count}×</CTableDataCell>
-                  </CTableRow>
-                ))
+                boards.map((board) => {
+                  const split = breakdown(board)
+                  return (
+                    // Keyed by materialKey, not by name: two materials can share a catalogue
+                    // name (same design, two sheet sizes), and the key has to be the identity.
+                    <CTableRow key={board.materialKey}>
+                      <CTableDataCell>
+                        <div>{board.name}</div>
+                        {split && <div className="materials-breakdown">{split}</div>}
+                      </CTableDataCell>
+                      <CTableDataCell className="text-end fw-semibold">
+                        {board.count}×
+                      </CTableDataCell>
+                    </CTableRow>
+                  )
+                })
               ) : (
                 <CTableRow>
                   <CTableDataCell colSpan={2} className="text-body-secondary">
@@ -175,7 +203,12 @@ const WorkshopMaterialsModal = ({
                   <CTableDataCell className="fw-semibold">
                     {boards.length} {boards.length === 1 ? 'material' : 'materiales'}
                   </CTableDataCell>
-                  <CTableDataCell className="text-end fw-semibold">{sheets}×</CTableDataCell>
+                  {/* "Planchas", not "tableros": with a half in the mix this is what comes off
+                      the rack (3), not what gets billed (2½). Keeping the two nouns apart is
+                      what stops the workshop's count from reading as a commercial claim. */}
+                  <CTableDataCell className="text-end fw-semibold">
+                    {sheets} {sheets === 1 ? 'plancha' : 'planchas'}
+                  </CTableDataCell>
                 </CTableRow>
               </CTableFoot>
             )}
@@ -197,7 +230,12 @@ const WorkshopMaterialsModal = ({
                   {banding.length > 0 ? (
                     banding.map((line) => (
                       <CTableRow key={line.name}>
-                        <CTableDataCell>{line.name}</CTableDataCell>
+                        <CTableDataCell>
+                          <span className="me-2">{line.name}</span>
+                          {/* Absent for a banding whose product was never assigned, and for a
+                              product the catalogue has no type for. */}
+                          {line.bandType && <BandTypeBadge bandType={line.bandType} />}
+                        </CTableDataCell>
                         <CTableDataCell className="text-end fw-semibold">
                           {line.linearM.toFixed(1)} m
                         </CTableDataCell>

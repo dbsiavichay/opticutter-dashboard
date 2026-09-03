@@ -763,8 +763,9 @@ input[type='number'] {
   color: var(--cui-secondary-color);
 }
 
-// The materials dialog wears the brand the way the proforma does: a solid coral band with the
-// isotype on it — three stacked boards, which is the subject of the dialog rather than decoration.
+// The materials dialog wears the brand the way the proforma does: a solid coral band carrying the
+// order's identity. No mark on it — the isotype was decoration on a dialog nobody reaches without
+// already being inside the app, and it only ate width the client's name needed.
 //
 // The saturated band is right HERE and wrong on `.summary-table`: that rule heads one or two rows
 // inside a step, where a coral fill outweighed its own content, while this heads a full page of rows
@@ -799,7 +800,7 @@ input[type='number'] {
   line-height: 1.1;
 }
 
-// The dialog header's one row: mark, identity, and the pager. `min-width: 0` on the identity block
+// The dialog header's one row: identity and the pager. `min-width: 0` on the identity block
 // is what lets a long client name ellipsise instead of pushing the pager off the band.
 .materials-headline {
   display: flex;
@@ -910,6 +911,16 @@ input[type='number'] {
   > tfoot > tr > td {
     border-top: 2px solid var(--brand-coral);
   }
+}
+
+// "2 enteros · 1 medio" under a board's name: how that material's sheets split, printed only when
+// there IS a half. Secondary ink and a step down in size so it reads as a note ON the name rather
+// than as a second material — the exact confusion the merged row exists to end. It escapes the
+// `white-space: nowrap` above by living in the FIRST cell, which is the wrapping one.
+.materials-breakdown {
+  color: var(--cui-secondary-color);
+  font-size: 0.8125rem;
+  font-variant-numeric: tabular-nums;
 }
 
 // Caption over each list — the same treatment `.list-table` gives its column labels, so it reads as

@@ -26,7 +26,9 @@ const materialsSummary = ({ boardUsage, bandingUsage }: WorkshopQueueItem): stri
   const sheets = boardUsage.reduce((n, board) => n + board.count, 0)
   const meters = bandingUsage.reduce((m, banding) => m + banding.linearM, 0)
   const parts: string[] = []
-  if (sheets > 0) parts.push(`${sheets} ${sheets === 1 ? 'tablero' : 'tableros'}`)
+  // "Planchas", the same noun the dialog's total uses: a half board is one sheet off the rack
+  // but half a tablero on the bill, and the card must not contradict what it opens.
+  if (sheets > 0) parts.push(`${sheets} ${sheets === 1 ? 'plancha' : 'planchas'}`)
   if (meters > 0) parts.push(`${meters.toFixed(1)} m de tapacanto`)
   return parts.join(' · ')
 }
