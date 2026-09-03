@@ -692,6 +692,237 @@ input[type='number'] {
   }
 }
 
+// --- Shop-floor queue board (/workshop-board) -------------------------------------------------
+// The landing page of `operador` and `canteador` — the only screen those roles have — read at
+// arm's length on a touch panel with no hover, so nothing here may depend on a `title=`.
+
+// The order's stage as a spine, so a whole column can be triaged before a single badge is read.
+// The accent lives in CSS rather than an inline `border-left` for the reason `.material-group`
+// documents: the `.border` utility declares the shorthand `!important` and would beat it. A
+// `data-` attribute rather than a custom property also spares the call site the `as CSSProperties`
+// assertion that `--*` vars need in React.
+.workshop-card {
+  border-left: 6px solid var(--cui-border-color);
+
+  &[data-status='queued'] {
+    border-left-color: var(--cui-secondary);
+  }
+
+  &[data-status='cutting'] {
+    border-left-color: var(--cui-primary);
+  }
+
+  &[data-status='cut'] {
+    border-left-color: var(--cui-success);
+  }
+}
+
+// Head of the FIFO queue. Computed client-side from the oldest `queued` item rather than trusting
+// the server's order, so it stays true whatever the endpoint decides to sort by.
+.workshop-next {
+  align-self: flex-start;
+  padding: 0.1rem 0.5rem;
+  border-radius: 10rem;
+  background-color: rgba(var(--cui-primary-rgb), 0.12);
+  color: var(--cui-primary);
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+// The material lists collapsed to one tappable line on the card itself. A real order carries six
+// boards and four banding lines; printing them all made the card taller than the queue it sits in,
+// and this board's whole job is to be scanned. The counts stay (they say how big the job is), the
+// names move behind `WorkshopMaterialsModal`.
+//
+// A `<button>` spanning the full row, not a link at the end of a sentence: on a touch panel the row
+// IS the control, and a chevron-sized target is not one.
+.usage-summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  width: 100%;
+  padding: 0.6rem 0.75rem;
+  border: var(--cui-border-width) var(--cui-border-style) var(--cui-border-color);
+  border-radius: var(--cui-border-radius);
+  background-color: var(--cui-tertiary-bg);
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+
+  &:hover,
+  &:focus-visible {
+    border-color: var(--cui-primary);
+  }
+}
+
+.usage-summary__chevron {
+  flex: 0 0 auto;
+  color: var(--cui-secondary-color);
+}
+
+// The materials dialog wears the brand the way the proforma does: a solid coral band with the
+// isotype on it — three stacked boards, which is the subject of the dialog rather than decoration.
+//
+// The saturated band is right HERE and wrong on `.summary-table`: that rule heads one or two rows
+// inside a step, where a coral fill outweighed its own content, while this heads a full page of rows
+// — the proforma's own situation. The ink is `--brand-black`, never white: coral under white is
+// 3.58:1 and fails AA, while the dark brand ink measures 4.69:1, the same resolution Bootstrap's
+// `color-contrast()` gives the coral buttons. Both colours are painted explicitly, so the band needs
+// no `color-mode(dark)` counterpart.
+.materials-header {
+  background-color: var(--brand-coral);
+  color: var(--brand-black);
+  border-bottom: 0;
+
+  // The band stays coral in both themes, so the close glyph must stay the dark one: CoreUI inverts
+  // it to white under the dark theme, where it would then sit invisible on the coral.
+  .btn-close {
+    --cui-btn-close-filter: none;
+    --cui-btn-close-opacity: 0.7;
+    --cui-btn-close-hover-opacity: 1;
+  }
+}
+
+.materials-eyebrow {
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  opacity: 0.75;
+}
+
+.materials-title {
+  font-weight: 800;
+  line-height: 1.1;
+}
+
+// The dialog header's one row: mark, identity, and the pager. `min-width: 0` on the identity block
+// is what lets a long client name ellipsise instead of pushing the pager off the band.
+.materials-headline {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  width: 100%;
+
+  .min-w-0 {
+    min-width: 0;
+  }
+}
+
+.materials-client {
+  overflow: hidden;
+  font-size: 0.8125rem;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  opacity: 0.8;
+}
+
+// Paging between orders, so a shift's materials can be reviewed without closing the dialog once per
+// card. Sits on the coral band, so it is drawn from the band's own ink rather than a button colour —
+// a `secondary` CButton here would have punched a grey hole in the brand.
+.materials-nav {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+  margin-left: auto;
+  flex-shrink: 0;
+}
+
+.materials-nav__btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  // 2.5rem square: this is a touch panel, and a chevron-sized hit area is not a target.
+  width: 2.5rem;
+  height: 2.5rem;
+  padding: 0;
+  border: 0;
+  border-radius: var(--cui-border-radius);
+  background-color: rgba(255, 255, 255, 0.25);
+  color: inherit;
+  cursor: pointer;
+
+  &:hover:not(:disabled),
+  &:focus-visible:not(:disabled) {
+    background-color: rgba(255, 255, 255, 0.5);
+  }
+
+  &:disabled {
+    opacity: 0.35;
+    cursor: default;
+  }
+}
+
+.materials-nav__count {
+  min-width: 4.5rem;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+}
+
+// The swipe surface. `pan-y` is what makes the gesture possible at all: it hands vertical scrolling
+// back to the browser (so a long material list still scrolls natively) and reserves the horizontal
+// axis for `useSwipeNav`, which the browser would otherwise consume before any handler saw it.
+//
+// `min-height: 100%` so the whole body is swipeable even when two short tables would not fill it.
+// It resolves only when the dialog has a definite height — i.e. under `lg`, where it is fullscreen,
+// which is exactly where the gesture applies.
+.materials-swipe {
+  min-height: 100%;
+  touch-action: pan-y;
+}
+
+// The two status badges as a strip across the top of the dialog body. Bled out to the dialog's edges with
+// a negative margin of its own padding, so the rule under it spans the full width and the block
+// reads as an extension of the header rather than as a card floating inside the content.
+.materials-status {
+  margin: calc(var(--cui-modal-padding) * -1);
+  margin-bottom: var(--cui-modal-padding);
+  padding: 0.75rem var(--cui-modal-padding);
+  border-bottom: var(--cui-border-width) var(--cui-border-style) var(--cui-border-color);
+  background-color: var(--cui-tertiary-bg);
+}
+
+// Boards and edge banding used by an order, inside that dialog. They began as `.badge`s, which carry
+// `white-space: nowrap` — and `flex-wrap` wraps BETWEEN items, never inside one, so a catalogue name
+// like "MDP MELAMÍNICO NOGAL TERRA 15MM 2150X2440" had a min-content width wider than its card,
+// refused to shrink, and spilled past the border (`.card` declares no `overflow` to clip it).
+//
+// `overflow-wrap: anywhere` on the name column is what actually closes that: it lets an unbroken
+// catalogue code — one with no spaces to break at — reduce the cell's min-content width. The
+// quantity column is `tabular-nums` and never wraps, so the numbers line up down the table.
+.materials-table {
+  > :not(caption) > * > td:first-child {
+    overflow-wrap: anywhere;
+  }
+
+  > :not(caption) > * > *:last-child {
+    white-space: nowrap;
+    font-variant-numeric: tabular-nums;
+  }
+
+  // The totals row reads as a sum, not as another product: the rule above it does the separating,
+  // so it needs no fill of its own to compete with the coral header.
+  > tfoot > tr > td {
+    border-top: 2px solid var(--brand-coral);
+  }
+}
+
+// Caption over each list — the same treatment `.list-table` gives its column labels, so it reads as
+// a rubric and not as another line of content. Both lists carry one: until now only the tapacantos
+// had a label, and it was inline with the chips, where wrapping orphaned it on its own line.
+.usage-label {
+  color: var(--cui-secondary-color);
+  font-size: 0.75rem;
+  font-weight: 600;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+}
+
 @include color-mode(dark) {
   body {
     background-color: var(--cui-dark-bg-subtle);

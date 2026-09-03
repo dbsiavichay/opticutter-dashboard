@@ -3,75 +3,62 @@
 //   - WorkshopPage.tsx        → single order's cutting canvas, at /orders/:id/workshop
 //   - WorkshopBoardSvg.tsx    → SVG renderer for ONE physical board/sheet within that canvas
 // This file (WorkshopBoardPage) is the multi-order dashboard at /workshop-board.
-import { useState } from 'react'
+//
+// It is the landing page of `operador` and `canteador` (permissions.ts) — the only screen those two
+// roles have — and it runs on a shop-floor touch panel: controls are `lg`, and nothing may depend on
+// a hover (a `title=` says nothing there). It carries no page chrome of its own, like every other
+// screen since the optimizer: the breadcrumb and the sidebar already name it, and a card wrapping a
+// grid of cards only draws a second border.
+import { useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useQueryClient } from '@tanstack/react-query'
 import {
   CAlert,
   CButton,
-  CCard,
-  CCardBody,
   CCol,
   CModal,
   CModalBody,
   CModalFooter,
   CModalHeader,
   CModalTitle,
-  CProgress,
-  CProgressBar,
   CRow,
   CSpinner,
 } from '@coreui/react'
-import CIcon from '@coreui/icons-react'
 import { cilArrowRight, cilCheckAlt, cilMediaPlay } from '@coreui/icons'
 
 import { useHasRole } from 'src/features/auth/useAuth'
 import { PRINT_JOBS_KEY, usePrintConsolidated } from 'src/features/print/usePrint'
 import PrintJobsPanel from 'src/features/print/PrintJobsPanel'
-import ReferenceNote from 'src/shared/components/ReferenceNote'
-import OrderStatusBadge from './OrderStatusBadge'
-import BandingStatusBadge from './BandingStatusBadge'
+import WorkshopQueueCard from './WorkshopQueueCard'
+import WorkshopMaterialsModal from './WorkshopMaterialsModal'
 import { useUpdateBanding, useUpdateOrderStatus, useWorkshopQueue } from './useOrders'
-import type { CutProgress, WorkshopQueueItem } from './types'
-
-const fmtDateTime = (iso?: string) =>
-  iso
-    ? new Date(iso).toLocaleString('es-EC', {
-        day: '2-digit',
-        month: '2-digit',
-        hour: '2-digit',
-        minute: '2-digit',
-      })
-    : '—'
-
-const pct = ({ cutPieces, totalPieces }: CutProgress) =>
-  totalPieces > 0 ? Math.round((cutPieces / totalPieces) * 100) : 0
-
-const isDone = ({ cutPieces, totalPieces }: CutProgress) =>
-  totalPieces > 0 && cutPieces >= totalPieces
-
-type BoardAction = 'take' | 'complete' | 'startBanding' | 'finishBanding'
+import type { BoardAction, CardAction, WorkshopQueueItem } from './types'
 
 interface ConfirmState {
   kind: BoardAction
   item: WorkshopQueueItem
 }
 
-const ACTION_COPY: Record<BoardAction, { verb: string; color: 'primary' | 'success' }> = {
-  take: { verb: 'Tomar', color: 'primary' },
-  complete: { verb: 'Completar', color: 'success' },
-  startBanding: { verb: 'Iniciar el canteado de', color: 'primary' },
-  finishBanding: { verb: 'Terminar el canteado de', color: 'success' },
+const ACTION_COPY: Record<
+  BoardAction,
+  { verb: string; label: string; color: 'primary' | 'success' }
+> = {
+  take: { verb: 'Tomar', label: 'Tomar', color: 'primary' },
+  complete: { verb: 'Completar', label: 'Completar', color: 'success' },
+  startBanding: { verb: 'Iniciar el canteado de', label: 'Iniciar canteado', color: 'primary' },
+  finishBanding: { verb: 'Terminar el canteado de', label: 'Terminar canteado', color: 'success' },
 }
 
-interface CardAction {
-  kind: BoardAction
-  label: string
-  color: 'primary' | 'success'
-  icon: string[]
-  disabled?: boolean
-  title?: string
-  nav?: boolean
+// Head of the FIFO queue: the oldest order still waiting to be taken. Derived here rather than
+// trusting the endpoint's order, so the "Siguiente" pill stays true whatever it decides to sort by.
+const nextOrderId = (items: WorkshopQueueItem[]): number | null => {
+  let head: WorkshopQueueItem | null = null
+  for (const item of items) {
+    if (item.status !== 'queued') continue
+    if (!head || new Date(item.createdAt).getTime() < new Date(head.createdAt).getTime())
+      head = item
+  }
+  return head?.orderId ?? null
 }
 
 const WorkshopBoardPage = () => {
@@ -84,6 +71,14 @@ const WorkshopBoardPage = () => {
   const canOperate = useHasRole('administrador', 'operador')
   const canBand = useHasRole('administrador', 'canteador')
   const [confirm, setConfirm] = useState<ConfirmState | null>(null)
+  // One dialog for the whole board rather than one per card: only one can be open at a time, and it
+  // pages through the queue. State is the ORDER ID, not the index the dialog's API speaks: the queue
+  // polls, so an index would keep pointing at a slot after the order in it was completed elsewhere —
+  // silently showing a different order's materials.
+  const [materialsId, setMaterialsId] = useState<number | null>(null)
+  const materialsIndex = items.findIndex((item) => item.orderId === materialsId)
+
+  const nextId = useMemo(() => nextOrderId(items), [items])
 
   const runAction = (kind: BoardAction, item: WorkshopQueueItem) => {
     const id = String(item.orderId)
@@ -115,233 +110,169 @@ const WorkshopBoardPage = () => {
     setConfirm(null)
   }
 
+  if (isLoading) {
+    return (
+      <div className="text-center py-5">
+        <CSpinner color="primary" />
+      </div>
+    )
+  }
+
   return (
-    <CCard>
-      <CCardBody>
-        <h4 className="mb-3">Tablero de taller</h4>
+    <>
+      <PrintJobsPanel />
 
-        <PrintJobsPanel />
+      {error ? (
+        <CAlert color="danger">{error.message || 'No se pudo cargar el tablero de taller.'}</CAlert>
+      ) : items.length === 0 ? (
+        <div className="text-center text-body-secondary py-5">No hay órdenes en el tablero.</div>
+      ) : (
+        <CRow className="g-3">
+          {items.map((item) => {
+            const bandingBlocked =
+              item.bandingStatus === 'pending' || item.bandingStatus === 'in_progress'
+            const idStr = String(item.orderId)
 
-        {isLoading ? (
-          <div className="text-center py-5">
-            <CSpinner color="primary" />
-          </div>
-        ) : error ? (
-          <CAlert color="danger">
-            {error.message || 'No se pudo cargar el tablero de taller.'}
-          </CAlert>
-        ) : items.length === 0 ? (
-          <div className="text-center text-body-secondary py-5">No hay órdenes en el tablero.</div>
-        ) : (
-          <CRow className="g-3">
-            {items.map((item) => {
-              const bandingBlocked =
-                item.bandingStatus === 'pending' || item.bandingStatus === 'in_progress'
-              const showBanding = item.bandingStatus !== 'not_applicable'
-              const idStr = String(item.orderId)
-
-              let operatorAction: CardAction | null = null
-              if (canOperate) {
-                if (item.status === 'queued') {
-                  operatorAction = {
-                    kind: 'take',
-                    label: 'Tomar',
-                    color: 'primary',
-                    icon: cilMediaPlay,
-                  }
-                } else if (item.status === 'cutting') {
-                  operatorAction = {
-                    kind: 'complete',
-                    label: 'Abrir taller',
-                    color: 'primary',
-                    icon: cilArrowRight,
-                    nav: true,
-                  }
-                } else if (item.status === 'cut') {
-                  operatorAction = {
-                    kind: 'complete',
-                    label: 'Completar',
-                    color: 'success',
-                    icon: cilCheckAlt,
-                    disabled: bandingBlocked,
-                    title: bandingBlocked ? 'Falta terminar el canteado' : undefined,
-                  }
+            let operatorAction: CardAction | null = null
+            if (canOperate) {
+              if (item.status === 'queued') {
+                operatorAction = {
+                  kind: 'take',
+                  label: 'Tomar',
+                  color: 'primary',
+                  icon: cilMediaPlay,
+                }
+              } else if (item.status === 'cutting') {
+                operatorAction = {
+                  kind: 'complete',
+                  label: 'Abrir taller',
+                  color: 'primary',
+                  icon: cilArrowRight,
+                  nav: true,
+                }
+              } else if (item.status === 'cut') {
+                operatorAction = {
+                  kind: 'complete',
+                  label: 'Completar',
+                  color: 'success',
+                  icon: cilCheckAlt,
+                  disabled: bandingBlocked,
+                  title: bandingBlocked ? 'Falta terminar el canteado' : undefined,
                 }
               }
+            }
 
-              let bandingAction: CardAction | null = null
-              if (canBand) {
-                if (
-                  (item.status === 'cutting' || item.status === 'cut') &&
-                  item.bandingStatus === 'pending'
-                ) {
-                  bandingAction = {
-                    kind: 'startBanding',
-                    label: 'Iniciar canteado',
-                    color: 'primary',
-                    icon: cilMediaPlay,
-                  }
-                } else if (
-                  (item.status === 'cutting' || item.status === 'cut') &&
-                  item.bandingStatus === 'in_progress'
-                ) {
-                  bandingAction = {
-                    kind: 'finishBanding',
-                    label: 'Terminar canteado',
-                    color: 'success',
-                    icon: cilCheckAlt,
-                  }
-                } else if (
-                  item.status === 'cut' &&
-                  (item.bandingStatus === 'done' || item.bandingStatus === 'not_applicable')
-                ) {
-                  bandingAction = {
-                    kind: 'complete',
-                    label: 'Completar',
-                    color: 'success',
-                    icon: cilCheckAlt,
-                  }
+            let bandingAction: CardAction | null = null
+            if (canBand) {
+              if (
+                (item.status === 'cutting' || item.status === 'cut') &&
+                item.bandingStatus === 'pending'
+              ) {
+                bandingAction = {
+                  kind: 'startBanding',
+                  label: 'Iniciar canteado',
+                  color: 'primary',
+                  icon: cilMediaPlay,
+                }
+              } else if (
+                (item.status === 'cutting' || item.status === 'cut') &&
+                item.bandingStatus === 'in_progress'
+              ) {
+                bandingAction = {
+                  kind: 'finishBanding',
+                  label: 'Terminar canteado',
+                  color: 'success',
+                  icon: cilCheckAlt,
+                }
+              } else if (
+                item.status === 'cut' &&
+                (item.bandingStatus === 'done' || item.bandingStatus === 'not_applicable')
+              ) {
+                bandingAction = {
+                  kind: 'complete',
+                  label: 'Completar',
+                  color: 'success',
+                  icon: cilCheckAlt,
                 }
               }
+            }
 
-              // Dedupe: administrador with both gates on the same order shouldn't see two
-              // identical "Completar" buttons.
-              if (operatorAction && bandingAction && operatorAction.kind === bandingAction.kind) {
-                bandingAction = null
-              }
+            // Dedupe: administrador with both gates on the same order shouldn't see two
+            // identical "Completar" buttons.
+            if (operatorAction && bandingAction && operatorAction.kind === bandingAction.kind) {
+              bandingAction = null
+            }
 
-              const statusError =
-                updateStatus.isError && updateStatus.variables?.id === idStr
-                  ? updateStatus.error?.message || 'No se pudo actualizar la orden.'
-                  : null
-              const bandingError =
-                updateBanding.isError && updateBanding.variables?.id === idStr
-                  ? updateBanding.error?.message || 'No se pudo actualizar el canteado.'
-                  : null
+            // Both the pending and the error state are scoped to the card that acted: the two
+            // mutations are shared by the whole page, so an unscoped `isPending` froze the buttons
+            // of every other order on the board while one request was in flight.
+            const acting = updateStatus.variables?.id === idStr
+            const bandingActing = updateBanding.variables?.id === idStr
+            const statusError =
+              updateStatus.isError && acting
+                ? updateStatus.error?.message || 'No se pudo actualizar la orden.'
+                : null
+            const bandingError =
+              updateBanding.isError && bandingActing
+                ? updateBanding.error?.message || 'No se pudo actualizar el canteado.'
+                : null
 
-              return (
-                <CCol key={item.orderId} xs={12} md={6} xl={4}>
-                  <CCard className="h-100">
-                    <CCardBody className="d-flex flex-column gap-3">
-                      <div className="d-flex justify-content-between align-items-center gap-2 flex-wrap">
-                        <span className="fs-4 fw-bold">{item.orderCode ?? '—'}</span>
-                        <div className="d-flex gap-1">
-                          <OrderStatusBadge status={item.status} />
-                          {showBanding && <BandingStatusBadge status={item.bandingStatus} />}
-                        </div>
-                      </div>
-                      <div>
-                        <div className="fw-semibold">
-                          {item.client.firstName} {item.client.lastName}
-                        </div>
-                        {/* Reference (project/site): tells apart several orders of the same client. */}
-                        <ReferenceNote notes={item.notes} variant="header" />
-                      </div>
-                      {item.boardUsage.length > 0 && (
-                        <div className="d-flex flex-wrap gap-1">
-                          {item.boardUsage.map((board) => (
-                            <span
-                              key={board.name}
-                              className="badge bg-secondary-subtle text-body-secondary"
-                            >
-                              {board.count}× {board.name}
-                            </span>
-                          ))}
-                        </div>
-                      )}
-                      {item.bandingUsage.length > 0 && (
-                        <div className="d-flex flex-wrap align-items-center gap-1">
-                          <span className="text-body-secondary small">Tapacantos:</span>
-                          {item.bandingUsage.map((banding) => (
-                            <span
-                              key={banding.name}
-                              className="badge bg-info-subtle text-info-emphasis"
-                            >
-                              {banding.name} — {banding.linearM.toFixed(1)} m
-                            </span>
-                          ))}
-                        </div>
-                      )}
-                      {item.progress.totalPieces > 0 && (
-                        <div>
-                          <CProgress className="mb-1">
-                            <CProgressBar
-                              value={pct(item.progress)}
-                              color={isDone(item.progress) ? 'success' : 'primary'}
-                            />
-                          </CProgress>
-                          <div className="text-body-secondary small">
-                            {item.progress.cutPieces}/{item.progress.totalPieces} piezas cortadas
-                          </div>
-                        </div>
-                      )}
-                      <div className="text-body-secondary small">
-                        En cola desde {fmtDateTime(item.createdAt)}
-                      </div>
+            return (
+              <CCol key={item.orderId} xs={12} md={6} xxl={4}>
+                <WorkshopQueueCard
+                  item={item}
+                  isNext={item.orderId === nextId}
+                  operatorAction={operatorAction}
+                  bandingAction={bandingAction}
+                  statusPending={updateStatus.isPending && acting}
+                  bandingPending={updateBanding.isPending && bandingActing}
+                  statusError={statusError}
+                  bandingError={bandingError}
+                  onAction={(action) => {
+                    if (action.nav) void navigate(`/orders/${item.orderId}/workshop`)
+                    else setConfirm({ kind: action.kind, item })
+                  }}
+                  onShowMaterials={() => setMaterialsId(item.orderId)}
+                />
+              </CCol>
+            )
+          })}
+        </CRow>
+      )}
 
-                      <div className="d-flex gap-2 mt-auto">
-                        {operatorAction && (
-                          <CButton
-                            color={operatorAction.color}
-                            className="flex-fill"
-                            disabled={operatorAction.disabled || updateStatus.isPending}
-                            title={operatorAction.title}
-                            onClick={() => {
-                              if (operatorAction.nav)
-                                void navigate(`/orders/${item.orderId}/workshop`)
-                              else setConfirm({ kind: operatorAction.kind, item })
-                            }}
-                          >
-                            <CIcon icon={operatorAction.icon} className="me-1" />
-                            {operatorAction.label}
-                          </CButton>
-                        )}
-                        {bandingAction && (
-                          <CButton
-                            color={bandingAction.color}
-                            className="flex-fill"
-                            disabled={updateBanding.isPending}
-                            onClick={() => setConfirm({ kind: bandingAction.kind, item })}
-                          >
-                            <CIcon icon={bandingAction.icon} className="me-1" />
-                            {bandingAction.label}
-                          </CButton>
-                        )}
-                      </div>
-                      {statusError && <div className="text-danger small">{statusError}</div>}
-                      {bandingError && <div className="text-danger small">{bandingError}</div>}
-                    </CCardBody>
-                  </CCard>
-                </CCol>
-              )
-            })}
-          </CRow>
-        )}
-      </CCardBody>
+      <WorkshopMaterialsModal
+        items={items}
+        index={materialsIndex < 0 ? null : materialsIndex}
+        onIndexChange={(next) => setMaterialsId(items[next]?.orderId ?? null)}
+        onClose={() => setMaterialsId(null)}
+      />
 
       <CModal visible={!!confirm} onClose={() => setConfirm(null)}>
         <CModalHeader>
           <CModalTitle>Confirmar acción</CModalTitle>
         </CModalHeader>
         <CModalBody>
-          <p className="mb-0">
+          <p className="mb-0 fs-5">
             ¿{confirm && ACTION_COPY[confirm.kind].verb} la orden{' '}
             <strong>{confirm?.item.orderCode}</strong>?
           </p>
         </CModalBody>
         <CModalFooter>
-          <CButton color="secondary" onClick={() => setConfirm(null)}>
+          <CButton color="secondary" size="lg" onClick={() => setConfirm(null)}>
             Cancelar
           </CButton>
+          {/* The verb, not a generic "Confirmar": on a touch panel the button you are about to press
+              should say what it does. */}
           <CButton
             color={confirm ? ACTION_COPY[confirm.kind].color : 'primary'}
+            size="lg"
             onClick={confirmAction}
           >
-            Confirmar
+            {confirm ? ACTION_COPY[confirm.kind].label : 'Confirmar'}
           </CButton>
         </CModalFooter>
       </CModal>
-    </CCard>
+    </>
   )
 }
 

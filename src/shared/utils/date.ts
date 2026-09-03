@@ -40,3 +40,9 @@ export const relativeTime = (iso: string): string => {
   const days = Math.round(hours / 24)
   return `hace ${days} d`
 }
+
+// Has `iso` aged past `ms`? Sibling of `relativeTime`, and clock-relative in exactly the same way:
+// both read `Date.now()` when they are called, so a component using either only tells the truth for
+// as long as it takes to re-render. Every caller so far either polls or re-renders often enough.
+export const isOlderThan = (iso: string, ms: number): boolean =>
+  Date.now() - new Date(iso).getTime() > ms

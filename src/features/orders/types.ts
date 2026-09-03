@@ -188,6 +188,22 @@ export interface WorkshopQueueItem {
   printConsolidatedEnabled: boolean
 }
 
+// The four transitions the workshop board offers on a card. `complete` is reachable from both
+// tracks: the operador completes a cut order, the canteador completes one whose banding is done.
+export type BoardAction = 'take' | 'complete' | 'startBanding' | 'finishBanding'
+
+// One button on a queue card, derived per item from the viewer's roles and the order's two statuses.
+// `nav` means the button navigates to the cutting canvas instead of confirming a transition.
+export interface CardAction {
+  kind: BoardAction
+  label: string
+  color: 'primary' | 'success'
+  icon: string[]
+  disabled?: boolean
+  title?: string
+  nav?: boolean
+}
+
 export interface AssociateInvoicePayload {
   externalInvoiceId: string
   [key: string]: unknown

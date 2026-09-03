@@ -89,6 +89,11 @@ export const useWorkshopQueue = () =>
   useQuery({
     queryKey: WORKSHOP_QUEUE_KEY,
     queryFn: () => ordersApi.getWorkshopQueue(),
+    // The board is shared: the operador takes an order on the shop-floor panel and, without this,
+    // the canteador's screen keeps offering "Tomar" on it until someone reloads. Same interval as
+    // `usePrintJobs`, which paints directly above it. It also keeps each card's "en cola hace N min"
+    // moving without a re-render of its own.
+    refetchInterval: 15000,
   })
 
 export const useAssociateInvoice = () => {
