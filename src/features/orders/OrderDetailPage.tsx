@@ -116,6 +116,7 @@ const OrderDetailPage = () => {
   const [branchNote, setBranchNote] = useState('')
   const [paymentModal, setPaymentModal] = useState(false)
   const [cashInput, setCashInput] = useState('')
+  const [transferInput, setTransferInput] = useState('')
   const [creditInput, setCreditInput] = useState('')
   const [paymentNote, setPaymentNote] = useState('')
 
@@ -151,6 +152,7 @@ const OrderDetailPage = () => {
 
   const openPayment = () => {
     setCashInput('')
+    setTransferInput('')
     setCreditInput('')
     setPaymentNote('')
     updateStatus.reset()
@@ -160,32 +162,42 @@ const OrderDetailPage = () => {
     setPaymentModal(false)
     updateStatus.reset()
   }
+  // Credit is the designated balance: typing cash or transfer recomputes it as what is left of the
+  // order total. With three methods there is no single "other" field the remainder can go to, so
+  // one of them has to be it — and credit is the one the seller is least likely to type first.
+  const settleCredit = (cash: string, transfer: string) => {
+    const rest = (order?.total ?? 0) - (parseFloat(cash) || 0) - (parseFloat(transfer) || 0)
+    setCreditInput(Math.max(rest, 0).toFixed(2))
+  }
   const handleCashChange = (raw: string) => {
     setCashInput(raw)
-    const cash = parseFloat(raw)
-    if (raw === '' || isNaN(cash)) {
-      setCreditInput('')
-      return
-    }
-    const remaining = Math.max((order?.total ?? 0) - cash, 0)
-    setCreditInput(remaining.toFixed(2))
+    settleCredit(raw, transferInput)
   }
-  const handleCreditChange = (raw: string) => {
-    setCreditInput(raw)
-    const credit = parseFloat(raw)
-    if (raw === '' || isNaN(credit)) {
-      setCashInput('')
-      return
-    }
-    const remaining = Math.max((order?.total ?? 0) - credit, 0)
-    setCashInput(remaining.toFixed(2))
+  const handleTransferChange = (raw: string) => {
+    setTransferInput(raw)
+    settleCredit(cashInput, raw)
   }
+  // Typed directly, credit is taken at face value: it is the saldo only when the other two move.
+  const handleCreditChange = (raw: string) => setCreditInput(raw)
+  // No shortcut for credit: "todo a crédito" is not a payment the counter registers on the spot,
+  // and the field is the balance anyway — zeroing the other two already leaves the whole total there.
+  const payAllWith = (method: 'cash' | 'transfer') => {
+    const total = (order?.total ?? 0).toFixed(2)
+    setCashInput(method === 'cash' ? total : '0.00')
+    setTransferInput(method === 'transfer' ? total : '0.00')
+    setCreditInput('0.00')
+  }
+  // Single source for the sum: the modal shows it and the confirm button gates on it.
+  const enteredPayment = () =>
+    (parseFloat(cashInput) || 0) + (parseFloat(transferInput) || 0) + (parseFloat(creditInput) || 0)
   const confirmPayment = () => {
     if (!id) return
     const cash = parseFloat(cashInput) || 0
+    const transfer = parseFloat(transferInput) || 0
     const credit = parseFloat(creditInput) || 0
-    const payment: { cashAmount?: number; creditAmount?: number } = {}
+    const payment: { cashAmount?: number; transferAmount?: number; creditAmount?: number } = {}
     if (cash > 0) payment.cashAmount = cash
+    if (transfer > 0) payment.transferAmount = transfer
     if (credit > 0) payment.creditAmount = credit
     updateStatus.mutate(
       { id, data: { status: 'queued', payment, note: paymentNote || undefined } },
@@ -283,8 +295,9 @@ const OrderDetailPage = () => {
   const filesBytes = files.reduce((sum, a) => sum + a.sizeBytes, 0)
 
   const cash = order.paymentCashAmount ?? 0
+  const transfer = order.paymentTransferAmount ?? 0
   const credit = order.paymentCreditAmount ?? 0
-  const hasPayment = cash > 0 || credit > 0
+  const hasPayment = cash > 0 || transfer > 0 || credit > 0
   const hasHistory = !!order.history && order.history.length > 0
 
   return (
@@ -485,6 +498,12 @@ const OrderDetailPage = () => {
                   <strong>{fmtMoney(cash)}</strong>
                 </div>
               )}
+              {transfer > 0 && (
+                <div>
+                  <span className="text-body-secondary me-2">Transferencia:</span>
+                  <strong>{fmtMoney(transfer)}</strong>
+                </div>
+              )}
               {credit > 0 && (
                 <div>
                   <span className="text-body-secondary me-2">A crédito:</span>
@@ -599,20 +618,29 @@ const OrderDetailPage = () => {
         </CModalHeader>
         <CModalBody>
           {(() => {
-            const entered = (parseFloat(cashInput) || 0) + (parseFloat(creditInput) || 0)
+            const entered = enteredPayment()
             const orderTotal = order.total
             const empty = entered <= 0
             const mismatch = !empty && Math.abs(entered - orderTotal) > 0.01
+            const pending = orderTotal - entered
             return (
               <>
-                <div className="d-flex gap-2 mb-3">
+                <div className="d-flex flex-wrap gap-2 mb-3">
                   <CButton
                     color="primary"
                     variant="outline"
                     size="sm"
-                    onClick={() => handleCashChange(orderTotal.toFixed(2))}
+                    onClick={() => payAllWith('cash')}
                   >
                     Todo efectivo
+                  </CButton>
+                  <CButton
+                    color="primary"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => payAllWith('transfer')}
+                  >
+                    Todo transferencia
                   </CButton>
                 </div>
                 <div className="mb-3">
@@ -627,6 +655,17 @@ const OrderDetailPage = () => {
                   />
                 </div>
                 <div className="mb-3">
+                  <CFormLabel>Transferencia (USD)</CFormLabel>
+                  <CFormInput
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    value={transferInput}
+                    onChange={(e) => handleTransferChange(e.target.value)}
+                    placeholder="0.00"
+                  />
+                </div>
+                <div className="mb-3">
                   <CFormLabel>A crédito (USD)</CFormLabel>
                   <CFormInput
                     type="number"
@@ -636,9 +675,19 @@ const OrderDetailPage = () => {
                     onChange={(e) => handleCreditChange(e.target.value)}
                     placeholder="0.00"
                   />
+                  <div className="form-text">
+                    Se calcula solo como el saldo al escribir efectivo o transferencia.
+                  </div>
                 </div>
-                <div className="fw-semibold small mb-3">
+                <div className="fw-semibold small mb-1">
                   Total ingresado: {fmtMoney(entered)} / Total de la orden: {fmtMoney(orderTotal)}
+                </div>
+                <div
+                  className={`small mb-3 ${Math.abs(pending) <= 0.01 ? 'text-body-secondary' : 'fw-semibold'}`}
+                >
+                  {pending < -0.01
+                    ? `Excede el total en ${fmtMoney(-pending)}`
+                    : `Falta por asignar: ${fmtMoney(Math.max(pending, 0))}`}
                 </div>
                 {empty && (
                   <div className="text-warning small mb-2">
@@ -678,7 +727,7 @@ const OrderDetailPage = () => {
             color="primary"
             onClick={confirmPayment}
             disabled={(() => {
-              const entered = (parseFloat(cashInput) || 0) + (parseFloat(creditInput) || 0)
+              const entered = enteredPayment()
               return (
                 updateStatus.isPending || entered <= 0 || Math.abs(entered - order.total) > 0.01
               )

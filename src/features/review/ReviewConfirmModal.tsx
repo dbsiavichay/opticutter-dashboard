@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import {
+  CAlert,
   CButton,
   CFormCheck,
   CModal,
@@ -63,6 +64,16 @@ const ReviewConfirmModal = ({
           {totalPieces === 1 ? 'pieza' : 'piezas'}
         </div>
 
+        {/* The order is born `confirmed` but only enters the cutting queue once someone registers
+            the payment, so the note that used to say "pasa a producción" was telling the client the
+            opposite of what happens. It is an alert, not muted small print: a client who believes
+            the saw is already running is the one who calls the shop the next day. */}
+        <CAlert color="info" className="small py-2">
+          <strong>Confirmar no inicia el corte.</strong> Tu pedido entra a la cola de producción una
+          vez registrado el pago: comunícate con tu asesor para coordinarlo y lo atendemos cuanto
+          antes.
+        </CAlert>
+
         <CFormCheck
           id="review-declaration"
           checked={accepted}
@@ -71,8 +82,7 @@ const ReviewConfirmModal = ({
         />
 
         <div className="text-body-secondary small mt-3">
-          Una vez confirmado, el pedido pasa a producción y ya no se puede modificar desde este
-          enlace.
+          Una vez confirmado, el pedido queda en firme y ya no se puede modificar desde este enlace.
         </div>
 
         {error && <div className="text-danger small mt-2">{error}</div>}
