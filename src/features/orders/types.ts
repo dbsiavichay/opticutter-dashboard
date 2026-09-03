@@ -101,8 +101,10 @@ export interface Order {
   dispatchedAt?: string
   dispatchedBy?: number
   dispatchedByLabel?: string
-  // Payment: fields frozen at the confirmed → queued transition.
+  // Payment: fields frozen at the confirmed → queued transition. An order registered before
+  // transferencia existed simply leaves that one null.
   paymentCashAmount?: number | null
+  paymentTransferAmount?: number | null
   paymentCreditAmount?: number | null
 }
 
@@ -130,7 +132,7 @@ export type OrderSort = 'oldest' | 'recent'
 export interface UpdateStatusPayload {
   status: OrderStatus
   note?: string
-  payment?: { cashAmount?: number; creditAmount?: number }
+  payment?: { cashAmount?: number; transferAmount?: number; creditAmount?: number }
 }
 
 // --- Change branch (rebalancing before the workshop starts cutting) ---

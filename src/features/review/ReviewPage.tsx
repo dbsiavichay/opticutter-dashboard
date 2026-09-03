@@ -257,6 +257,13 @@ const ReviewPage = () => {
         <CAlert color="success">
           Tu pedido <strong>{data.orderCode}</strong> está confirmado
           {data.confirmedAt ? ` (${fmtDateTime(data.confirmedAt)})` : ''}.
+          {/* Repeated here on purpose: the modal that carried this message is gone by now, and this
+              banner is the whole page the client sees after confirming. */}
+          <div className="mt-1 small">
+            El corte todavía no inicia: tu pedido entra a la cola de producción una vez registrado
+            el pago. <strong>Comunícate con tu asesor</strong> para coordinarlo y lo atendemos
+            cuanto antes.
+          </div>
         </CAlert>
       )}
 
