@@ -10,8 +10,9 @@ import {
   buildPayload,
   canonicalMaterialKeys,
   cloneMaterial,
-  emptyCatalogMaterial,
+  emptyMaterial,
   isPristineMaterial,
+  normalizeMaterials,
   isRequirementEmpty,
   piecesMissingBandingProduct,
   requirementIssues,
@@ -60,8 +61,8 @@ const OptimizerPage = () => {
   // to hydrate the initial state, instead of a mount effect with setState.
   const [bootstrap] = useState(loadAutosave)
 
-  const [materials, setMaterials] = useState<MaterialForm[]>(
-    () => bootstrap?.materials ?? [emptyCatalogMaterial()],
+  const [materials, setMaterials] = useState<MaterialForm[]>(() =>
+    bootstrap?.materials ? normalizeMaterials(bootstrap.materials) : [emptyMaterial()],
   )
   const [showImport, setShowImport] = useState(false)
   const [deleteTarget, setDeleteTarget] = useState<MaterialForm | null>(null)
@@ -123,7 +124,15 @@ const OptimizerPage = () => {
     expand: groups.expand,
   })
 
-  const addMaterial = () => setMaterials((ms) => [...ms, emptyCatalogMaterial()])
+  // Returns the new uid so the list can open its material modal on it: with the
+  // inline board form gone, "Agregar material" would otherwise leave an empty
+  // card and make the seller hunt for the way in. Same number of clicks as when
+  // the form auto-opened.
+  const addMaterial = () => {
+    const created = emptyMaterial()
+    setMaterials((ms) => [...ms, created])
+    return created.uid
+  }
   const updateMaterial = <K extends keyof MaterialForm>(
     uid: string,
     field: K,
@@ -157,7 +166,7 @@ const OptimizerPage = () => {
     pieces.removePiecesOf(deleteTarget.uid)
     setMaterials((ms) => {
       const remaining = ms.filter((m) => m.uid !== deleteTarget.uid)
-      return remaining.length ? remaining : [emptyCatalogMaterial()]
+      return remaining.length ? remaining : [emptyMaterial()]
     })
     setDeleteTarget(null)
   }
@@ -213,7 +222,7 @@ const OptimizerPage = () => {
   // Is there work that would be lost on reset? (more than one material, any with data, or non-empty pieces)
   const hasWork =
     materials.length > 1 ||
-    materials.some((m) => m.boardId || m.label || m.height !== '' || m.width !== '') ||
+    materials.some((m) => m.boardId || m.label || (m.offcuts ?? []).length > 0) ||
     hasPieceData
 
   // Debounced autosave: persists the form state as-is (including incomplete rows).
@@ -274,7 +283,7 @@ const OptimizerPage = () => {
   })
 
   const resetWorkspace = () => {
-    setMaterials([emptyCatalogMaterial()])
+    setMaterials([emptyMaterial()])
     pieces.clear()
     services.set([])
     setDraftId(null)
@@ -329,7 +338,8 @@ const OptimizerPage = () => {
     setLoadingDraftId(id)
     try {
       const d = await draftsApi.get(id)
-      setMaterials(d.payload.materials)
+      // Drafts saved before the material modal carry the old shape.
+      setMaterials(normalizeMaterials(d.payload.materials))
       pieces.addMany(d.payload.requirements, true)
       // Optional: drafts saved before services existed have no such key.
       services.set((d.payload.additionalServices ?? []).map(serviceLineFromApi))
@@ -595,7 +605,7 @@ const OptimizerPage = () => {
     setMaterials((ms) => {
       const merged = [...ms, ...newMaterials]
       const kept = merged.filter((m) => used.has(m.uid) || (!replace && !isPristineMaterial(m)))
-      return kept.length ? kept : [emptyCatalogMaterial()]
+      return kept.length ? kept : [emptyMaterial()]
     })
   }
 
@@ -622,7 +632,7 @@ const OptimizerPage = () => {
               onPieces
                 ? () => {
                     pieces.clear()
-                    setMaterials([emptyCatalogMaterial()])
+                    setMaterials([emptyMaterial()])
                   }
                 : undefined
             }

@@ -10,9 +10,17 @@ import type {
 
 // --- Form model (during editing; numbers may be '' while the user is typing) ---
 
-// A client/company offcut attached to a catalog board: extra finite stock of the
-// SAME material, so the optimizer can pack a group's pieces across board + offcuts.
+// A client/company offcut attached to another material: extra finite stock of the
+// SAME material, so the optimizer can pack a group's pieces across the anchor +
+// its offcuts. The anchor is usually a catalog board, but it can be another
+// retazo — that is how a job cut only on the client's material is expressed.
 export type OffcutSource = 'clientOffcut' | 'companyOffcut'
+
+// A retazo is a physical piece somebody owns, so its supply is finite and its
+// cost is only the workshop's business: the client's own material is never
+// billed (the API coerces it to 0 regardless of what we send).
+export const isOffcutSource = (source: MaterialSourceKind): source is OffcutSource =>
+  source === 'clientOffcut' || source === 'companyOffcut'
 
 export interface OffcutForm {
   uid: string
@@ -25,16 +33,22 @@ export interface OffcutForm {
   quantity: number | string
 }
 
+// One group = "where the material for these pieces comes from": a catalog board,
+// a set of retazos, or both. There is deliberately no `source` here any more.
+// The API needs one material to be the pool's ANCHOR and the rest to hang off it,
+// but which retazo plays that role is an implementation detail of `buildPayload`
+// — physically they are the same thing, and making the seller nominate one was
+// the single most confusing part of the old card.
 export interface MaterialForm {
   uid: string
-  source: MaterialSourceKind
-  boardId: string // catalog: board product id
-  label: string // inline sources (manual/offcut)
-  height: number | string
-  width: number | string
-  thickness: number | string
-  costPerUnit: number | string
-  // Catalog boards only: attached offcuts (same material) + their fill order.
+  // Catalog board product id. Empty = no board: the pieces are cut on `offcuts`
+  // alone, which is how a job on the client's own retazos is expressed.
+  boardId: string
+  // Free text the CSV import writes to tell board-less groups apart before a
+  // board is picked.
+  label: string
+  // Retazos of this same material. `fillOrder` only means something next to a
+  // board, since it decides board-vs-retazo priority.
   offcuts?: OffcutForm[]
   fillOrder?: PoolFillOrder
   // Catalog boards only: is this board billed at the quote's price level rather than the list
@@ -91,20 +105,66 @@ export const emptyEdgeBanding = (): EdgeBandingForm => ({
   bandType: '',
 })
 
-export const emptyCatalogMaterial = (): MaterialForm => ({
+export const emptyMaterial = (): MaterialForm => ({
   uid: nextUid(),
-  source: 'catalog',
   boardId: '',
   label: '',
-  height: '',
-  width: '',
-  thickness: '',
-  costPerUnit: '',
   offcuts: [],
   fillOrder: 'auto',
   applyPriceLevel: false,
   wholeBoard: false,
 })
+
+// Legacy autosaves, drafts and pre-orders carry the pre-modal shape, where a
+// group could BE a retazo (`source` + inline dims) with its siblings nested. That
+// asymmetry is gone, so the old anchor becomes just another row in `offcuts` and
+// every consumer below sees one shape. Cheap and idempotent: a group that already
+// has no `source` passes straight through.
+interface LegacyMaterialForm extends MaterialForm {
+  source?: MaterialSourceKind
+  height?: number | string
+  width?: number | string
+  thickness?: number | string
+  costPerUnit?: number | string
+  quantity?: number | string
+}
+
+export const normalizeMaterial = (m: MaterialForm): MaterialForm => {
+  const legacy = m as LegacyMaterialForm
+  if (!legacy.source || legacy.source === 'catalog') {
+    return {
+      uid: m.uid,
+      boardId: m.boardId ?? '',
+      label: m.label ?? '',
+      offcuts: m.offcuts ?? [],
+      fillOrder: m.fillOrder,
+      applyPriceLevel: m.applyPriceLevel,
+      wholeBoard: m.wholeBoard,
+    }
+  }
+  const anchor: OffcutForm = {
+    uid: nextUid(),
+    source: legacy.source === 'companyOffcut' ? 'companyOffcut' : 'clientOffcut',
+    label: legacy.label ?? '',
+    height: legacy.height ?? '',
+    width: legacy.width ?? '',
+    thickness: legacy.thickness ?? '',
+    costPerUnit: legacy.costPerUnit ?? '',
+    quantity: legacy.quantity ?? 1,
+  }
+  return {
+    uid: m.uid,
+    boardId: '',
+    label: '',
+    offcuts: [anchor, ...(m.offcuts ?? [])],
+    fillOrder: m.fillOrder,
+    applyPriceLevel: m.applyPriceLevel,
+    wholeBoard: m.wholeBoard,
+  }
+}
+
+export const normalizeMaterials = (materials: MaterialForm[]): MaterialForm[] =>
+  materials.map(normalizeMaterial)
 
 export const emptyOffcut = (source: OffcutSource = 'clientOffcut'): OffcutForm => ({
   uid: nextUid(),
@@ -128,9 +188,10 @@ export const cloneMaterial = (m: MaterialForm): MaterialForm => ({
   offcuts: m.offcuts ? m.offcuts.map((o) => ({ ...o, uid: nextUid() })) : m.offcuts,
 })
 
-// Valid offcuts attached to a catalog board (empty for non-catalog materials).
+// Valid offcuts attached to this material. Any anchor may carry them: a catalog
+// board (board + retazos) or a retazo (retazos only).
 export const validOffcuts = (m: MaterialForm): OffcutForm[] =>
-  m.source === 'catalog' ? (m.offcuts ?? []).filter(isOffcutValid) : []
+  (m.offcuts ?? []).filter(isOffcutValid)
 
 export const hasOffcuts = (m: MaterialForm): boolean => validOffcuts(m).length > 0
 
@@ -145,22 +206,16 @@ export const emptyRequirement = (materialUid = ''): RequirementForm => ({
   edgeBanding: emptyEdgeBanding(),
 })
 
-// A starter group the user never touched: a catalog material with nothing filled in. Used after a
+// A starter group the user never touched: nothing filled in at all. Used after a
 // CSV import to drop the blank card the page opens with once the import brought its own groups.
 export const isPristineMaterial = (m: MaterialForm): boolean =>
-  m.source === 'catalog' &&
-  !m.boardId &&
-  !m.label.trim() &&
-  m.height === '' &&
-  m.width === '' &&
-  m.thickness === '' &&
-  m.costPerUnit === '' &&
-  (m.offcuts ?? []).length === 0
+  !m.boardId && !m.label.trim() && (m.offcuts ?? []).length === 0
 
+// A group can be cut from as soon as it names a board OR carries one usable
+// retazo. Both together is the mixed pool; neither is a card the seller has not
+// finished filling in.
 export const isMaterialValid = (m: MaterialForm): boolean =>
-  m.source === 'catalog'
-    ? !!m.boardId
-    : Number(m.height) > 0 && Number(m.width) > 0 && Number(m.thickness) > 0
+  !!m.boardId || validOffcuts(m).length > 0
 
 export const selectedSides = (eb: EdgeBandingForm): EdgeSide[] =>
   EDGE_SIDES.filter((s) => eb.sides[s.key]).map((s) => s.key)
@@ -257,17 +312,23 @@ export const requirementIssues = (
 }
 
 // Human-readable label for a material, used in the pieces dropdown and diagram.
+export const offcutLabel = (o: OffcutForm): string => {
+  if (o.label.trim()) return o.label.trim()
+  const dims = [o.height, o.width, o.thickness].filter((v) => v !== '' && v != null).join('×')
+  return dims ? `${SOURCE_LABELS[o.source]} ${dims}` : SOURCE_LABELS[o.source]
+}
+
 export const materialLabel = (m: MaterialForm, boards: BoardProduct[]): string => {
-  if (m.source === 'catalog') {
+  if (m.boardId) {
     // Product id may arrive as a number at runtime; compare as string to be safe.
     const b = boards.find((x) => String(x.id) === String(m.boardId))
     if (b) return `${b.name} (${b.code})`
-    // CSV import pre-labels a group with the text that created it, before a board is picked.
-    return m.label.trim() || 'Tablero sin elegir'
   }
-  if (m.label.trim()) return m.label.trim()
-  const dims = [m.height, m.width, m.thickness].filter((v) => v !== '' && v != null).join('×')
-  return dims ? `${SOURCE_LABELS[m.source]} ${dims}` : SOURCE_LABELS[m.source]
+  // No board: the group is named after the retazo the pieces will be cut on.
+  const [first] = validOffcuts(m)
+  if (first) return offcutLabel(first)
+  // CSV import pre-labels a group with the text that created it, before a board is picked.
+  return m.label.trim() || 'Material sin definir'
 }
 
 export interface BuiltPayload {
@@ -288,7 +349,7 @@ export const canonicalMaterialKeys = (materials: MaterialForm[]): Map<string, st
   const canonicalKey = new Map<string, string>()
   const catalogCanonical = new Map<number, string>()
   for (const m of materials.filter(isMaterialValid)) {
-    if (m.source === 'catalog' && !hasOffcuts(m)) {
+    if (m.boardId && !hasOffcuts(m)) {
       const productId = Number(m.boardId)
       const existing = catalogCanonical.get(productId)
       if (existing) {
@@ -313,7 +374,7 @@ const mergedMarks = (
 ): Map<string, { applyPriceLevel: boolean; wholeBoard: boolean }> => {
   const marks = new Map<string, { applyPriceLevel: boolean; wholeBoard: boolean }>()
   for (const m of materials) {
-    if (m.source !== 'catalog') continue
+    if (!m.boardId) continue
     const key = canonicalKey.get(m.uid)
     if (!key) continue
     const acc = marks.get(key)
@@ -324,6 +385,27 @@ const mergedMarks = (
   }
   return marks
 }
+
+// The client's own retazo is never billed: the shop charges the cutting and the
+// banding as additional services instead. Zeroed here as well as server-side so
+// the staleness signature and the payload agree with what the UI shows.
+const offcutCost = (o: OffcutForm): number =>
+  o.source === 'clientOffcut' ? 0 : Number(o.costPerUnit) || 0
+
+// One retazo as a payload material. ``key`` is passed in because the pool's
+// ANCHOR is emitted under the GROUP's uid — that is what keeps the requirements,
+// which point at the group, resolving — while its siblings keep their own.
+const offcutInput = (o: OffcutForm, key: string, poolKey?: string): InlineMaterialInput => ({
+  key,
+  source: o.source,
+  height: Number(o.height),
+  width: Number(o.width),
+  thickness: Number(o.thickness),
+  costPerUnit: offcutCost(o),
+  label: o.label.trim() || undefined,
+  quantity: Number(o.quantity) || 1,
+  ...(poolKey ? { poolKey } : {}),
+})
 
 // Builds the contract's materials[] + requirements[] from form state. Each material uses its `uid`
 // as `key`; pieces reference it via `materialKey`. Only materials actually used by a valid piece are included.
@@ -341,54 +423,41 @@ export const buildPayload = (
   const canonicalKey = canonicalMaterialKeys(materials)
   const marks = mergedMarks(validMaterials, canonicalKey)
 
-  const mappedMaterials: MaterialInput[] = validMaterials
-    .filter((m) => canonicalKey.get(m.uid) === m.uid)
-    .map((m) => {
-      if (m.source === 'catalog') {
-        const base = {
-          key: m.uid,
-          source: 'catalog' as const,
-          productId: Number(m.boardId),
-          // Read off the merged marks, not off `m`: two blocks of the same board become ONE payload
-          // material, and taking only the canonical block's flags dropped a mark set on the other.
-          // Only when marked: an omitted flag reads as false on the API and keeps the payload — and
-          // the staleness signature built from it — identical to before this feature for every quote
-          // that levels nothing.
-          ...(marks.get(m.uid)?.applyPriceLevel ? { applyPriceLevel: true } : {}),
-          ...(marks.get(m.uid)?.wholeBoard ? { wholeBoard: true } : {}),
-        }
-        // Only carry fillOrder when the board actually anchors a pool of offcuts.
-        return hasOffcuts(m) ? { ...base, fillOrder: m.fillOrder ?? 'auto' } : base
-      }
-      return {
-        key: m.uid,
-        source: m.source,
-        height: Number(m.height),
-        width: Number(m.width),
-        thickness: Number(m.thickness),
-        costPerUnit: Number(m.costPerUnit) || 0,
-        label: m.label.trim() || undefined,
-      }
-    })
-
-  // Pooled offcuts: extra finite stock of a catalog board. Emitted with a poolKey
-  // pointing at that board's key; not referenced by any requirement.
+  // One payload material per canonical group. With a board it is the catalog
+  // entry and every retazo hangs off it; without one, the FIRST retazo takes the
+  // group's key and becomes the anchor the rest hang off. Either way the pieces
+  // keep pointing at the group and never at a retazo — which is why the seller
+  // never has to nominate one.
+  const mappedMaterials: MaterialInput[] = []
   const pooledOffcuts: InlineMaterialInput[] = []
   for (const m of validMaterials) {
-    if (m.source !== 'catalog' || canonicalKey.get(m.uid) !== m.uid) continue
-    for (const o of validOffcuts(m)) {
-      pooledOffcuts.push({
-        key: o.uid,
-        source: o.source,
-        height: Number(o.height),
-        width: Number(o.width),
-        thickness: Number(o.thickness),
-        costPerUnit: Number(o.costPerUnit) || 0,
-        label: o.label.trim() || undefined,
-        quantity: Number(o.quantity) || 1,
-        poolKey: m.uid,
-      })
+    if (canonicalKey.get(m.uid) !== m.uid) continue
+    const retazos = validOffcuts(m)
+
+    if (m.boardId) {
+      const base = {
+        key: m.uid,
+        source: 'catalog' as const,
+        productId: Number(m.boardId),
+        // Read off the merged marks, not off `m`: two blocks of the same board become ONE payload
+        // material, and taking only the canonical block's flags dropped a mark set on the other.
+        // Only when marked: an omitted flag reads as false on the API and keeps the payload — and
+        // the staleness signature built from it — identical to before this feature for every quote
+        // that levels nothing.
+        ...(marks.get(m.uid)?.applyPriceLevel ? { applyPriceLevel: true } : {}),
+        ...(marks.get(m.uid)?.wholeBoard ? { wholeBoard: true } : {}),
+      }
+      // Only carry fillOrder when the board actually anchors a pool of retazos.
+      mappedMaterials.push(retazos.length ? { ...base, fillOrder: m.fillOrder ?? 'auto' } : base)
+      for (const o of retazos) pooledOffcuts.push(offcutInput(o, o.uid, m.uid))
+      continue
     }
+
+    // `isMaterialValid` guarantees a retazo when there is no board.
+    const [anchor, ...rest] = retazos
+    if (!anchor) continue
+    mappedMaterials.push(offcutInput(anchor, m.uid))
+    for (const o of rest) pooledOffcuts.push(offcutInput(o, o.uid, m.uid))
   }
 
   const validReqs = requirements.filter((r) => isRequirementValid(r, validUids))
@@ -411,7 +480,7 @@ export const buildPayload = (
 
   const usedUids = new Set(mappedReqs.map((r) => r.materialKey))
   const materialsUsed = mappedMaterials.filter((m) => usedUids.has(m.key))
-  // Keep a pooled offcut when its parent catalog board is actually used.
+  // Keep a pooled retazo when the group it hangs off is actually used.
   const offcutsUsed = pooledOffcuts.filter((o) => o.poolKey != null && usedUids.has(o.poolKey))
 
   return {
