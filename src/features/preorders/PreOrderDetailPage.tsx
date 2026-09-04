@@ -15,7 +15,6 @@ import {
 import type {
   MaterialForm,
   OffcutForm,
-  OffcutSource,
   RequirementForm,
 } from 'src/features/optimizer/optimizerForm'
 import type {
@@ -30,7 +29,7 @@ import {
   buildPayload,
   canonicalMaterialKeys,
   cloneMaterial,
-  emptyCatalogMaterial,
+  emptyMaterial,
   emptyEdgeBanding,
   isPristineMaterial,
   nextUid,
@@ -84,13 +83,32 @@ import PiecesSelectionBar from 'src/features/optimizer/PiecesSelectionBar'
 import PiecesSummary from 'src/features/optimizer/PiecesSummary'
 
 // Convert stored API format back to editable form state
+// One stored inline material as a retazo row. The same shape whether it was the
+// pool's anchor or one of its attached siblings — which is the point: the API's
+// anchor is not a distinction the form keeps.
+function offcutForm(m: InlineMaterialInput, uid: string): OffcutForm {
+  return {
+    uid,
+    source: m.source === 'companyOffcut' ? 'companyOffcut' : 'clientOffcut',
+    label: m.label ?? '',
+    height: m.height,
+    width: m.width,
+    thickness: m.thickness,
+    costPerUnit: m.costPerUnit ?? 0,
+    // Round-tripped like everything else: dropping it turned a client's two
+    // retazos back into one on every reopen.
+    quantity: m.quantity ?? 1,
+  }
+}
+
 function formFromPreOrderData(
   materials: MaterialInput[],
   requirements: RequirementInput[],
 ): { materials: MaterialForm[]; requirements: RequirementForm[] } {
   const keyToUid = new Map<string, string>()
-  // Catalog forms indexed by material key so pooled offcuts can re-attach to them.
-  const catalogByKey = new Map<string, MaterialForm>()
+  // Every material a pooled offcut may hang off, by stored key. Not just the
+  // catalog boards: a quote cut on the client's retazos anchors on one of them.
+  const anchorByKey = new Map<string, MaterialForm>()
   const matForms: MaterialForm[] = []
   const pooledOffcuts: InlineMaterialInput[] = []
   // Every uid handed out here, materials and pooled offcuts alike: they share one namespace, since
@@ -119,13 +137,8 @@ function formFromPreOrderData(
     if (m.source === 'catalog') {
       const form: MaterialForm = {
         uid,
-        source: 'catalog',
         boardId: String(m.productId),
         label: '',
-        height: '',
-        width: '',
-        thickness: '',
-        costPerUnit: '',
         offcuts: [],
         fillOrder: m.fillOrder ?? 'auto',
         // A quote saved before the per-board marks shipped has no flag: it reads as
@@ -133,38 +146,29 @@ function formFromPreOrderData(
         applyPriceLevel: m.applyPriceLevel ?? false,
         wholeBoard: m.wholeBoard ?? false,
       }
-      catalogByKey.set(m.key, form)
+      anchorByKey.set(m.key, form)
       matForms.push(form)
     } else {
-      matForms.push({
+      // A board-less group: the stored anchor is a retazo like any other, so it
+      // becomes the FIRST row of `offcuts` rather than a property of the group.
+      // The group keeps the stored key as its uid — the per-board marks and the
+      // loaded `optimization` rows are keyed by it.
+      const form: MaterialForm = {
         uid,
-        source: m.source,
         boardId: '',
-        label: m.label ?? '',
-        height: m.height,
-        width: m.width,
-        thickness: m.thickness,
-        costPerUnit: m.costPerUnit ?? 0,
-      })
+        label: '',
+        offcuts: [offcutForm(m, uidFor(`${m.key}#anchor`))],
+      }
+      anchorByKey.set(m.key, form)
+      matForms.push(form)
     }
   }
 
-  // Re-attach each pooled offcut to its parent catalog board (orphans ignored).
+  // Re-attach each pooled retazo to its anchor group (orphans ignored).
   for (const o of pooledOffcuts) {
-    const parent = o.poolKey ? catalogByKey.get(o.poolKey) : undefined
+    const parent = o.poolKey ? anchorByKey.get(o.poolKey) : undefined
     if (!parent) continue
-    const source: OffcutSource = o.source === 'companyOffcut' ? 'companyOffcut' : 'clientOffcut'
-    const offcut: OffcutForm = {
-      uid: uidFor(o.key),
-      source,
-      label: o.label ?? '',
-      height: o.height,
-      width: o.width,
-      thickness: o.thickness,
-      costPerUnit: o.costPerUnit ?? 0,
-      quantity: o.quantity ?? 1,
-    }
-    parent.offcuts = [...(parent.offcuts ?? []), offcut]
+    parent.offcuts = [...(parent.offcuts ?? []), offcutForm(o, uidFor(o.key))]
   }
   const reqForms: RequirementForm[] = requirements.map((r) => ({
     materialUid: keyToUid.get(r.materialKey) ?? '',
@@ -230,7 +234,7 @@ const PreOrderView = ({ preOrder }: { preOrder: PreOrder }) => {
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
   const [materials, setMaterials] = useState<MaterialForm[]>(
-    () => initialFormData?.materials ?? [emptyCatalogMaterial()],
+    () => initialFormData?.materials ?? [emptyMaterial()],
   )
   const serviceLines = useServiceLines(() =>
     (preOrder.additionalServices ?? []).map(serviceLineFromApi),
@@ -387,7 +391,15 @@ const PreOrderView = ({ preOrder }: { preOrder: PreOrder }) => {
     doSave(next)
   }
 
-  const addMaterial = () => setMaterials((ms) => [...ms, emptyCatalogMaterial()])
+  // Returns the new uid so the list can open its material modal on it: with the
+  // inline board form gone, "Agregar material" would otherwise leave an empty
+  // card and make the seller hunt for the way in. Same number of clicks as when
+  // the form auto-opened.
+  const addMaterial = () => {
+    const created = emptyMaterial()
+    setMaterials((ms) => [...ms, created])
+    return created.uid
+  }
 
   // Import: pieces plus the material groups the CSV declared. "Replace" makes the workspace mirror
   // the file, so groups that received no piece are dropped; when appending, only the untouched
@@ -401,7 +413,7 @@ const PreOrderView = ({ preOrder }: { preOrder: PreOrder }) => {
     setMaterials((ms) => {
       const merged = [...ms, ...newMaterials]
       const kept = merged.filter((m) => used.has(m.uid) || (!replace && !isPristineMaterial(m)))
-      return kept.length ? kept : [emptyCatalogMaterial()]
+      return kept.length ? kept : [emptyMaterial()]
     })
     setShowImport(false)
   }
@@ -477,7 +489,7 @@ const PreOrderView = ({ preOrder }: { preOrder: PreOrder }) => {
     editor.removePiecesOf(deleteTarget.uid)
     setMaterials((ms) => {
       const remaining = ms.filter((m) => m.uid !== deleteTarget.uid)
-      return remaining.length ? remaining : [emptyCatalogMaterial()]
+      return remaining.length ? remaining : [emptyMaterial()]
     })
     setDeleteTarget(null)
   }

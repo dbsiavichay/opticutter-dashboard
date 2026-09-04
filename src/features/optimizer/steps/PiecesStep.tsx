@@ -47,7 +47,8 @@ interface PiecesStepProps {
   // Folded groups: owned by the page, because the actions menu toggles them all at once.
   collapsed: Set<string>
   onToggleGroup: (uid: string) => void
-  onAddMaterial: () => void
+  // Returns the new material's uid: the list opens its modal on it.
+  onAddMaterial: () => string
   onUpdateMaterial: <K extends keyof MaterialForm>(
     uid: string,
     field: K,

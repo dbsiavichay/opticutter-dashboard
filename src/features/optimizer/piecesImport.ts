@@ -1,6 +1,6 @@
 import type { BoardProduct } from 'src/features/products/types'
 import { normalizeText } from 'src/shared/utils/text'
-import { emptyCatalogMaterial, emptyRequirement, materialLabel } from './optimizerForm'
+import { emptyMaterial, emptyRequirement, isMaterialValid, materialLabel } from './optimizerForm'
 import type { MaterialForm, RequirementForm } from './optimizerForm'
 import type { CsvMaterialText, RawPieceRow } from './piecesCsv'
 
@@ -51,15 +51,16 @@ export const resolveMaterialTargets = (
   const groupByLabel = new Map<string, MaterialForm>()
   const groupByBoard = new Map<string, MaterialForm>()
   for (const m of materials) {
-    // A catalog material with no board renders as the literal 'Tablero sin elegir' unless it carries
-    // a label, so only index the display label when it actually identifies the material.
-    if (m.source !== 'catalog' || m.boardId) {
+    // A group with no board and no retazos renders as the literal 'Material sin
+    // definir' unless it carries a label, so only index the display label when it
+    // actually identifies the material.
+    if (isMaterialValid(m)) {
       const k = normalizeText(materialLabel(m, boards))
       if (!groupByLabel.has(k)) groupByLabel.set(k, m)
     }
     const own = normalizeText(m.label)
     if (own && !groupByLabel.has(own)) groupByLabel.set(own, m)
-    if (m.source === 'catalog' && m.boardId && !groupByBoard.has(String(m.boardId))) {
+    if (m.boardId && !groupByBoard.has(String(m.boardId))) {
       groupByBoard.set(String(m.boardId), m)
     }
   }
@@ -187,14 +188,14 @@ export const buildImport = (rows: RawPieceRow[], mappings: MaterialMapping[]): I
         uidByKey.set(m.key, existing.uid)
         continue
       }
-      const created = { ...emptyCatalogMaterial(), boardId: m.target.boardId }
+      const created = { ...emptyMaterial(), boardId: m.target.boardId }
       byBoard.set(m.target.boardId, created)
       newMaterials.push(created)
       uidByKey.set(m.key, created.uid)
       continue
     }
     // 'new': one board-less group per text, labelled so the user can tell them apart.
-    const created = { ...emptyCatalogMaterial(), label: m.text }
+    const created = { ...emptyMaterial(), label: m.text }
     newMaterials.push(created)
     uidByKey.set(m.key, created.uid)
   }

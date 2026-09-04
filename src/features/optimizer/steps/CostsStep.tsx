@@ -14,6 +14,7 @@ import { KEY } from 'src/shared/utils/platform'
 import type { ModalContainer, OptimizeResponse } from '../types'
 import CutLayoutDiagram from '../CutLayoutDiagram'
 import OptimizingOverlay from '../OptimizingOverlay'
+import UnplacedPiecesAlert from '../UnplacedPiecesAlert'
 import { EdgeBandingSummaryTable, Kpi, MaterialsSummaryTable, meters } from '../summaryTables'
 
 // Step 2, and the step that runs the search. There used to be an `Optimización` step before this
@@ -158,6 +159,13 @@ const CostsStep = ({
             />
           </CRow>
 
+          {/* Above the plan: it changes what the seller does next, rather than describing what
+              was done. Empty on every quote anchored on a catalog board. */}
+          <UnplacedPiecesAlert
+            unplaced={result.unplaced}
+            materialsSummary={result.materialsSummary}
+          />
+
           {/* Under the money, not over it: the tiles are what the step is for, and the plan is the
               thing you check against them. `container` is not optional here — the workspace can be
               in fullscreen, and a modal portaled to document.body would mount outside it and never
@@ -185,7 +193,9 @@ const CostsStep = ({
             }
           />
 
-          <div className="text-body-secondary small text-uppercase fw-semibold mb-2">Tableros</div>
+          <div className="text-body-secondary small text-uppercase fw-semibold mb-2">
+            Materiales
+          </div>
           <MaterialsSummaryTable
             rows={result.materialsSummary ?? []}
             leveledKeys={leveledKeys}

@@ -69,9 +69,10 @@ export const MaterialsSummaryTable = ({
     <CTable small responsive className="summary-table mb-3">
       <CTableHead>
         <CTableRow>
-          {/* "Tablero", not "Material": every row here IS a board, and the old wording clashed with
-              the "Tableros" count column beside it — now "Cant." */}
-          <CTableHeaderCell>Tablero</CTableHeaderCell>
+          {/* "Material", not "Tablero": a row here can be a catalog board, a retazo of the
+              workshop or one the client brought, and a quote can be made entirely of the last
+              kind. The clash the old wording avoided is gone — the count column is "Cant.". */}
+          <CTableHeaderCell>Material</CTableHeaderCell>
           <CTableHeaderCell>Medida</CTableHeaderCell>
           <CTableHeaderCell className="text-end">Cant.</CTableHeaderCell>
           {/* Precio unitario, no eficiencia: esta es la tabla de dinero del paso, y con solo

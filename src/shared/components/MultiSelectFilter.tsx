@@ -12,6 +12,9 @@ interface MultiSelectFilterProps<T extends string> {
   size?: 'sm' | 'lg'
   disabled?: boolean
   style?: CSSProperties
+  // Where to portal the menu, same contract as SearchableSelect. Pass it inside a
+  // modal or a fullscreen host; omit it and the menu renders in place.
+  container?: () => Element | null
 }
 
 // Single-field checkbox dropdown (e.g. a lone status filter elsewhere). Styled
@@ -28,6 +31,7 @@ const MultiSelectFilter = <T extends string>({
   size,
   disabled = false,
   style,
+  container,
 }: MultiSelectFilterProps<T>) => {
   const selected = options.filter((o) => values.includes(o.value))
 
@@ -41,7 +45,7 @@ const MultiSelectFilter = <T extends string>({
   const sizeClass = size === 'sm' ? ' form-select-sm' : size === 'lg' ? ' form-select-lg' : ''
 
   return (
-    <CDropdown variant="dropdown" autoClose="outside" style={style}>
+    <CDropdown variant="dropdown" autoClose="outside" style={style} portal container={container}>
       <CDropdownToggle custom disabled={disabled}>
         <button
           type="button"
@@ -54,7 +58,10 @@ const MultiSelectFilter = <T extends string>({
           {toggleLabel}
         </button>
       </CDropdownToggle>
-      <CDropdownMenu style={{ minWidth: 220, maxWidth: 320 }}>
+      {/* `zIndex` above the modal layer (CoreUI: backdrop 1050, modal 1055) and
+          below popover/tooltip — the portaled menu would otherwise paint under a
+          dialog it was opened from. Same reasoning as SearchableSelect. */}
+      <CDropdownMenu style={{ minWidth: 220, maxWidth: 320, zIndex: 1060 }}>
         <div style={{ maxHeight: 280, overflowY: 'auto' }}>
           <FilterCheckboxList values={values} options={options} onChange={onChange} />
         </div>

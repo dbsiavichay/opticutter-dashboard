@@ -118,7 +118,17 @@ const SearchableSelect = ({
           {toggleLabel}
         </button>
       </CDropdownToggle>
-      <CDropdownMenu style={{ minWidth: 260, maxWidth: 380 }}>
+      {/* `zIndex` above the modal layer (CoreUI: backdrop 1050, modal 1055) and
+          below popover/tooltip. The menu always portals OUT of its parent, so
+          inside a modal it landed in the same host at the dropdown's default
+          1000 — mounted, positioned, and painted underneath the dialog. Raising
+          it is the fix rather than portaling into the modal body, which would
+          clip the menu against that body's own scroll.
+
+          The width cap is generous because these lists are product names
+          ("Melamina Blanca Ranurada 2440x1220"): at 380 the label truncated on
+          most rows and the picker stopped being readable. */}
+      <CDropdownMenu style={{ minWidth: 260, maxWidth: 'min(560px, 92vw)', zIndex: 1060 }}>
         <div className="px-2 pt-1 pb-2">
           <CFormInput
             ref={inputRef}

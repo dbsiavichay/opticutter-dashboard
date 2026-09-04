@@ -1,4 +1,4 @@
-import { useMemo } from 'react'
+import { useMemo, useState } from 'react'
 import { CButton } from '@coreui/react'
 import CIcon from '@coreui/icons-react'
 import { cilPlus } from '@coreui/icons'
@@ -11,6 +11,7 @@ import type { PiecesEditor } from './usePiecesEditor'
 import type { PiecesNavigation } from './usePiecesNavigation'
 import { accentFor } from './groupColors'
 import MaterialGroupCard from './MaterialGroupCard'
+import MaterialModal from './MaterialModal'
 
 // The pieces list, and nothing else. It used to be a CCard whose header carried nine buttons and
 // whose body held bordered group cards — a box inside a box inside a box before the first table row.
@@ -35,7 +36,7 @@ interface MaterialGroupsProps {
   // Folded groups, owned by the page (see useCollapsedGroups) because the menu toggles them all.
   collapsed: Set<string>
   onToggleGroup: (uid: string) => void
-  onAddMaterial: () => void
+  onAddMaterial: () => string
   onUpdateMaterial: <K extends keyof MaterialForm>(
     uid: string,
     field: K,
@@ -61,6 +62,13 @@ const MaterialGroups = ({
   onDuplicateMaterial,
 }: MaterialGroupsProps) => {
   const { requirements } = editor
+
+  // The material modal is owned HERE, not by the page: both call sites (the
+  // wizard and the pre-order detail) already hand this component the boards, the
+  // portal container and the update callback, so threading a fourth prop through
+  // each of them would buy nothing. One modal for the whole list, by uid.
+  const [configuringUid, setConfiguringUid] = useState<string | null>(null)
+  const configuring = materials.find((m) => m.uid === configuringUid) ?? null
 
   const validUids = validMaterialUids(materials)
 
@@ -106,9 +114,9 @@ const MaterialGroups = ({
             onRegister={nav?.registerMaterial(m.uid)}
             onGoToIssue={nav ? () => nav.goToNextIssue(m.uid) : undefined}
             onToggle={() => onToggleGroup(m.uid)}
-            onUpdate={onUpdateMaterial}
             onRequestDelete={onRequestDeleteMaterial}
             onDuplicate={onDuplicateMaterial}
+            onConfigure={() => setConfiguringUid(m.uid)}
           />
         )
       })}
@@ -122,11 +130,19 @@ const MaterialGroups = ({
         variant="ghost"
         type="button"
         className="add-slot w-100"
-        onClick={onAddMaterial}
+        onClick={() => setConfiguringUid(onAddMaterial())}
       >
         <CIcon icon={cilPlus} className="me-1" />
         Agregar material
       </CButton>
+
+      <MaterialModal
+        material={configuring}
+        boards={boards}
+        onUpdate={onUpdateMaterial}
+        container={container}
+        onClose={() => setConfiguringUid(null)}
+      />
     </div>
   )
 }

@@ -134,6 +134,17 @@ export interface PricingData {
   total: number
 }
 
+// A piece the available stock could not hold, grouped by size. Only a pool of
+// finite retazos can actually run out of material, so this is empty on every
+// quote anchored on a catalog board.
+export interface UnplacedPiece {
+  materialKey: string
+  label: string | null
+  height: number
+  width: number
+  quantity: number
+}
+
 export interface OptimizeResponse {
   id: null
   client: Client | null
@@ -151,6 +162,8 @@ export interface OptimizeResponse {
   strategy?: PackingStrategy
   // Alternative-solution seed this result was computed with (0 = canonical).
   variant?: number
+  // Optional: a result cached before the field existed comes back without it.
+  unplaced?: UnplacedPiece[]
 }
 
 // --- Request inputs (what the frontend sends) ---

@@ -6,6 +6,7 @@ import PricingBlock from 'src/shared/components/PricingBlock'
 import type { OptimizeResponse } from './types'
 import CutLayoutDiagram from './CutLayoutDiagram'
 import OptimizingOverlay from './OptimizingOverlay'
+import UnplacedPiecesAlert from './UnplacedPiecesAlert'
 import { EdgeBandingSummaryTable, Kpi, MaterialsSummaryTable, meters } from './summaryTables'
 
 // The result of a cut run: KPIs, cost tables and the diagram bar stacked together. Used by the
@@ -82,6 +83,14 @@ const OptimizationPreview = ({
             <Kpi label="Corte lineal" value={meters(result.totalCutLinearM)} />
             <Kpi label="Tapacanto lineal" value={meters(result.totalEdgeBandingLinearM)} />
           </CRow>
+
+          {/* A pre-order re-optimizes on every read, so a retazo the client already
+              used elsewhere can turn a quote that fitted into one that no longer
+              does. Saying it here is what keeps that from reaching the workshop. */}
+          <UnplacedPiecesAlert
+            unplaced={result.unplaced}
+            materialsSummary={result.materialsSummary}
+          />
 
           <MaterialsSummaryTable
             rows={result.materialsSummary ?? []}
