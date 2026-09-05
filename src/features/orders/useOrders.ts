@@ -9,6 +9,7 @@ import type {
   ChangeBranchPayload,
   CuttingPlan,
   MarkPieceResponse,
+  SetPriorityPayload,
 } from './types'
 
 const WORKSHOP_QUEUE_KEY = ['orders', 'workshop-queue'] as const
@@ -48,6 +49,21 @@ export const useChangeOrderBranch = () => {
   return useMutation({
     mutationFn: ({ id, data }: { id: string; data: ChangeBranchPayload }) =>
       ordersApi.changeBranch(id, data),
+    onSuccess: (_data, { id }) => {
+      void qc.invalidateQueries({ queryKey: ['orders', id] })
+      void qc.invalidateQueries({ queryKey: ['orders'] })
+      void qc.invalidateQueries({ queryKey: WORKSHOP_QUEUE_KEY })
+    },
+  })
+}
+
+// Priority attention: sales' exception to the workshop's FIFO. Invalidating the board key is the
+// point of the mutation — that is the list whose ORDER the flag changes.
+export const useSetOrderPriority = () => {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: ({ id, data }: { id: string; data: SetPriorityPayload }) =>
+      ordersApi.setPriority(id, data),
     onSuccess: (_data, { id }) => {
       void qc.invalidateQueries({ queryKey: ['orders', id] })
       void qc.invalidateQueries({ queryKey: ['orders'] })

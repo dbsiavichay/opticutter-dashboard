@@ -14,6 +14,12 @@ import type { OrderSort, OrderStatus } from './types'
 
 const STATUS_OPTIONS = ORDER_STATUS_VALUES.map((value) => ({ value, label: statusLabel(value) }))
 
+const PRIORITY_OPTIONS = [
+  { value: '', label: 'Todas' },
+  { value: 'true', label: 'Solo prioritarias' },
+  { value: 'false', label: 'Solo normales' },
+]
+
 const SORT_OPTIONS: { value: OrderSort; label: string }[] = [
   { value: 'recent', label: 'Más recientes primero' },
   { value: 'oldest', label: 'Más antiguas primero' },
@@ -26,6 +32,9 @@ export interface OrdersFilterValues {
   createdFrom: string
   createdTo: string
   sort: OrderSort
+  // '' = all; 'true'/'false' narrow to prioritized / regular. A string, like clientId and branchId,
+  // so it rides the URL without a third representation of "unset".
+  isPriority: string
 }
 
 interface OrdersFiltersProps {
@@ -95,6 +104,22 @@ const OrdersFilters = ({ values, onChange, onClear, showBranch }: OrdersFiltersP
         </FilterSection>
       )}
 
+      <FilterSection label="Prioridad">
+        <div className="px-3 py-1">
+          <CFormSelect
+            size="sm"
+            value={values.isPriority}
+            onChange={(e) => onChange('isPriority', e.target.value)}
+          >
+            {PRIORITY_OPTIONS.map((o) => (
+              <option key={o.value} value={o.value}>
+                {o.label}
+              </option>
+            ))}
+          </CFormSelect>
+        </div>
+      </FilterSection>
+
       <FilterSection label="Creada entre">
         <div className="px-3 py-1 d-flex gap-2">
           <CFormInput
@@ -144,7 +169,8 @@ export const activeCount = (values: OrdersFilterValues, showBranch: boolean): nu
   (values.clientId ? 1 : 0) +
   (showBranch && values.branchId ? 1 : 0) +
   (values.createdFrom ? 1 : 0) +
-  (values.createdTo ? 1 : 0)
+  (values.createdTo ? 1 : 0) +
+  (values.isPriority ? 1 : 0)
 
 // The chips mirror `activeCount` field by field, so what the badge counts is always what the row
 // below it lists. A hook rather than a pure function because two of the labels have to be looked
@@ -195,6 +221,13 @@ export const useOrdersFilterChips = (
       key: 'createdTo',
       label: `Hasta: ${fmtDay(values.createdTo)}`,
       onRemove: () => onChange('createdTo', ''),
+    })
+  }
+  if (values.isPriority) {
+    chips.push({
+      key: 'isPriority',
+      label: values.isPriority === 'true' ? 'Solo prioritarias' : 'Solo normales',
+      onRemove: () => onChange('isPriority', ''),
     })
   }
   return chips

@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { Navigate, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import {
   CAlert,
+  CBadge,
   CButton,
   CFormInput,
   CFormLabel,
@@ -16,6 +17,8 @@ import {
   CProgressBar,
   CSpinner,
 } from '@coreui/react'
+import CIcon from '@coreui/icons-react'
+import { cilBolt } from '@coreui/icons'
 
 import { useCurrentUser, useHasRole } from 'src/features/auth/useAuth'
 import { usePrintConsolidated } from 'src/features/print/usePrint'
@@ -38,6 +41,7 @@ import {
   useAssociateInvoice,
   useAttachments,
   useChangeOrderBranch,
+  useSetOrderPriority,
   useCuttingPlan,
   useOrder,
   useUpdateOrderStatus,
@@ -77,6 +81,7 @@ const OrderDetailPage = () => {
   const updateStatus = useUpdateOrderStatus()
   const associateInvoice = useAssociateInvoice()
   const changeBranch = useChangeOrderBranch()
+  const setPriority = useSetOrderPriority()
   const printConsolidated = usePrintConsolidated()
   const { data: activeBranches = [] } = useActiveBranches()
   // Only for the summary row's count; the dialog owns the upload and delete mutations. React Query
@@ -114,6 +119,8 @@ const OrderDetailPage = () => {
   const [branchModal, setBranchModal] = useState(false)
   const [targetBranchId, setTargetBranchId] = useState('')
   const [branchNote, setBranchNote] = useState('')
+  const [priorityModal, setPriorityModal] = useState(false)
+  const [priorityNote, setPriorityNote] = useState('')
   const [paymentModal, setPaymentModal] = useState(false)
   const [cashInput, setCashInput] = useState('')
   const [transferInput, setTransferInput] = useState('')
@@ -236,6 +243,25 @@ const OrderDetailPage = () => {
     )
   }
 
+  const openPriorityModal = () => {
+    setPriorityNote('')
+    setPriority.reset()
+    setPriorityModal(true)
+  }
+  const closePriorityModal = () => {
+    setPriorityModal(false)
+    setPriority.reset()
+  }
+  // Confirmed rather than toggled straight from the menu: it reorders the shop floor's queue, and
+  // the dialog is also where the reason gets typed into the order's history.
+  const confirmPriorityChange = (next: boolean) => {
+    if (!id) return
+    setPriority.mutate(
+      { id, data: { isPriority: next, note: priorityNote || undefined } },
+      { onSuccess: closePriorityModal },
+    )
+  }
+
   if (isOperator) {
     return <Navigate to={`/orders/${id}/workshop`} replace />
   }
@@ -258,6 +284,10 @@ const OrderDetailPage = () => {
   // ("Cancelar", "Regresar a cola") ride beside it as outline buttons.
   const [primary, ...secondary] = transitions
   const canChangeBranch = canManage && (order.status === 'confirmed' || order.status === 'queued')
+  // Prioritizing a closed order means nothing (the board doesn't list it) — the API refuses it too.
+  const canPrioritize =
+    canManage && !['completed', 'despachado', 'cancelled'].includes(order.status)
+  const isPriority = !!order.isPriority
   const branchOptions = activeBranches.filter((b) => b.id !== order.branch.id)
   const locked = attachmentsLocked(order.status)
 
@@ -321,6 +351,13 @@ const OrderDetailPage = () => {
             ) : (
               <OrderStatusBadge status={order.status} />
             )}
+            {/* Orthogonal to the status: says the order jumps the workshop's FIFO, nothing more. */}
+            {isPriority && (
+              <CBadge color="warning" className="d-inline-flex align-items-center gap-1">
+                <CIcon icon={cilBolt} size="sm" />
+                Prioritaria
+              </CBadge>
+            )}
           </div>
           <div className="text-body-secondary small">
             {clientName(order.client)}
@@ -337,6 +374,9 @@ const OrderDetailPage = () => {
           <div className="text-body-secondary small">
             Creada {fmtDateTime(order.createdAt)}
             {order.confirmedAt && ` · Confirmada ${fmtDateTime(order.confirmedAt)}`}
+            {/* When it reached the shop (i.e. when it was paid) — the date the workshop board
+                queues by, which is often nothing like the creation date. */}
+            {order.queuedAt && ` · En cola ${fmtDateTime(order.queuedAt)}`}
             {order.dispatchedAt && ` · Despachada ${fmtDateTime(order.dispatchedAt)}`}
           </div>
           {/* Reference inherited from the quote; read-only here (no endpoint edits it) and printed
@@ -361,6 +401,8 @@ const OrderDetailPage = () => {
               canManage && !order.externalInvoiceId ? () => setInvoiceModal(true) : undefined
             }
             onChangeBranch={canChangeBranch ? openBranchModal : undefined}
+            onTogglePriority={canPrioritize ? openPriorityModal : undefined}
+            isPriority={isPriority}
           />
         </div>
       </div>
@@ -847,6 +889,51 @@ const OrderDetailPage = () => {
             disabled={!targetBranchId || changeBranch.isPending}
           >
             {changeBranch.isPending ? <CSpinner size="sm" /> : 'Mover'}
+          </CButton>
+        </CModalFooter>
+      </CModal>
+
+      {/* Priority attention — sales' exception to the workshop's FIFO */}
+      <CModal visible={priorityModal} onClose={closePriorityModal}>
+        <CModalHeader>
+          <CModalTitle>{isPriority ? 'Quitar prioridad' : 'Marcar como prioritaria'}</CModalTitle>
+        </CModalHeader>
+        <CModalBody>
+          <p>
+            {isPriority
+              ? 'La orden vuelve a su lugar en la cola del taller, por orden de llegada.'
+              : 'La orden pasa al primer lugar del tablero de taller y se muestra resaltada. No cambia su estado ni sus precios.'}
+          </p>
+          <CFormLabel>Motivo/nota (opcional)</CFormLabel>
+          <CFormTextarea
+            rows={2}
+            maxLength={512}
+            value={priorityNote}
+            onChange={(e) => setPriorityNote(e.target.value)}
+            placeholder={isPriority ? 'Motivo o comentario…' : 'Ej.: el cliente viaja mañana'}
+          />
+          {setPriority.error && (
+            <div className="text-danger small mt-2">
+              {setPriority.error.message || 'No se pudo cambiar la prioridad.'}
+            </div>
+          )}
+        </CModalBody>
+        <CModalFooter>
+          <CButton color="secondary" onClick={closePriorityModal}>
+            Cancelar
+          </CButton>
+          <CButton
+            color={isPriority ? 'secondary' : 'warning'}
+            onClick={() => confirmPriorityChange(!isPriority)}
+            disabled={setPriority.isPending}
+          >
+            {setPriority.isPending ? (
+              <CSpinner size="sm" />
+            ) : isPriority ? (
+              'Quitar prioridad'
+            ) : (
+              'Marcar prioritaria'
+            )}
           </CButton>
         </CModalFooter>
       </CModal>

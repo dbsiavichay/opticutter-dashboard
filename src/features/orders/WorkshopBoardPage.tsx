@@ -49,14 +49,28 @@ const ACTION_COPY: Record<
   finishBanding: { verb: 'Terminar el canteado de', label: 'Terminar canteado', color: 'success' },
 }
 
-// Head of the FIFO queue: the oldest order still waiting to be taken. Derived here rather than
-// trusting the endpoint's order, so the "Siguiente" pill stays true whatever it decides to sort by.
+// Head of the queue: the next order to be taken. Derived here rather than trusting the endpoint's
+// order, so the "Siguiente" pill stays true whatever it decides to sort by — but it must apply the
+// SAME rule the endpoint does, or the pill lands on a card that isn't the first one: a prioritized
+// order wins, and among equals the one that reached the shop first does. Only `queued`: once someone
+// has taken an order it is nobody's "next".
+//
+// "Reached the shop" is `queuedAt` — when the order was PAID — not `createdAt`. An order is quoted
+// and then waits for payment, so a quote raised first is often paid last; ranking by creation gave
+// the next slot to whoever asked first instead of whoever paid first.
+const arrivedAt = (item: WorkshopQueueItem): number =>
+  new Date(item.queuedAt ?? item.createdAt).getTime()
+
+const isAheadOf = (candidate: WorkshopQueueItem, head: WorkshopQueueItem): boolean => {
+  if (candidate.isPriority !== head.isPriority) return candidate.isPriority
+  return arrivedAt(candidate) < arrivedAt(head)
+}
+
 const nextOrderId = (items: WorkshopQueueItem[]): number | null => {
   let head: WorkshopQueueItem | null = null
   for (const item of items) {
     if (item.status !== 'queued') continue
-    if (!head || new Date(item.createdAt).getTime() < new Date(head.createdAt).getTime())
-      head = item
+    if (!head || isAheadOf(item, head)) head = item
   }
   return head?.orderId ?? null
 }

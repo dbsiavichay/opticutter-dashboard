@@ -81,9 +81,15 @@ export interface Order {
   history?: OrderHistoryEntry[]
   createdAt: string
   confirmedAt?: string
+  // When the order entered the production queue (payment registered); null while `confirmed`.
+  queuedAt?: string | null
   // Commercial reference (project/site name) inherited from the quote and frozen here: read-only
   // on the order (there is no endpoint to edit it). Printed on every document as the "Ref:" line.
   notes?: string | null
+  // Priority attention: sales' exception to the workshop's FIFO. Toggled with PATCH
+  // /orders/:id/priority (orders:write, i.e. admin/vendedor) while the order is open; it moves the
+  // order to the head of the shop-floor board and lights its card up. Nothing commercial.
+  isPriority?: boolean
   externalInvoiceId?: string
   assignedToId?: number | null
   assignedAt?: string | null
@@ -123,6 +129,9 @@ export interface OrderListParams {
   // The backend defaults to `oldest` (the workshop reads the listing FIFO); the list page asks for
   // `recent` because the back office wants the last order first.
   sort?: OrderSort
+  // Only prioritized orders (true) or only regular ones (false); omit for both. Filters, never
+  // reorders — floating them to the top is the shop-floor board's rule, not the back office's.
+  isPriority?: boolean
   offset?: number
   limit?: number
 }
@@ -138,6 +147,13 @@ export interface UpdateStatusPayload {
 // --- Change branch (rebalancing before the workshop starts cutting) ---
 export interface ChangeBranchPayload {
   branchId: number
+  note?: string
+}
+
+// --- Priority attention (sales' exception to the workshop's FIFO) ---
+export interface SetPriorityPayload {
+  isPriority: boolean
+  // Why it was prioritized; lands in the order's history next to the status transitions.
   note?: string
 }
 
@@ -189,7 +205,13 @@ export interface WorkshopQueueItem {
   status: Extract<OrderStatus, 'queued' | 'cutting' | 'cut'>
   bandingStatus: BandingStatus
   notes?: string | null
+  // Priority attention: the endpoint already lists these first (then FIFO). The card highlights it.
+  isPriority: boolean
   createdAt: string
+  // When the order actually entered the queue — i.e. when it was PAID, which is what gates
+  // `confirmed → queued`. This, not `createdAt`, is the shop's arrival time: it is what the
+  // endpoint's FIFO sorts by and what the card must measure the wait from.
+  queuedAt?: string | null
   client: Client
   boardUsage: BoardUsage[]
   bandingUsage: BandingUsage[]

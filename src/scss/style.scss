@@ -715,6 +715,37 @@ input[type='number'] {
   &[data-status='cut'] {
     border-left-color: var(--cui-success);
   }
+
+  // Priority attention deliberately does NOT touch the left spine: that channel is the STAGE, and
+  // triaging a column by stage without reading a badge is the whole reason it exists. Urgency is a
+  // second, orthogonal question, so it gets a second channel — a warning ring plus a tinted ground,
+  // both readable at arm's length on the shop-floor panel.
+  &[data-priority='true'] {
+    background-color: rgba(var(--cui-warning-rgb), 0.07);
+    box-shadow: 0 0 0 2px rgba(var(--cui-warning-rgb), 0.55);
+  }
+}
+
+// Says WHY the card is at the top of the board. Same pill shape as `.workshop-next` (they stack on
+// a prioritized head of queue), in warning so the two never read as the same kind of statement.
+.workshop-priority {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  align-self: flex-start;
+  padding: 0.1rem 0.5rem;
+  border-radius: 10rem;
+  background-color: rgba(var(--cui-warning-rgb), 0.18);
+  color: var(--cui-warning-emphasis, var(--cui-warning));
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.workshop-priority__icon {
+  width: 0.75rem;
+  height: 0.75rem;
 }
 
 // Head of the FIFO queue. Computed client-side from the oldest `queued` item rather than trusting

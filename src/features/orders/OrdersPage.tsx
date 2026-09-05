@@ -1,5 +1,6 @@
 import { useNavigate } from 'react-router-dom'
 import {
+  CBadge,
   CButton,
   CTable,
   CTableBody,
@@ -9,7 +10,7 @@ import {
   CTableRow,
 } from '@coreui/react'
 import CIcon from '@coreui/icons-react'
-import { cilPlus } from '@coreui/icons'
+import { cilBolt, cilPlus } from '@coreui/icons'
 
 import NoBranchNotice, { isNoBranchError } from 'src/shared/components/NoBranchNotice'
 import ReferenceNote from 'src/shared/components/ReferenceNote'
@@ -31,7 +32,15 @@ import { useOrders } from './useOrders'
 import type { OrderSort, OrderStatus } from './types'
 
 // Filter fields that live in the URL. `q` is the search box; the rest are the panel's.
-const FILTER_KEYS = ['q', 'status', 'clientId', 'branchId', 'createdFrom', 'createdTo']
+const FILTER_KEYS = [
+  'q',
+  'status',
+  'clientId',
+  'branchId',
+  'createdFrom',
+  'createdTo',
+  'isPriority',
+]
 
 const OrdersPage = () => {
   const navigate = useNavigate()
@@ -50,6 +59,7 @@ const OrdersPage = () => {
     createdTo: getParam('createdTo'),
     // The backend defaults to FIFO for the workshop; this page is the back office's.
     sort: (getParam('sort') || 'recent') as OrderSort,
+    isPriority: getParam('isPriority'),
   }
 
   const handleChange = <K extends keyof OrdersFilterValues>(
@@ -80,6 +90,9 @@ const OrdersPage = () => {
     createdFrom: values.createdFrom || undefined,
     createdTo: values.createdTo || undefined,
     sort: values.sort,
+    // '' means "both", and `false` is a real filter — so map through the empty string explicitly
+    // rather than leaning on a falsy check, which would swallow "Solo normales".
+    isPriority: values.isPriority === '' ? undefined : values.isPriority === 'true',
     offset,
     limit,
   })
@@ -151,7 +164,15 @@ const OrdersPage = () => {
                 orders.map((o) => (
                   <CTableRow key={o.id} onClick={() => void navigate(`/orders/${o.id}`)}>
                     <CTableDataCell>
-                      <strong>{o.code ?? '—'}</strong>
+                      <div className="d-flex align-items-center gap-2">
+                        <strong>{o.code ?? '—'}</strong>
+                        {/* Orthogonal to the status column: the order jumps the workshop's FIFO. */}
+                        {o.isPriority && (
+                          <CBadge color="warning" title="Atención prioritaria">
+                            <CIcon icon={cilBolt} size="sm" />
+                          </CBadge>
+                        )}
+                      </div>
                       <ReferenceNote notes={o.notes} />
                     </CTableDataCell>
                     <CTableDataCell>
