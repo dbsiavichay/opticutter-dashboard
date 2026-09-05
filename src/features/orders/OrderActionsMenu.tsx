@@ -7,7 +7,7 @@ import {
   CDropdownToggle,
 } from '@coreui/react'
 import CIcon from '@coreui/icons-react'
-import { cilBuilding, cilExternalLink, cilFile, cilOptions } from '@coreui/icons'
+import { cilBolt, cilBuilding, cilExternalLink, cilFile, cilOptions } from '@coreui/icons'
 
 // The order's paperwork and its administrative moves, in one ⋮ — the same grammar as the
 // optimizer's menu (sections that render only when their handler arrives, muted headers, items as
@@ -30,6 +30,11 @@ interface OrderActionsMenuProps {
   // disabled entry repeating it would be the section's only content on most closed orders.
   onInvoice?: () => void
   onChangeBranch?: () => void
+  // Priority attention. Omitted once the order is closed — prioritizing an order the workshop board
+  // no longer lists means nothing, and the API refuses it.
+  onTogglePriority?: () => void
+  // Only decides the entry's wording: the same item both marks and unmarks.
+  isPriority?: boolean
 }
 
 const OrderActionsMenu = ({
@@ -39,9 +44,11 @@ const OrderActionsMenu = ({
   onDispatchSheet,
   onInvoice,
   onChangeBranch,
+  onTogglePriority,
+  isPriority = false,
 }: OrderActionsMenuProps) => {
   const hasDocs = !!(onOrderPdf || onProductionSheet || onConsolidatedPdf || onDispatchSheet)
-  const hasManage = !!(onInvoice || onChangeBranch)
+  const hasManage = !!(onInvoice || onChangeBranch || onTogglePriority)
 
   return (
     <CDropdown alignment="end" portal>
@@ -124,6 +131,17 @@ const OrderActionsMenu = ({
               >
                 <CIcon icon={cilBuilding} className="me-2" />
                 Cambiar sucursal…
+              </CDropdownItem>
+            )}
+            {onTogglePriority && (
+              <CDropdownItem
+                as="button"
+                type="button"
+                className="d-flex align-items-center"
+                onClick={onTogglePriority}
+              >
+                <CIcon icon={cilBolt} className="me-2" />
+                {isPriority ? 'Quitar prioridad…' : 'Marcar como prioritaria…'}
               </CDropdownItem>
             )}
           </>

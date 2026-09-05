@@ -12,6 +12,7 @@ import type {
   Order,
   OrderListParams,
   UpdateStatusPayload,
+  SetPriorityPayload,
   WorkshopQueueItem,
 } from './types'
 
@@ -28,6 +29,7 @@ export const ordersApi = {
     createdFrom,
     createdTo,
     sort,
+    isPriority,
     offset = 0,
     limit = 20,
   }: OrderListParams = {}) =>
@@ -40,6 +42,7 @@ export const ordersApi = {
         createdFrom,
         createdTo,
         sort,
+        isPriority,
         offset,
         limit,
       })}`,
@@ -49,6 +52,8 @@ export const ordersApi = {
     httpClient.patch<Order>(`${BASE}/${id}/status`, data),
   changeBranch: (id: string, data: ChangeBranchPayload) =>
     httpClient.patch<Order>(`${BASE}/${id}/branch`, data),
+  setPriority: (id: string, data: SetPriorityPayload) =>
+    httpClient.patch<Order>(`${BASE}/${id}/priority`, data),
   associateInvoice: (id: string, data: AssociateInvoicePayload) =>
     httpClient.post<Order>(`${BASE}/${id}/invoice`, data),
   getCuttingPlan: (id: string) => httpClient.get<CuttingPlan>(`${BASE}/${id}/cutting-plan`),

@@ -1,6 +1,6 @@
 import { CButton, CCard, CCardBody, CProgress, CProgressBar, CSpinner } from '@coreui/react'
 import CIcon from '@coreui/icons-react'
-import { cilChevronRight } from '@coreui/icons'
+import { cilBolt, cilChevronRight } from '@coreui/icons'
 
 import ReferenceNote from 'src/shared/components/ReferenceNote'
 import { isOlderThan, relativeTime } from 'src/shared/utils/date'
@@ -17,6 +17,12 @@ const isDone = ({ cutPieces, totalPieces }: WorkshopQueueItem['progress']) =>
 // A queued order that has been waiting a full day is the thing a shop-floor board exists to give
 // away. Only `queued`: once someone has taken it, elapsed time is no longer anybody's cue.
 const STALE_MS = 24 * 60 * 60 * 1000
+
+// The wait the floor cares about starts when the order reached the shop — i.e. when it was PAID,
+// which is what gates `confirmed → queued`. Measuring from `createdAt` made a quote raised last week
+// and paid ten minutes ago read "En cola hace 7 días", in warning colours, on a card nobody had had
+// the chance to take yet. `createdAt` is only the fallback for a row the backfill could not date.
+const arrivedAt = (item: WorkshopQueueItem): string => item.queuedAt ?? item.createdAt
 
 // One line standing in for the whole material list: how much there is to cut, and how much banding
 // to run. A real order carries six boards and four banding lines; printing them all made the card
@@ -61,14 +67,26 @@ const WorkshopQueueCard = ({
   onShowMaterials,
 }: WorkshopQueueCardProps) => {
   const showBanding = item.bandingStatus !== 'not_applicable'
-  const isStale = item.status === 'queued' && isOlderThan(item.createdAt, STALE_MS)
+  const isStale = item.status === 'queued' && isOlderThan(arrivedAt(item), STALE_MS)
   const summary = materialsSummary(item)
 
   return (
-    <CCard className="workshop-card h-100" data-status={item.status}>
+    <CCard
+      className="workshop-card h-100"
+      data-status={item.status}
+      data-priority={item.isPriority ? 'true' : undefined}
+    >
       <CCardBody className="d-flex flex-column gap-3">
         <div className="d-flex justify-content-between align-items-start gap-2 flex-wrap">
           <div className="d-flex flex-column gap-1">
+            {/* Two pills, not one: "Prioritaria" says WHY this card is up here, "Siguiente" says it
+                is the one to take. On a prioritized head of queue both are true at once. */}
+            {item.isPriority && (
+              <span className="workshop-priority">
+                <CIcon icon={cilBolt} className="workshop-priority__icon" />
+                Prioritaria
+              </span>
+            )}
             {isNext && <span className="workshop-next">Siguiente</span>}
             <span className="fs-4 fw-bold">{item.orderCode ?? '—'}</span>
           </div>
@@ -116,7 +134,7 @@ const WorkshopQueueCard = ({
         )}
 
         <div className={isStale ? 'text-warning-emphasis fw-semibold' : 'text-body-secondary'}>
-          En cola {relativeTime(item.createdAt)}
+          En cola {relativeTime(arrivedAt(item))}
         </div>
 
         <div className="d-flex gap-2 mt-auto">
