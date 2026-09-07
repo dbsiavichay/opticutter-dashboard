@@ -692,6 +692,152 @@ input[type='number'] {
   }
 }
 
+// --- Cutting canvas (/orders/:id/workshop) ----------------------------------------------------
+// The one screen that owns the whole viewport. It runs on a tablet bolted next to the saw, where
+// the only task is marking pieces cut, and the smallest panel in the shop (Infinix XPad, 960×544
+// CSS in landscape) leaves ~544px of height — less than the chrome this page used to stack above
+// the diagram. So the page is a fixed three-row grid over the app's header and sidebar, and only
+// the middle row grows. Nothing scrolls; there is nowhere to scroll to.
+//
+// This is the layout, not the Fullscreen API. The API sits on top of it, hosted on this same
+// element, and buys only the browser's own toolbar back — so the screen still fits on a panel
+// where fullscreen is refused.
+.workshop-shell {
+  position: fixed;
+  inset: 0;
+  // Above the sticky app header (1030) and the sidebar, below modals (1055) and the toaster
+  // (1090) — so the confirm dialog and any error still land on top of the canvas.
+  z-index: 1035;
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr) auto;
+  overflow: hidden;
+  // The layout's `min-vh-100` wrapper is still behind this; without it iOS rubber-bands the page
+  // under a fixed element.
+  overscroll-behavior: none;
+  background-color: var(--cui-body-bg);
+
+  // The Fullscreen API paints its own black backdrop, so the theme background is restated here.
+  &:fullscreen {
+    background-color: var(--cui-body-bg);
+  }
+}
+
+.workshop-topbar {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  min-width: 0;
+  padding: 0.25rem 0.5rem;
+  border-bottom: 1px solid var(--cui-border-color);
+}
+
+// Order code, status, banding and reference. The one part allowed to shrink: everything to its
+// right is a control, and a control that truncates is a control you cannot hit.
+.workshop-identity {
+  display: flex;
+  flex: 1 1 auto;
+  align-items: center;
+  gap: 0.5rem;
+  min-width: 0;
+  overflow: hidden;
+}
+
+.workshop-pager {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 0.25rem;
+}
+
+// Fixed width so the bar does not shift as the counters change under the finger.
+.workshop-pager__label {
+  min-width: 13rem;
+  white-space: nowrap;
+}
+
+.workshop-total {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.workshop-total__bar {
+  width: 6rem;
+}
+
+// Below lg the bar has no room for everything, and three things go in the order they stop earning
+// their width: the progress BAR (the fraction beside it is the same fact, exactly), the pager's
+// fixed width (it only exists to stop the counters shifting under a finger, and a narrow panel has
+// no room to spend on that), and the banding badge — the canteado track is read-only here and
+// `canteador` cannot even open this route. Hiding them is what stops a badge being clipped
+// mid-word, which reads as a broken screen rather than a full one.
+@media (max-width: 991.98px) {
+  .workshop-total__bar,
+  .workshop-banding-badge {
+    display: none;
+  }
+
+  .workshop-pager__label {
+    min-width: 0;
+  }
+}
+
+.workshop-stage-wrap {
+  position: relative;
+  display: grid;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.workshop-stage {
+  position: relative;
+  min-height: 0;
+  overflow: hidden;
+  // The swipe that pages between boards needs the horizontal axis. Without this the browser
+  // consumes the gesture before any handler sees it; with it, vertical scrolling stays native.
+  touch-action: pan-y;
+}
+
+// The board's name over the diagram, so naming what is on screen costs no row of its own. It sits
+// on the letterbox margin most of the time, but a sheet whose ratio matches the stage leaves none —
+// hence the translucent chip, which keeps the name readable without ever hiding a piece.
+.workshop-boardname {
+  position: absolute;
+  bottom: 0.25rem;
+  left: 0.5rem;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  max-width: 60%;
+  padding: 0.1rem 0.45rem;
+  border-radius: var(--cui-border-radius);
+  background-color: rgba(var(--cui-body-bg-rgb), 0.82);
+  color: var(--cui-secondary-color);
+  font-size: 0.875rem;
+  pointer-events: none;
+}
+
+// One action at a time — the states that could fill this row turn out to be mutually exclusive.
+.workshop-actionbar {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.5rem 0.75rem;
+  border-top: 1px solid var(--cui-border-color);
+}
+
+.workshop-picker {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(15rem, 1fr));
+  gap: 0.5rem;
+}
+
+.workshop-picker__item {
+  min-width: 0;
+  text-align: start;
+}
+
 // --- Shop-floor queue board (/workshop-board) -------------------------------------------------
 // The landing page of `operador` and `canteador` — the only screen those roles have — read at
 // arm's length on a touch panel with no hover, so nothing here may depend on a `title=`.

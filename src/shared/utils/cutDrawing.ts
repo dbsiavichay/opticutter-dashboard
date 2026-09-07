@@ -116,6 +116,20 @@ export const uprightText = (x: number, y: number) => `rotate(-90 ${x} ${y})`
 
 export const bandedSides = (p: Pick<DrawablePiece, 'edges'>): EdgeSide[] => p.edges?.sides ?? []
 
+// Splits the workshop's edge-banding notation into its two halves: the side count, and everything
+// that qualifies it. The backend builds the string as `sides [type] [alias]` — '2L1C CS CSH' —
+// where '2L1C' decides how the piece is banded and 'CS CSH' names the material doing it
+// (`edge_banding_notation`, opticutter-api). They are printed at different sizes because they
+// answer different questions, and on a small piece only the first half fits.
+//
+// The count comes from the piece's NOMINAL sides, so the string is stable under rotation and must
+// be printed verbatim — recomputing it from a placed piece's (rotated) `edges.sides` turns every
+// 1L into a 1C.
+export const splitNotation = (notation?: string | null): [string, string] => {
+  const [head = '', ...rest] = (notation ?? '').trim().split(/\s+/)
+  return [head, rest.join(' ')]
+}
+
 export interface SideLine {
   x1: number
   y1: number

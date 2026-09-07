@@ -1,7 +1,4 @@
-import { useId, type CSSProperties } from 'react'
-import { CButton } from '@coreui/react'
-import CIcon from '@coreui/icons-react'
-import { cilFullscreen, cilFullscreenExit } from '@coreui/icons'
+import { useId } from 'react'
 
 import {
   EDGE_COLOR,
@@ -12,10 +9,11 @@ import {
   clamp,
   insetSideLine,
   pieceSig,
+  splitNotation,
   uprightText,
 } from 'src/shared/utils/cutDrawing'
 import useZoomPan from 'src/shared/hooks/useZoomPan'
-import useFullscreen from 'src/shared/hooks/useFullscreen'
+import { useSwipeNav } from 'src/shared/hooks/useSwipeNav'
 import ZoomControls from 'src/shared/components/ZoomControls'
 import EdgeDimensions from 'src/shared/components/EdgeDimensions'
 import type { CutBoard, CutPiece } from './types'
@@ -28,18 +26,26 @@ interface WorkshopBoardSvgProps {
   // Single tap marks the piece as cut; double-tap unmarks it (no confirmation).
   onPieceTap: (piece: CutPiece) => void
   onPieceUntap: (piece: CutPiece) => void
+  // Paging to the neighbouring board with a horizontal swipe. A shortcut, never the only way: the
+  // `‹ ›` in the top bar stays. Omitted at either end of the queue.
+  onPrevBoard?: () => void
+  onNextBoard?: () => void
 }
 
 const CHECK_COLOR = '#2b8a3e' // verde del ✓ de pieza cortada
 
 // Renders a physical board from the cutting plan using the same geometry as the optimizer, adding
-// per-piece cut state (dimmed + ✓), hatched waste areas, and a tap target over each full rectangle.
+// per-piece cut state (dimmed + ✓), the edge-banding notation, hatched waste areas, and a tap
+// target over each full rectangle. It fills the height its container gives it — the page owns the
+// viewport, this owns the drawing.
 const WorkshopBoardSvg = ({
   board,
   colorFor,
   interactive,
   onPieceTap,
   onPieceUntap,
+  onPrevBoard,
+  onNextBoard,
 }: WorkshopBoardSvgProps) => {
   const W = board.width
   const H = board.height
@@ -52,37 +58,29 @@ const WorkshopBoardSvg = ({
   const { svgRef, groupTransform, scale, isZoomed, zoomIn, zoomOut, reset } = useZoomPan({
     doubleClickZoom: false,
   })
-  const {
-    containerRef,
-    isFullscreen,
-    isSupported: fullscreenSupported,
-    toggle: toggleFullscreen,
-  } = useFullscreen<HTMLDivElement>()
 
-  const containerStyle: CSSProperties = { position: 'relative', overflow: 'hidden' }
-  if (isFullscreen) {
-    // Fullscreen element fills the viewport; center the (aspect-ratio constrained) SVG within it.
-    containerStyle.display = 'flex'
-    containerStyle.alignItems = 'center'
-    containerStyle.justifyContent = 'center'
-    containerStyle.height = '100vh'
-    containerStyle.background = 'var(--cui-body-bg)'
-    containerStyle.padding = '1rem'
-  }
+  // Swipe belongs HERE and not on the page: this is what knows about the zoom. Once zoomed, a
+  // horizontal drag is a pan and the gesture has to be off, or the board changes under the finger
+  // that was inspecting it. Unzoomed, `useZoomPan` still swallows the click of any drag past its
+  // own threshold, so a swipe cannot mark a piece on its way out.
+  const swipeRef = useSwipeNav({
+    onPrev: onPrevBoard,
+    onNext: onNextBoard,
+    enabled: !isZoomed,
+  })
 
   return (
-    <div ref={containerRef} style={containerStyle}>
+    <div ref={swipeRef} className="workshop-stage">
       <svg
         ref={svgRef}
         viewBox={`0 0 ${H} ${W}`}
         preserveAspectRatio="xMidYMid meet"
         style={{
           width: '100%',
-          height: 'auto',
+          height: '100%',
           display: 'block',
-          maxHeight: isFullscreen ? '94vh' : '72vh',
-          // Not zoomed: let the browser handle vertical page scroll (pinch is still ours).
-          // Zoomed: take full control to pan the diagram with one finger.
+          // Not zoomed: leave the vertical axis to the browser and the horizontal one to the swipe
+          // (pinch is still ours). Zoomed: take full control to pan the diagram with one finger.
           touchAction: isZoomed ? 'none' : 'pan-y',
           cursor: isZoomed ? 'grab' : undefined,
         }}
@@ -137,6 +135,25 @@ const WorkshopBoardSvg = ({
             const cx = p.x + p.width / 2
             const cy = p.y + p.height / 2
 
+            // Edge-banding notation, printed VERBATIM: the server computes it from the piece's
+            // nominal sides, so it survives rotation. Recomputing it from `edges.sides` (which is
+            // rotated into the drawing's frame) would turn every 1L into a 1C.
+            const [notation, bandNote] = splitNotation(p.edges?.notation)
+            // On screen the piece's y axis runs horizontally and its x axis vertically, because of
+            // `boardRotation` — the same frame `EdgeDimensions` documents. So the room a horizontal
+            // label has is `p.height` wide by `p.width` tall.
+            const noteSize = clamp(
+              Math.min(p.width * 0.3, p.height / Math.max(notation.length * 0.62, 1)),
+              12,
+              90,
+            )
+            // A cut piece belongs to the ✓: the canto no longer decides anything there. Revealed
+            // earlier than the measurements (a 4-character string needs far less room), and the
+            // qualifier only once the piece is big enough for two lines.
+            const showNote = !p.cut && !!notation && p.width * scale > 60 && p.height * scale > 60
+            const showBandNote =
+              showNote && !!bandNote && p.width * scale > 130 && p.height * scale > 90
+
             return (
               <g
                 key={p.id}
@@ -148,6 +165,7 @@ const WorkshopBoardSvg = ({
                 <title>
                   {p.label} · {p.originalWidth}×{p.originalHeight} mm
                   {p.rotated ? ' (rotada 90°)' : ''}
+                  {p.edges?.notation ? ` · canto ${p.edges.notation}` : ''}
                   {p.cut ? ' — cortada' : ''}
                   {p.cut && p.cutByLabel ? ` por ${p.cutByLabel}` : ''}
                 </title>
@@ -183,6 +201,35 @@ const WorkshopBoardSvg = ({
                     )
                   })}
                 </g>
+
+                {/* Edge-banding notation over the piece it belongs to: how many sides are banded is
+                    what decides the cut, so it is the big line; the type and alias name the
+                    tapacanto to fetch and ride underneath at 60%. The white halo is what keeps both
+                    legible over any PALETTE hue on a dusty shop screen. */}
+                {showNote && (
+                  <text
+                    x={cx}
+                    y={cy}
+                    textAnchor="middle"
+                    dominantBaseline="central"
+                    fill={PIECE_LABEL}
+                    fontWeight={700}
+                    stroke="rgba(255,255,255,0.85)"
+                    strokeWidth={noteSize * 0.14}
+                    paintOrder="stroke"
+                    transform={uprightText(cx, cy)}
+                    style={{ pointerEvents: 'none', userSelect: 'none' }}
+                  >
+                    <tspan x={cx} dy={showBandNote ? -noteSize * 0.32 : 0} fontSize={noteSize}>
+                      {notation}
+                    </tspan>
+                    {showBandNote && (
+                      <tspan x={cx} dy={noteSize * 0.92} fontSize={noteSize * 0.6}>
+                        {bandNote}
+                      </tspan>
+                    )}
+                  </text>
+                )}
 
                 {/* ✓ at full opacity above the dimmed layer, so the cut state reads at a glance */}
                 {p.cut && (
@@ -242,19 +289,6 @@ const WorkshopBoardSvg = ({
         </g>
       </svg>
       <ZoomControls onZoomIn={zoomIn} onZoomOut={zoomOut} onReset={reset} isZoomed={isZoomed} />
-      {fullscreenSupported && (
-        <CButton
-          color="light"
-          size="lg"
-          className="shadow-sm"
-          title={isFullscreen ? 'Salir de pantalla completa' : 'Pantalla completa'}
-          aria-label={isFullscreen ? 'Salir de pantalla completa' : 'Pantalla completa'}
-          style={{ position: 'absolute', top: 8, left: 8, zIndex: 2 }}
-          onClick={toggleFullscreen}
-        >
-          <CIcon icon={isFullscreen ? cilFullscreenExit : cilFullscreen} />
-        </CButton>
-      )}
     </div>
   )
 }
